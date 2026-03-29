@@ -221,7 +221,7 @@ export default function ProfilePage({ params }: any) {
 
 /* 🎨 STYLES */
 
-const styles = {
+const styles: any = {
   page: {
     maxWidth: 900,
     margin: "0 auto",
