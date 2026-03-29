@@ -6,9 +6,9 @@ import { cleanWatchlistRow } from "@/lib/watchlistCleaner"
 
 export function cleanRentRollRow(row: any){
 
-const trim = (v)=> v ? v.toString().trim() : null
+const trim = (v: any)=> v ? v.toString().trim() : null
 
-const splitName = (name)=>{
+const splitName = (name: any)=>{
 
 if(!name) return {first:null,last:null}
 
