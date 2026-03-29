@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase/supabaseClient";
 
 export default function ProfilePage({ params }: any) {
 
-  const resolvedParams = use(params);
+  const resolvedParams = use(params) as { id: string };
   const id = resolvedParams.id;
 
   const [person, setPerson] = useState<any>(null);
