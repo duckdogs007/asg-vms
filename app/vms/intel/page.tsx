@@ -275,7 +275,7 @@ export default function IntelPage() {
 
             <h3 style={{ marginTop: 20 }}>📊 Visitor History</h3>
 
-            {(selectedPerson.history || []).map(v => {
+            {(selectedPerson.history || []).map(v: any) => {
 
               const isDL = v.dl_first_name && v.dl_last_name;
 
