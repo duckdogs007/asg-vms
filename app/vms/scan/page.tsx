@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { supabase } from "../../../lib/supabaseClient"
+import { supabase } from "@/lib/supabase/supabaseClient"
 import SecurityAlert from "../../../components/SecurityAlert"
 
 export default function ScanID(){

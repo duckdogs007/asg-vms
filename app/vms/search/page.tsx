@@ -1,7 +1,7 @@
 "use client"
 
 import { useState,useEffect } from "react"
-import { supabase } from "../../../lib/supabaseClient"
+import { supabase } from "@/lib/supabase/supabaseClient"
 import CommunitySelector from "../../../components/CommunitySelector"
 
 export default function IntelTerminal(){

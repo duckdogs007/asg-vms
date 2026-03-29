@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
-import { supabase } from "../../../lib/supabaseClient"
+import { supabase } from "@/lib/supabase/supabaseClient"
 import CommunitySelector from "../../../components/CommunitySelector"
 import SecurityAlert from "../../../components/SecurityAlert"
 
