@@ -21,7 +21,7 @@ last: parts.slice(1).join(" ")
 
 }
 
-const formatDate = (date)=>{
+const formatDate = (date: any)=>{
 
 if(!date) return null
 
