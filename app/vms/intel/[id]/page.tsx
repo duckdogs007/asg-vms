@@ -1,12 +1,10 @@
 "use client";
 
-import { useEffect, useState, use } from "react";
 import { supabase } from "@/lib/supabase/supabaseClient";
 
 export default function ProfilePage({ params }: any) {
 
-  const resolvedParams = use(params) as { id: string };
-  const id = resolvedParams.id;
+  const { id } = params as { id: string };
 
   const [person, setPerson] = useState<any>(null);
   const [notes, setNotes] = useState("");
