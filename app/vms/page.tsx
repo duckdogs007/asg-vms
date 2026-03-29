@@ -183,7 +183,7 @@ export default function VMSPage() {
 
   return (
     <div style={styles.container}>
-      <h2>ASG VMS</h2>
+      <h2>ASG Visitor Management System</h2>
 
       <div style={styles.layout}>
 
