@@ -4,7 +4,7 @@ import { useState } from "react"
 import Papa from "papaparse"
 import { cleanWatchlistRow } from "@/lib/watchlistCleaner"
 
-export function cleanRentRollRow(row){
+export function cleanRentRollRow(row: any){
 
 const trim = (v)=> v ? v.toString().trim() : null
 
