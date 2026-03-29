@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase/supabaseClient";
 
 export default function ProfilePage({ params }: any) {
