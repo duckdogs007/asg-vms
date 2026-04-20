@@ -481,6 +481,12 @@ export default function UserDashboard() {
                 {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <span className="text-sm text-gray-500">{filteredRentRoll.length} residents</span>
+              {(() => {
+                const dates = filteredRentRoll.map(r => r.created_at).filter(Boolean)
+                if (!dates.length) return null
+                const latest = new Date(dates.reduce((a, b) => a > b ? a : b))
+                return <span className="text-xs text-gray-400">· Last uploaded {latest.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</span>
+              })()}
             </div>
             <input value={rentRollSearch} onChange={(e) => setRentRollSearch(e.target.value)}
               placeholder="Search name or unit..."
