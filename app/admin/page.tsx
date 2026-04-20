@@ -114,7 +114,7 @@ export default function UserDashboard() {
     const id = commId ?? rentRollCommunityId
     const community = communities.find(c => c.id === id)
     const commName  = community?.name || ""
-    const { data } = await supabase.from("residents").select("*").order("unit_number", { ascending: true })
+    const { data } = await supabase.from("residents").select("*").order("unit_number", { ascending: true }).limit(5000)
     const filtered = (data || []).filter(r => {
       if (!id) return true
       return r.community_id === id || r.community_id === commName
@@ -219,6 +219,9 @@ export default function UserDashboard() {
       const { error } = await supabase.from("residents").insert(rows.slice(i, i + 200))
       if (error) { setImportError("Insert failed: " + error.message); setImportLoading(false); return }
     }
+    // Sync unique unit numbers into the units table so VMS dropdown works
+    const uniqueUnits = [...new Set(rows.map(r => r.unit_number))].map(u => ({ unit_number: u, community_id: importCommunityId }))
+    await supabase.from("units").upsert(uniqueUnits, { onConflict: "unit_number,community_id" })
     setImportLoading(false)
     setImportStatus(`✅ ${rows.length} residents imported successfully.`)
     setImportPreview([]); setShowImport(false)
