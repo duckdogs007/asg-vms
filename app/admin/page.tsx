@@ -215,6 +215,7 @@ export default function UserDashboard() {
           currentUnit = col0.trim()
           allUnits.add(currentUnit)
           if (row[3]) residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: excelDateToISO(row[7]) })
+          else residents.push({ unit_number: currentUnit, name: null, relationship: null, move_in: null })
         } else if (!col0 && row[3] && currentUnit) {
           residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: null })
         }
@@ -479,7 +480,7 @@ export default function UserDashboard() {
                         {importPreview.slice(0, 8).map((r, i) => (
                           <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
                             <td className="px-3 py-1.5 font-mono text-blue-700">{r.unit_number}</td>
-                            <td className="px-3 py-1.5">{r.name}</td>
+                            <td className="px-3 py-1.5">{r.name ?? <span className="text-gray-400 italic">Vacant</span>}</td>
                             <td className="px-3 py-1.5 text-gray-500">{r.relationship}</td>
                             <td className="px-3 py-1.5 text-gray-500">{r.move_in || "—"}</td>
                           </tr>
@@ -538,7 +539,7 @@ export default function UserDashboard() {
                   {filteredRentRoll.map((r, i) => (
                     <tr key={r.id || i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
                       <td className="px-4 py-3 font-mono font-medium text-blue-700">{r.unit_number || "—"}</td>
-                      <td className="px-4 py-3 font-medium">{r.name || "—"}</td>
+                      <td className="px-4 py-3 font-medium">{r.name ? r.name : <span className="text-gray-400 italic">Vacant</span>}</td>
                       <td className="px-4 py-3 text-gray-500">{r.relationship || "—"}</td>
                       <td className="px-4 py-3 text-gray-500">{r.move_in ? new Date(r.move_in).toLocaleDateString() : "—"}</td>
                     </tr>
