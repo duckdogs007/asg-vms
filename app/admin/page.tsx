@@ -30,6 +30,7 @@ export default function UserDashboard() {
 
   // Rent roll import
   const [importPreview,     setImportPreview]     = useState<any[]>([])
+  const [importAllUnits,    setImportAllUnits]    = useState<string[]>([])
   const [importCommunityId, setImportCommunityId] = useState("")
   const [importLoading,     setImportLoading]     = useState(false)
   const [importStatus,      setImportStatus]      = useState("")
@@ -114,8 +115,22 @@ export default function UserDashboard() {
     const id = commId ?? rentRollCommunityId
     const community = communities.find(c => c.id === id)
     const commName  = community?.name || ""
-    const { data } = await supabase.from("residents").select("*").order("unit_number", { ascending: true }).limit(5000)
-    const filtered = (data || []).filter(r => {
+    // Paginate to bypass PostgREST server-side row cap
+    let all: any[] = []
+    let page = 0
+    const PAGE = 1000
+    while (true) {
+      const { data } = await supabase
+        .from("residents")
+        .select("*")
+        .order("unit_number", { ascending: true })
+        .range(page * PAGE, (page + 1) * PAGE - 1)
+      if (!data || data.length === 0) break
+      all = all.concat(data)
+      if (data.length < PAGE) break
+      page++
+    }
+    const filtered = all.filter(r => {
       if (!id) return true
       return r.community_id === id || r.community_id === commName
     })
@@ -191,18 +206,21 @@ export default function UserDashboard() {
       const ws   = wb.Sheets[wb.SheetNames[0]]
       const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][]
       const residents: any[] = []
+      const allUnits = new Set<string>()
       let currentUnit: string | null = null
       for (const row of rows) {
         const col0 = row[0]
         if (!col0 && !row[3]) continue
         if (typeof col0 === "string" && col0.startsWith("   ")) {
           currentUnit = col0.trim()
+          allUnits.add(currentUnit)
           if (row[3]) residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: excelDateToISO(row[7]) })
         } else if (!col0 && row[3] && currentUnit) {
           residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: null })
         }
       }
       if (!residents.length) { setImportError("No resident data found. Make sure this is a Yardi/property-management rent roll export."); return }
+      setImportAllUnits([...allUnits])
       setImportPreview(residents)
     } catch (e: any) {
       setImportError("Could not read file: " + e.message)
@@ -219,11 +237,14 @@ export default function UserDashboard() {
       const { error } = await supabase.from("residents").insert(rows.slice(i, i + 200))
       if (error) { setImportError("Insert failed: " + error.message); setImportLoading(false); return }
     }
-    // Sync unique unit numbers into the units table so VMS dropdown works
-    const uniqueUnits = [...new Set(rows.map(r => r.unit_number))].map(u => ({ unit_number: u, community_id: importCommunityId }))
-    await supabase.from("units").upsert(uniqueUnits, { onConflict: "unit_number,community_id" })
+    // Sync all unit numbers (including vacant) into units table so VMS dropdown works
+    await supabase.from("units").delete().eq("community_id", importCommunityId)
+    const uniqueUnits = importAllUnits.map(u => ({ unit_number: u, community_id: importCommunityId }))
+    for (let i = 0; i < uniqueUnits.length; i += 200) {
+      await supabase.from("units").insert(uniqueUnits.slice(i, i + 200))
+    }
     setImportLoading(false)
-    setImportStatus(`✅ ${rows.length} residents imported successfully.`)
+    setImportStatus(`✅ ${rows.length} residents imported across ${uniqueUnits.length} units (${uniqueUnits.length - new Set(rows.map(r => r.unit_number)).size} vacant).`)
     setImportPreview([]); setShowImport(false)
     loadRentRoll(importCommunityId)
   }
