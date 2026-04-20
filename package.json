@@ -4,15 +4,15 @@
   "private": true,
   "scripts": {
     "dev": "node --max-old-space-size=4096 ./node_modules/next/dist/bin/next dev --webpack",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
     "clean": "rmdir /s /q .next"
   },
   "dependencies": {
-    "@supabase/ssr": "^0.9.0",
+    "@supabase/ssr": "^0.10.2",
     "@supabase/supabase-js": "^2.99.2",
-    "next": "16.1.6",
+    "next": "^16.2.4",
     "papaparse": "^5.4.1",
     "react": "^18.3.0",
     "react-dom": "^18.3.0"

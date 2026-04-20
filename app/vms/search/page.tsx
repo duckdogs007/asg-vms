@@ -152,7 +152,7 @@ export default function IntelTerminal(){
       </h1>
 
       <CommunitySelector
-        selected={community}
+        value={community}
         onChange={(value)=>{
           setCommunity(value)
           localStorage.setItem("asg-community",value)
