@@ -76,7 +76,8 @@ export default function VMSPage() {
     setUnits(data || [])
   }
 
-  async function loadResidents(unitNumber: string) {
+  async function loadResidents(rawUnitNumber: string) {
+    const unitNumber = rawUnitNumber.trim()
     setUnitId(unitNumber)
     setLoadError("")
     if (!unitNumber) { setResidents([]); return }
@@ -88,10 +89,7 @@ export default function VMSPage() {
       .eq("unit_number", unitNumber)
       .not("name", "is", null)
 
-    if (error) { setLoadError("Resident query error: " + error.message); return }
-    if (!data || data.length === 0) {
-      setLoadError(`No residents found for unit="${unitNumber}" community="${communityId}"`)
-    }
+    if (error) { setLoadError("Failed to load residents."); return }
     setResidents(data || [])
   }
 

@@ -240,7 +240,7 @@ export default function UserDashboard() {
     }
     // Sync all unit numbers (including vacant) into units table so VMS dropdown works
     await supabase.from("units").delete().eq("community_id", importCommunityId)
-    const uniqueUnits = importAllUnits.map(u => ({ unit_number: u, community_id: importCommunityId }))
+    const uniqueUnits = importAllUnits.map(u => ({ unit_number: u.trim(), community_id: importCommunityId }))
     for (let i = 0; i < uniqueUnits.length; i += 200) {
       await supabase.from("units").insert(uniqueUnits.slice(i, i + 200))
     }
