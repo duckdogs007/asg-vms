@@ -7,7 +7,8 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "next lint",
-    "clean": "rmdir /s /q .next"
+    "clean": "rmdir /s /q .next",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@supabase/ssr": "^0.10.2",
@@ -25,6 +26,7 @@
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
+    "patch-package": "^8.0.1",
     "tailwindcss": "^4",
     "typescript": "^5"
   }

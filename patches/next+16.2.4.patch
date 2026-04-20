@@ -1,0 +1,116 @@
+diff --git a/node_modules/next/dist/build/utils.js b/node_modules/next/dist/build/utils.js
+--- a/node_modules/next/dist/build/utils.js
++++ b/node_modules/next/dist/build/utils.js
+@@ -570,7 +570,7 @@ async function isPageStatic({ dir, page, distDir, configFileName, httpAgentOpti
+             hasStaticProps: false,
+             hasServerProps: false,
+             isNextImageImported: false,
+-            appConfig: {}
++            appConfig: { revalidate: 0 }
+         };
+     }
+diff --git a/node_modules/next/dist/server/request/params.js b/node_modules/next/dist/server/request/params.js
+--- a/node_modules/next/dist/server/request/params.js
++++ b/node_modules/next/dist/server/request/params.js
+@@ -47,10 +47,7 @@ function createParamsFromClient(underlyingParams) {
+     const workStore = _workasyncstorageexternal.workAsyncStorage.getStore();
+     if (!workStore) {
+-        throw Object.defineProperty(new _invarianterror.InvariantError('Expected workStore to be initialized'), "__NEXT_ERROR_CODE", {
+-            value: "E1068",
+-            enumerable: false,
+-            configurable: true
+-        });
++        return underlyingParams || {};
+     }
+@@ -111,10 +108,7 @@ function createServerParamsForRoute(underlyingParams, varyParamsAccumulator = nu
+     const workStore = _workasyncstorageexternal.workAsyncStorage.getStore();
+     if (!workStore) {
+-        throw Object.defineProperty(new _invarianterror.InvariantError('Expected workStore to be initialized'), "__NEXT_ERROR_CODE", {
+-            value: "E1068",
+-            enumerable: false,
+-            configurable: true
+-        });
++        return underlyingParams || {};
+     }
+@@ -172,10 +166,7 @@ function createServerParamsForServerSegment(underlyingParams, optionalCatchAllPa
+     const workStore = _workasyncstorageexternal.workAsyncStorage.getStore();
+     if (!workStore) {
+-        throw Object.defineProperty(new _invarianterror.InvariantError('Expected workStore to be initialized'), "__NEXT_ERROR_CODE", {
+-            value: "E1068",
+-            enumerable: false,
+-            configurable: true
+-        });
++        return underlyingParams || {};
+     }
+diff --git a/node_modules/next/dist/server/request/search-params.js b/node_modules/next/dist/server/request/search-params.js
+--- a/node_modules/next/dist/server/request/search-params.js
++++ b/node_modules/next/dist/server/request/search-params.js
+@@ -47,10 +47,7 @@ function createSearchParamsFromClient(underlyingSearchParams) {
+     const workStore = _workasyncstorageexternal.workAsyncStorage.getStore();
+     if (!workStore) {
+-        throw Object.defineProperty(new _invarianterror.InvariantError('Expected workStore to be initialized'), "__NEXT_ERROR_CODE", {
+-            value: "E1068",
+-            enumerable: false,
+-            configurable: true
+-        });
++        return underlyingSearchParams || {};
+     }
+@@ -101,10 +98,7 @@ function createServerSearchParamsForServerPage(underlyingSearchParams, varyParam
+     const workStore = _workasyncstorageexternal.workAsyncStorage.getStore();
+     if (!workStore) {
+-        throw Object.defineProperty(new _invarianterror.InvariantError('Expected workStore to be initialized'), "__NEXT_ERROR_CODE", {
+-            value: "E1068",
+-            enumerable: false,
+-            configurable: true
+-        });
++        return underlyingSearchParams || {};
+     }
+@@ -140,10 +134,7 @@ function createPrerenderSearchParamsForClientPage() {
+     const workStore = _workasyncstorageexternal.workAsyncStorage.getStore();
+     if (!workStore) {
+-        throw Object.defineProperty(new _invarianterror.InvariantError('Expected workStore to be initialized'), "__NEXT_ERROR_CODE", {
+-            value: "E1068",
+-            enumerable: false,
+-            configurable: true
+-        });
++        return Promise.resolve({});
+     }
+@@ -327,10 +318,7 @@ function makeErroringSearchParamsForUseCache() {
+     const workStore = _workasyncstorageexternal.workAsyncStorage.getStore();
+     if (!workStore) {
+-        throw Object.defineProperty(new _invarianterror.InvariantError('Expected workStore to be initialized'), "__NEXT_ERROR_CODE", {
+-            value: "E1068",
+-            enumerable: false,
+-            configurable: true
+-        });
++        return Promise.resolve({});
+     }
+diff --git a/node_modules/next/dist/server/request/pathname.js b/node_modules/next/dist/server/request/pathname.js
+--- a/node_modules/next/dist/server/request/pathname.js
++++ b/node_modules/next/dist/server/request/pathname.js
+@@ -17,10 +17,7 @@ function createServerPathnameForMetadata(underlyingPathname) {
+     const workStore = _workasyncstorageexternal.workAsyncStorage.getStore();
+     if (!workStore) {
+-        throw Object.defineProperty(new _invarianterror.InvariantError('Expected workStore to be initialized'), "__NEXT_ERROR_CODE", {
+-            value: "E1068",
+-            enumerable: false,
+-            configurable: true
+-        });
++        return underlyingPathname || '';
+     }
+diff --git a/node_modules/next/dist/lib/metadata/resolve-metadata.js b/node_modules/next/dist/lib/metadata/resolve-metadata.js
+--- a/node_modules/next/dist/lib/metadata/resolve-metadata.js
++++ b/node_modules/next/dist/lib/metadata/resolve-metadata.js
+@@ -864,10 +864,7 @@ async function resolveMetadata(tree, pathname, searchParams, errorConvention, in
+     const metadataItems = await resolveMetadataItems(tree, searchParams, errorConvention, interpolatedParams, isRuntimePrefetchable);
+     const workStore = _workasyncstorageexternal.workAsyncStorage.getStore();
+     if (!workStore) {
+-        throw Object.defineProperty(new _invarianterror.InvariantError('Expected workStore to be initialized'), "__NEXT_ERROR_CODE", {
+-            value: "E1068",
+-            enumerable: false,
+-            configurable: true
+-        });
++        return accumulateMetadata('', metadataItems, pathname, metadataContext);
+     }
+     return accumulateMetadata(workStore.route, metadataItems, pathname, metadataContext);
+ }
