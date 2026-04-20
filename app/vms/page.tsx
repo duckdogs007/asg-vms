@@ -78,6 +78,7 @@ export default function VMSPage() {
 
   async function loadResidents(unitNumber: string) {
     setUnitId(unitNumber)
+    setLoadError("")
     if (!unitNumber) { setResidents([]); return }
 
     const { data, error } = await supabase
@@ -87,7 +88,10 @@ export default function VMSPage() {
       .eq("unit_number", unitNumber)
       .not("name", "is", null)
 
-    if (error) { setLoadError("Failed to load residents."); return }
+    if (error) { setLoadError("Resident query error: " + error.message); return }
+    if (!data || data.length === 0) {
+      setLoadError(`No residents found for unit="${unitNumber}" community="${communityId}"`)
+    }
     setResidents(data || [])
   }
 
