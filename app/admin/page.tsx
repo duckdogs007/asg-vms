@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic"
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
+import Papa from "papaparse"
 
 type Tab        = "dashboard" | "watchlist" | "rentroll" | "reports"
 type ReportTab  = "daily" | "incident" | "view"
@@ -32,8 +33,9 @@ export default function UserDashboard() {
   const [reportSaving,  setReportSaving] = useState(false)
   const [reportMessage, setReportMessage]= useState("")
   const [reportError,   setReportError]  = useState("")
-  const [pastReports,   setPastReports]  = useState<any[]>([])
-  const [reportsLoading,setReportsLoading] = useState(false)
+  const [pastReports,    setPastReports]    = useState<any[]>([])
+  const [reportsLoading, setReportsLoading] = useState(false)
+  const [expandedReport, setExpandedReport] = useState<number | null>(null)
 
   // Daily log form
   const [dailyDate,      setDailyDate]      = useState(new Date().toISOString().split("T")[0])
@@ -176,6 +178,47 @@ export default function UserDashboard() {
     }
     setMessage("🚨 Watchlist Uploaded")
     if (activeTab === "watchlist") loadWatchlist()
+  }
+
+  function exportCSV() {
+    const rows = pastReports.map(r => ({
+      Type:             r._type,
+      Date:             r.date,
+      Time:             r.time || "",
+      Officer:          r.officer_name || "",
+      Shift:            r.shift || "",
+      "Incident Type":  r.incident_type || "",
+      Location:         r.location || "",
+      "Persons Involved": r.persons_involved || "",
+      Narrative:        r.narrative || r.description || "",
+      "Action Taken":   r.action_taken || "",
+      "Follow-Up":      r.follow_up_required ? "Yes" : "",
+      Weather:          r.weather || "",
+      Notes:            r.notes || "",
+    }))
+    const csv = Papa.unparse(rows)
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a")
+    a.href = url
+    a.download = `officer-reports-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportPDF() {
+    window.print()
+  }
+
+  function exportEmail() {
+    const lines = pastReports.map(r => {
+      const type = r._type === "Incident" ? "INCIDENT REPORT" : "DAILY LOG"
+      const body = r.narrative || r.description || ""
+      return `[${type}] ${r.date}${r.time ? " " + r.time : ""} | ${r.officer_name || ""}\n${body}${r.action_taken ? "\nAction: " + r.action_taken : ""}${r.follow_up_required ? "\n⚠ Follow-up required" : ""}`
+    }).join("\n\n---\n\n")
+    const subject = encodeURIComponent(`Officer Reports — ${new Date().toLocaleDateString()}`)
+    const body    = encodeURIComponent(lines)
+    window.location.href = `mailto:?subject=${subject}&body=${body}`
   }
 
   const filteredWatchlist = watchlist.filter(p => {
@@ -490,35 +533,111 @@ export default function UserDashboard() {
           {/* VIEW REPORTS */}
           {reportTab === "view" && (
             <div>
+              {/* EXPORT TOOLBAR */}
+              {pastReports.length > 0 && (
+                <div className="flex gap-2 mb-5">
+                  <button onClick={exportCSV}
+                    className="px-4 py-2 bg-green-700 text-white text-xs font-semibold rounded-lg hover:bg-green-800 border-none cursor-pointer">
+                    ⬇ Export CSV / Excel
+                  </button>
+                  <button onClick={exportPDF}
+                    className="px-4 py-2 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 border-none cursor-pointer">
+                    🖨 Print / Save PDF
+                  </button>
+                  <button onClick={exportEmail}
+                    className="px-4 py-2 bg-blue-700 text-white text-xs font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer">
+                    ✉ Email Reports
+                  </button>
+                </div>
+              )}
+
               {reportsLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading reports...</div>}
               {!reportsLoading && pastReports.length === 0 && (
                 <div className="text-gray-500 text-sm py-8 text-center">No reports submitted yet.</div>
               )}
+
               {!reportsLoading && pastReports.map((r, i) => (
-                <div key={i} className={`border rounded-xl px-5 py-4 mb-3 ${r._type === "Incident" ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r._type === "Incident" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
-                          {r._type === "Incident" ? "🚨 Incident" : "📝 Daily Log"}
-                        </span>
-                        {r.incident_type && <span className="text-xs text-gray-500">{r.incident_type}</span>}
-                        {r.shift && <span className="text-xs text-gray-500">{r.shift} Shift</span>}
-                      </div>
-                      <div className="font-semibold text-gray-900 text-sm">
-                        {r.narrative || r.description || "No description"}
-                      </div>
-                      {r.action_taken && (
-                        <div className="text-xs text-gray-500 mt-1">Action: {r.action_taken}</div>
-                      )}
+                <div key={i}
+                  className={`border rounded-xl mb-3 overflow-hidden transition-all ${r._type === "Incident" ? "border-red-200" : "border-gray-200"}`}>
+
+                  {/* HEADER ROW — always visible, click to expand */}
+                  <div
+                    className={`px-5 py-4 flex justify-between items-center cursor-pointer ${
+                      r._type === "Incident" ? "bg-red-50 hover:bg-red-100" : "bg-white hover:bg-gray-50"
+                    }`}
+                    onClick={() => setExpandedReport(expandedReport === i ? null : i)}
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r._type === "Incident" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+                        {r._type === "Incident" ? "🚨 Incident" : "📝 Daily Log"}
+                      </span>
+                      {r.incident_type && <span className="text-xs text-gray-500">{r.incident_type}</span>}
+                      {r.shift         && <span className="text-xs text-gray-500">{r.shift} Shift</span>}
+                      <span className="text-sm font-semibold text-gray-800 line-clamp-1">
+                        {(r.narrative || r.description || "No description").slice(0, 80)}
+                        {(r.narrative || r.description || "").length > 80 ? "…" : ""}
+                      </span>
                     </div>
-                    <div className="text-right text-xs text-gray-400 shrink-0 ml-4">
-                      <div>{r.date}</div>
-                      {r.time && <div>{r.time}</div>}
-                      <div className="mt-0.5">{r.officer_name}</div>
-                      {r.follow_up_required && <div className="text-orange-500 font-semibold mt-1">⚠ Follow-up needed</div>}
+                    <div className="flex items-center gap-4 shrink-0 ml-3">
+                      <div className="text-right text-xs text-gray-400">
+                        <div>{r.date}{r.time ? " · " + r.time : ""}</div>
+                        <div>{r.officer_name}</div>
+                        {r.follow_up_required && <div className="text-orange-500 font-semibold">⚠ Follow-up</div>}
+                      </div>
+                      <span className="text-gray-400 text-sm">{expandedReport === i ? "▲" : "▼"}</span>
                     </div>
                   </div>
+
+                  {/* EXPANDED DETAIL */}
+                  {expandedReport === i && (
+                    <div className="px-5 py-4 border-t border-gray-100 bg-white">
+                      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                        <Field label="Date"           value={r.date} />
+                        {r.time          && <Field label="Time"           value={r.time} />}
+                        <Field label="Officer"        value={r.officer_name} />
+                        {r.shift         && <Field label="Shift"          value={r.shift} />}
+                        {r.weather       && <Field label="Weather"        value={r.weather} />}
+                        {r.incident_type && <Field label="Incident Type"  value={r.incident_type} />}
+                        {r.location      && <Field label="Location"       value={r.location} />}
+                        {r.persons_involved && <Field label="Persons Involved" value={r.persons_involved} />}
+                      </div>
+
+                      {(r.narrative || r.description) && (
+                        <div className="mb-3">
+                          <div className="text-xs font-semibold text-gray-500 mb-1">
+                            {r._type === "Incident" ? "Incident Description" : "Patrol Narrative"}
+                          </div>
+                          <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">
+                            {r.narrative || r.description}
+                          </div>
+                        </div>
+                      )}
+
+                      {r.action_taken && (
+                        <div className="mb-3">
+                          <div className="text-xs font-semibold text-gray-500 mb-1">Action Taken</div>
+                          <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">
+                            {r.action_taken}
+                          </div>
+                        </div>
+                      )}
+
+                      {r.notes && (
+                        <div className="mb-3">
+                          <div className="text-xs font-semibold text-gray-500 mb-1">Notes</div>
+                          <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">
+                            {r.notes}
+                          </div>
+                        </div>
+                      )}
+
+                      {r.follow_up_required && (
+                        <div className="bg-orange-50 border border-orange-200 text-orange-700 text-sm px-4 py-2 rounded-lg font-medium">
+                          ⚠ Follow-up action required
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               ))}
             </div>
@@ -536,6 +655,15 @@ function StatCard({ label, value }: { label: string; value: number }) {
     <div className="bg-gray-50 border border-gray-200 rounded-xl px-5 py-4">
       <div className="text-2xl font-bold text-gray-900">{value}</div>
       <div className="text-xs text-gray-500 mt-1">{label}</div>
+    </div>
+  )
+}
+
+function Field({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-xs font-semibold text-gray-400">{label}</div>
+      <div className="text-gray-800">{value}</div>
     </div>
   )
 }
