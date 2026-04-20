@@ -355,21 +355,3 @@ export default function VMSPage() {
     </div>
   )
 }
-<<<<<<< HEAD
-
-// ---------------- STYLES ----------------
-
-const styles: any = {
-  container: { padding: 20 },
-  layout: { display: "flex", gap: 30 },
-  left: { flex: 1.2, display: "flex", flexDirection: "column", gap: 12 },
-  right: { flex: 1 },
-  input: { padding: 8, borderRadius: 4, border: "1px solid #ccc" },
-  scanBtn: { padding: 12, background: "#1f2937", color: "#fff", borderRadius: 6, border: "none" },
-  card: { background: "#111", color: "#fff", padding: 12, borderRadius: 6, marginBottom: 10 },
-  alertCard: { background: "#7f1d1d", border: "2px solid red" },
-  matchRow: { padding: 10, background: "#1a1a1a", marginBottom: 6, borderRadius: 6 },
-  flag: { color: "#ef4444", marginLeft: 8 }
-};
-=======
->>>>>>> 2b0a0b4 (Add auth, Tailwind, real-time, photo upload, admin tabs, and dashboard)
