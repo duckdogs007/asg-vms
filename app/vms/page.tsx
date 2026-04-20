@@ -275,7 +275,7 @@ export default function VMSPage() {
           <select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={inputCls}>
             <option value="">Select Resident</option>
             {residents.map(r => (
-              <option key={r.id} value={r.id}>{r.name}</option>
+              <option key={r.id} value={r.id}>{r.name}{r.relationship ? ` (${r.relationship})` : ""}</option>
             ))}
           </select>
 

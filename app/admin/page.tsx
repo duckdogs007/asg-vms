@@ -28,6 +28,14 @@ export default function UserDashboard() {
   const [rentRollSearch,    setRentRollSearch]    = useState("")
   const [rentRollCommunityId, setRentRollCommunityId] = useState("")
 
+  // Rent roll import
+  const [importPreview,     setImportPreview]     = useState<any[]>([])
+  const [importCommunityId, setImportCommunityId] = useState("")
+  const [importLoading,     setImportLoading]     = useState(false)
+  const [importStatus,      setImportStatus]      = useState("")
+  const [importError,       setImportError]       = useState("")
+  const [showImport,        setShowImport]        = useState(false)
+
   // Officer reports
   const [reportTab,     setReportTab]    = useState<ReportTab>("daily")
   const [reportSaving,  setReportSaving] = useState(false)
@@ -167,6 +175,54 @@ export default function UserDashboard() {
       await supabase.from("residents").upsert([{ name: resident_name, unit_number, community_id: communityId }])
     }
     setMessage("✅ Rent Roll Uploaded")
+  }
+
+  function excelDateToISO(serial: any): string | null {
+    if (!serial || typeof serial !== "number") return null
+    return new Date((serial - 25569) * 86400 * 1000).toISOString().split("T")[0]
+  }
+
+  async function handleImportFileSelect(file: File) {
+    setImportPreview([]); setImportError(""); setImportStatus("")
+    try {
+      const XLSX = await import("xlsx")
+      const buf  = await file.arrayBuffer()
+      const wb   = XLSX.read(buf, { type: "array" })
+      const ws   = wb.Sheets[wb.SheetNames[0]]
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1 }) as any[][]
+      const residents: any[] = []
+      let currentUnit: string | null = null
+      for (const row of rows) {
+        const col0 = row[0]
+        if (!col0 && !row[3]) continue
+        if (typeof col0 === "string" && col0.startsWith("   ")) {
+          currentUnit = col0.trim()
+          if (row[3]) residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: excelDateToISO(row[7]) })
+        } else if (!col0 && row[3] && currentUnit) {
+          residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: null })
+        }
+      }
+      if (!residents.length) { setImportError("No resident data found. Make sure this is a Yardi/property-management rent roll export."); return }
+      setImportPreview(residents)
+    } catch (e: any) {
+      setImportError("Could not read file: " + e.message)
+    }
+  }
+
+  async function confirmImport() {
+    if (!importCommunityId) { setImportError("Please select a community first."); return }
+    setImportLoading(true); setImportError("")
+    const { error: delErr } = await supabase.from("residents").delete().eq("community_id", importCommunityId)
+    if (delErr) { setImportError("Delete failed: " + delErr.message); setImportLoading(false); return }
+    const rows = importPreview.map(r => ({ ...r, community_id: importCommunityId }))
+    for (let i = 0; i < rows.length; i += 200) {
+      const { error } = await supabase.from("residents").insert(rows.slice(i, i + 200))
+      if (error) { setImportError("Insert failed: " + error.message); setImportLoading(false); return }
+    }
+    setImportLoading(false)
+    setImportStatus(`✅ ${rows.length} residents imported successfully.`)
+    setImportPreview([]); setShowImport(false)
+    loadRentRoll(importCommunityId)
   }
 
   async function handleWatchlistUpload(file: File) {
@@ -340,6 +396,82 @@ export default function UserDashboard() {
       {/* ── RENT ROLL TAB ── */}
       {activeTab === "rentroll" && (
         <div>
+          {/* Import panel toggle */}
+          <div className="flex justify-between items-center mb-4">
+            <button onClick={() => { setShowImport(!showImport); setImportPreview([]); setImportError(""); setImportStatus("") }}
+              className="px-4 py-2 bg-blue-800 text-white text-sm font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer">
+              {showImport ? "✕ Cancel Import" : "⬆ Import Rent Roll"}
+            </button>
+            {importStatus && <span className="text-green-600 text-sm font-medium">{importStatus}</span>}
+          </div>
+
+          {/* IMPORT PANEL */}
+          {showImport && (
+            <div className="border border-blue-200 rounded-xl bg-blue-50 p-5 mb-5">
+              <h3 className="font-bold text-gray-800 mb-3">Import Rent Roll (.xlsx from Yardi / property software)</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className={labelCls}>Community</label>
+                  <select value={importCommunityId} onChange={e => setImportCommunityId(e.target.value)} className={inputCls}>
+                    <option value="">— Select community —</option>
+                    {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Select File</label>
+                  <input type="file" accept=".xlsx,.xls,.csv"
+                    onChange={e => { if (e.target.files?.[0]) handleImportFileSelect(e.target.files[0]) }}
+                    className="text-sm text-gray-600 w-full file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900" />
+                </div>
+              </div>
+
+              {importError && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm mb-3">{importError}</div>}
+
+              {importPreview.length > 0 && (
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="text-sm text-gray-700">
+                      <strong>{importPreview.length}</strong> residents across{" "}
+                      <strong>{new Set(importPreview.map(r => r.unit_number)).size}</strong> units ready to import.
+                      {importCommunityId && <span className="text-orange-600 ml-2">⚠ This will replace all existing residents for the selected community.</span>}
+                    </div>
+                    <button onClick={confirmImport} disabled={importLoading || !importCommunityId}
+                      className="px-5 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 border-none cursor-pointer disabled:opacity-50">
+                      {importLoading ? "Importing..." : "✓ Confirm Import"}
+                    </button>
+                  </div>
+                  {/* Preview first 8 rows */}
+                  <div className="border border-gray-200 rounded-lg overflow-hidden bg-white">
+                    <table className="w-full text-xs">
+                      <thead className="bg-gray-50 border-b border-gray-200">
+                        <tr>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-500">Unit</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-500">Name</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-500">Relationship</th>
+                          <th className="text-left px-3 py-2 font-semibold text-gray-500">Move-In</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {importPreview.slice(0, 8).map((r, i) => (
+                          <tr key={i} className={i % 2 === 0 ? "bg-white" : "bg-gray-50"}>
+                            <td className="px-3 py-1.5 font-mono text-blue-700">{r.unit_number}</td>
+                            <td className="px-3 py-1.5">{r.name}</td>
+                            <td className="px-3 py-1.5 text-gray-500">{r.relationship}</td>
+                            <td className="px-3 py-1.5 text-gray-500">{r.move_in || "—"}</td>
+                          </tr>
+                        ))}
+                        {importPreview.length > 8 && (
+                          <tr><td colSpan={4} className="px-3 py-1.5 text-gray-400 text-center">…and {importPreview.length - 8} more</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* FILTERS + SEARCH */}
           <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
             <div className="flex items-center gap-3">
               <select value={rentRollCommunityId}
