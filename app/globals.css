@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 :root{
   --bg:#f4f6f9;
   --text:#111827;
@@ -25,14 +27,10 @@ body{
   margin:0;
 }
 
-/* DATABASE STYLE CARDS */
-
 .card{
   background:var(--card);
   border:1px solid var(--border);
 }
-
-/* INTEL RESULTS */
 
 .intel-row{
   display:flex;
@@ -48,8 +46,6 @@ body{
   background:#1f2933;
 }
 
-/* STATUS */
-
 .status-active{
   color:var(--danger);
   font-weight:700;
@@ -58,34 +54,6 @@ body{
 .status-clear{
   color:var(--success);
 }
-
-/* BUTTONS */
-
-button{
-  background:var(--accent);
-  color:white;
-  border:none;
-  border-radius:6px;
-  padding:10px 16px;
-  cursor:pointer;
-}
-
-button:hover{
-  opacity:.9;
-}
-
-/* SEARCH BOX */
-
-input{
-  padding:10px;
-  border-radius:6px;
-  border:1px solid var(--border);
-  background:var(--card);
-  color:var(--text);
-  font-family:"JetBrains Mono";
-}
-
-/* PHOTO */
 
 .photo-thumb{
   width:52px;

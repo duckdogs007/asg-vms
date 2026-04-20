@@ -1,7 +1,10 @@
 "use client"
 
+import "./globals.css"
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import { useRouter, usePathname } from "next/navigation"
+import { supabase } from "@/lib/supabase/supabaseClient"
 
 export default function RootLayout({
   children,
@@ -9,10 +12,22 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
 
+  const router = useRouter()
+  const pathname = usePathname()
+  const isLoginPage = pathname === "/login"
+
+  const adminEmails = ["jhall@teamasg.com"]
   const [currentTime, setCurrentTime] = useState("")
   const [menuOpen, setMenuOpen] = useState(false)
+  const [userEmail, setUserEmail] = useState("")
+  const [isAdmin, setIsAdmin] = useState(false)
+  const [nightMode, setNightMode] = useState(false)
 
   useEffect(() => {
+    const saved = localStorage.getItem("asg-night-mode") === "true"
+    setNightMode(saved)
+    document.body.classList.toggle("dark", saved)
+
     const interval = setInterval(() => {
       const now = new Date()
       setCurrentTime(
@@ -27,172 +42,104 @@ export default function RootLayout({
         })
       )
     }, 1000)
-
     return () => clearInterval(interval)
   }, [])
 
-  function toggleMenu() {
-    setMenuOpen(!menuOpen)
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) {
+        setUserEmail(user.email || "")
+        setIsAdmin(adminEmails.includes(user.email || ""))
+      }
+    })
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      const user = session?.user
+      if (user) {
+        setUserEmail(user.email || "")
+        setIsAdmin(adminEmails.includes(user.email || ""))
+      } else {
+        setUserEmail("")
+        setIsAdmin(false)
+      }
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
+
+  async function handleLogout() {
+    await supabase.auth.signOut()
+    router.push("/login")
   }
 
-  function handleLogout() {
-    console.log("logout placeholder")
-  }
+  const displayName = userEmail
+    ? userEmail.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, c => c.toUpperCase())
+    : ""
+
+  const navLink = "text-gray-700 hover:text-blue-800 text-sm font-medium transition-colors"
 
   return (
     <html lang="en">
-      <body style={styles.body}>
+      <body>
 
-        {/* 🔝 TOP NAV BAR */}
-        <div style={styles.topBar}>
+        {!isLoginPage && (
+          <nav className="flex justify-between items-center px-5 py-3 border-b border-gray-200 bg-white shadow-sm">
 
-          {/* LEFT NAV LINKS */}
-          <div style={styles.navLinks}>
-            <Link href="/">Home</Link>
-            <Link href="/vms">VMS</Link>
-            <Link href="/vms/intel">Intel Terminal</Link>
+            <div className="flex gap-5">
+              <Link href="/" className={navLink}>Home</Link>
+              <Link href="/vms" className={navLink}>VMS</Link>
+              <Link href="/vms/intel" className={navLink}>Intel Terminal</Link>
+              <Link href="/vms/reports" className={navLink}>Reports</Link>
+              {isAdmin && <Link href="/admin" className={navLink}>Admin Dashboard</Link>}
+            </div>
 
-            {/* ✅ ADDED REPORTS */}
-            <Link href="/vms/reports">Reports</Link>
+            <div className="flex items-center gap-3">
 
-            <Link href="/admin">Admin Dashboard</Link>
-          </div>
+              <div className="relative flex items-center gap-2 cursor-pointer" onClick={() => setMenuOpen(!menuOpen)}>
+                <span className="w-2 h-2 bg-green-500 rounded-full"></span>
+                <span className="text-sm font-bold text-gray-800">{displayName || "—"}</span>
+                <span className="text-[10px] text-gray-500">▼</span>
 
-          {/* RIGHT SIDE */}
-          <div style={styles.topRight}>
-
-            {/* USER BLOCK */}
-            <div style={styles.userWrap} onClick={toggleMenu}>
-
-              <span style={styles.onlineDot}></span>
-
-              <span style={styles.userName}>
-                John Hall
-              </span>
-
-              <span style={styles.caret}>▼</span>
-
-              {menuOpen && (
-                <div style={styles.dropdown}>
-
-                  <div style={styles.dropdownItem}>
-                    👤 Profile
+                {menuOpen && (
+                  <div className="absolute top-7 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px]">
+                    <div className="px-3 py-2.5 text-xs text-gray-500 border-b border-gray-100 truncate">
+                      {userEmail}
+                    </div>
+                    <div
+                      className="px-3 py-2.5 text-sm cursor-pointer hover:bg-gray-50 text-red-600"
+                      onClick={handleLogout}
+                    >
+                      🚪 Logout
+                    </div>
                   </div>
+                )}
+              </div>
 
-                  <div
-                    style={styles.dropdownItem}
-                    onClick={handleLogout}
-                  >
-                    🚪 Logout
-                  </div>
+              <span className="text-gray-300">|</span>
+              <span className="text-xs text-gray-500">{currentTime}</span>
 
-                </div>
-              )}
+              <button
+                onClick={() => {
+                  const next = !nightMode
+                  setNightMode(next)
+                  document.body.classList.toggle("dark", next)
+                  localStorage.setItem("asg-night-mode", String(next))
+                }}
+                className="px-3 py-1.5 bg-blue-800 text-white text-xs rounded-md hover:bg-blue-900 transition-colors border-none"
+              >
+                {nightMode ? "☀️ Day Mode" : "🌙 Night Mode"}
+              </button>
 
             </div>
 
-            <span style={{ margin: "0 8px" }}>|</span>
+          </nav>
+        )}
 
-            <span>{currentTime}</span>
-
-            <button style={styles.nightBtn}>
-              Night Mode
-            </button>
-
-          </div>
-
-        </div>
-
-        {/* PAGE CONTENT */}
-        <div style={styles.page}>
+        <div className={isLoginPage ? "" : "p-5"}>
           {children}
         </div>
 
       </body>
     </html>
   )
-}
-
-const styles: any = {
-
-  body: {
-    margin: 0,
-    fontFamily: "Arial"
-  },
-
-  topBar: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "center",
-    padding: "10px 20px",
-    borderBottom: "1px solid #ddd",
-    background: "#fff"
-  },
-
-  navLinks: {
-    display: "flex",
-    gap: 20
-  },
-
-  topRight: {
-    display: "flex",
-    alignItems: "center",
-    gap: 10
-  },
-
-  userWrap: {
-    display: "flex",
-    alignItems: "center",
-    gap: 6,
-    cursor: "pointer",
-    position: "relative"
-  },
-
-  userName: {
-    fontWeight: "bold"
-  },
-
-  caret: {
-    fontSize: 10
-  },
-
-  onlineDot: {
-    width: 8,
-    height: 8,
-    background: "#22c55e",
-    borderRadius: "50%"
-  },
-
-  dropdown: {
-    position: "absolute",
-    top: 25,
-    right: 0,
-    background: "white",
-    border: "1px solid #ddd",
-    borderRadius: 6,
-    boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
-    zIndex: 1000,
-    minWidth: 140
-  },
-
-  dropdownItem: {
-    padding: "10px 12px",
-    cursor: "pointer",
-    borderBottom: "1px solid #eee"
-  },
-
-  nightBtn: {
-    marginLeft: 10,
-    padding: "6px 10px",
-    background: "#1e40af",
-    color: "white",
-    border: "none",
-    borderRadius: 6,
-    cursor: "pointer"
-  },
-
-  page: {
-    padding: 20
-  }
-
 }

@@ -2,41 +2,33 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import { Community } from "@/lib/types"
 
-type Community = {
-  id: string
-  name: string
+interface Props {
+  value: string
+  onChange: (value: string) => void
+  label?: string
 }
 
-type Props = {
-  value?: string
-  selected?: string
-  onChange?: (value: string) => void
-  setSelected?: (value: string) => void
-}
-
-export default function CommunitySelector({
-  value,
-  selected,
-  onChange,
-  setSelected
-}: Props) {
+export default function CommunitySelector({ value, onChange, label = "Community" }: Props) {
 
   const [communities, setCommunities] = useState<Community[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState("")
 
   useEffect(() => {
     loadCommunities()
   }, [])
 
   async function loadCommunities() {
-
     const { data, error } = await supabase
       .from("communities")
       .select("id, name")
       .order("name", { ascending: true })
 
-    if (!error && data) {
+    if (error) {
+      setError("Failed to load communities")
+    } else if (data) {
       setCommunities(data)
     }
 
@@ -44,23 +36,19 @@ export default function CommunitySelector({
   }
 
   return (
-    <div>
+    <div className="mb-4">
+      <label className="block text-sm font-semibold mb-1">{label}</label>
 
-      <label style={styles.label}>Community</label>
+      {error && (
+        <p className="text-red-600 text-sm mb-1">{error}</p>
+      )}
 
       <select
-        value={value || selected || ""}
-        onChange={(e) => {
-          const val = e.target.value
-
-          // supports BOTH usage styles
-          if (onChange) onChange(val)
-          if (setSelected) setSelected(val)
-        }}
-        style={styles.select}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
         disabled={loading}
+        className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-50"
       >
-
         <option value="">
           {loading ? "Loading..." : "Select Community"}
         </option>
@@ -70,29 +58,7 @@ export default function CommunitySelector({
             {c.name}
           </option>
         ))}
-
       </select>
-
     </div>
   )
-}
-
-// ---------------- STYLES ----------------
-
-const styles: any = {
-
-  label: {
-    display: "block",
-    marginBottom: 6,
-    fontWeight: "bold"
-  },
-
-  select: {
-    width: "100%",
-    padding: "10px",
-    borderRadius: 6,
-    border: "1px solid #ccc",
-    fontSize: "14px"
-  }
-
 }

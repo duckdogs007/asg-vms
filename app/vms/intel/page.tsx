@@ -1,345 +1,313 @@
-"use client";
+"use client"
 
-import { useEffect, useState } from "react";
-import { supabase } from "@/lib/supabase/supabaseClient";
+import { useEffect, useState } from "react"
+import { supabase } from "@/lib/supabase/supabaseClient"
+import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
+
+interface PersonProfile {
+  name: string
+  status: "barred" | "clear"
+  visits: number
+  last_seen: string | null
+  oln: string | null
+}
 
 export default function IntelPage() {
 
-  const [searchInput, setSearchInput] = useState("");
-  const [results, setResults] = useState<any[]>([]);
-  const [selectedPerson, setSelectedPerson] = useState<any>(null);
-  const [communities, setCommunities] = useState<any[]>([]);
+  const [search,         setSearch]         = useState("")
+  const [selectedPerson, setSelectedPerson] = useState<PersonProfile | null>(null)
+  const [banHistory,     setBanHistory]     = useState<WatchlistEntry[]>([])
+  const [history,        setHistory]        = useState<VisitorLog[]>([])
+  const [communities,    setCommunities]    = useState<Community[]>([])
+  const [loading,        setLoading]        = useState(false)
+  const [error,          setError]          = useState("")
 
-  // ---------------- HELPERS ----------------
+  const [photoUrl,   setPhotoUrl]   = useState("")
+  const [uploading,  setUploading]  = useState(false)
+  const [uploadError,setUploadError]= useState("")
 
-  function normalizeName(name: string) {
-    return (name || "")
-      .toLowerCase()
-      .replace(",", "")
-      .replace(/\s+/g, " ")
-      .trim();
-  }
-
-  function daysAgo(date: string) {
-    const diff = Date.now() - new Date(date).getTime();
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-
-    if (days === 0) return "Today";
-    if (days === 1) return "1 day ago";
-    return `${days} days ago`;
-  }
-
-  function getCommunityName(id?: string) {
-    if (!id) return null;
-    const match = communities.find(c => c.id === id);
-    return match?.name || null;
-  }
-
-  // ---------------- INIT ----------------
   useEffect(() => {
-    loadCommunities();
-  }, []);
+    loadCommunities()
+
+    const params = new URLSearchParams(window.location.search)
+    const s = params.get("search")
+    if (s) {
+      setSearch(s)
+      handleSearch(s)
+    }
+  }, [])
 
   async function loadCommunities() {
-    const { data } = await supabase
-      .from("communities")
-      .select("id, name");
-
-    setCommunities(data || []);
+    const { data, error } = await supabase.from("communities").select("id,name")
+    if (!error && data) setCommunities(data)
   }
 
-  // ---------------- SEARCH ----------------
-  async function runSearch(query: string) {
-    if (!query) return;
+  function getCommunityName(id: string) {
+    return communities.find(x => x.id === id)?.name || "Unknown"
+  }
 
-    const q = query.toLowerCase().trim();
-    const tokens = q.replace(",", " ").split(" ").filter(Boolean);
-
-    const { data: visitors } = await supabase.from("visitors").select("*");
-    const { data: watchlist } = await supabase.from("watchlist").select("*");
-    const { data: logs } = await supabase.from("visitor_logs").select("*");
-
-    function matchText(text: string) {
-      const t = (text || "").toLowerCase();
-      return tokens.every(token => t.includes(token));
+  function parseName(input: string) {
+    const s = input.toLowerCase().trim()
+    if (s.includes(",")) {
+      const [last, first] = s.split(",").map(p => p.trim())
+      return { first, last }
     }
+    const parts = s.split(" ")
+    return { first: parts[0] || "", last: parts[parts.length - 1] || "" }
+  }
 
-    const profiles: any[] = [];
+  async function handleSearch(term?: string) {
+    const query = (term || search).trim()
+    if (!query) return
 
-    // ---------- VISITORS ----------
-    (visitors || []).forEach(v => {
-      const full = `${v.first_name} ${v.last_name}`;
-      if (!matchText(full)) return;
+    setLoading(true)
+    setError("")
+    setPhotoUrl("")
 
-      const watchMatch = (watchlist || []).find(w =>
-        w.first_name.toLowerCase() === v.first_name.toLowerCase() &&
-        w.last_name.toLowerCase() === v.last_name.toLowerCase()
-      );
+    try {
+      const { first, last } = parseName(query)
 
-      const normalizedFull = normalizeName(full);
+      const { data: visits, error: visitErr } = await supabase
+        .from("visitor_logs")
+        .select("*")
+        .or(`last_name.ilike.%${last}%,first_name.ilike.%${first}%`)
+        .order("created_at", { ascending: false })
 
-      const personLogs = (logs || []).filter(l => {
-        const name1 = normalizeName(`${l.first_name} ${l.last_name}`);
-        const name2 = normalizeName(`${l.dl_first_name} ${l.dl_last_name}`);
-        return name1 === normalizedFull || name2 === normalizedFull;
-      });
-
-      const lastVisit = personLogs.sort((a, b) =>
-        new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
-      )[0];
-
-      profiles.push({
-        id: v.id,
-        first_name: v.first_name,
-        last_name: v.last_name,
-        isBarred: !!watchMatch,
-        watchData: watchMatch || null,
-        history: personLogs,
-        lastVisit,
-        community_id: lastVisit?.community_id || null
-      });
-    });
-
-    // ---------- WATCHLIST ONLY ----------
-    (watchlist || []).forEach(w => {
-      const full = `${w.first_name} ${w.last_name}`;
-      if (!matchText(full)) return;
-
-      const exists = profiles.some(p =>
-        p.first_name.toLowerCase() === w.first_name.toLowerCase() &&
-        p.last_name.toLowerCase() === w.last_name.toLowerCase()
-      );
-
-      if (!exists) {
-        profiles.push({
-          id: w.id,
-          first_name: w.first_name,
-          last_name: w.last_name,
-          isBarred: true,
-          watchData: w,
-          history: [],
-          lastVisit: null,
-          community_id: w.community_id || null
-        });
+      if (visitErr) {
+        setError("Failed to load visit history.")
+        return
       }
-    });
 
-    profiles.sort((a, b) => {
-      if (a.isBarred && !b.isBarred) return -1;
-      if (!a.isBarred && b.isBarred) return 1;
-      return a.last_name.localeCompare(b.last_name);
-    });
+      const visitData = (visits || []).filter((v: VisitorLog) =>
+        v.first_name?.toLowerCase().includes(first) &&
+        v.last_name?.toLowerCase().includes(last)
+      )
+      setHistory(visitData)
 
-    setResults(profiles);
+      const { data: watch, error: watchErr } = await supabase
+        .from("watchlist")
+        .select("*")
+        .or(`last_name.ilike.%${last}%,first_name.ilike.%${first}%`)
+
+      if (watchErr) {
+        setError("Failed to load watchlist data.")
+        return
+      }
+
+      const watchMatch = (watch || []).find((w: WatchlistEntry) =>
+        w.first_name?.toLowerCase().includes(first) &&
+        w.last_name?.toLowerCase().includes(last)
+      ) || null
+
+      setSelectedPerson({
+        name: query,
+        status: watchMatch ? "barred" : "clear",
+        visits: visitData.length,
+        last_seen: visitData[0]?.created_at || null,
+        oln: watchMatch?.oln || null
+      })
+
+      setBanHistory(watchMatch ? [watchMatch] : [])
+
+      // Try to load stored photo
+      const slug = `${first}_${last}`
+      tryLoadPhoto(slug)
+
+    } finally {
+      setLoading(false)
+    }
   }
 
-  // ---------------- SELECT ----------------
-  function loadProfile(person: any) {
-    setSelectedPerson(person);
-    setResults([]);
+  function tryLoadPhoto(slug: string) {
+    const { data } = supabase.storage
+      .from("visitor-photos")
+      .getPublicUrl(`${slug}.jpg`)
+
+    if (data?.publicUrl) setPhotoUrl(data.publicUrl)
   }
 
-  // ---------------- LOG ENCOUNTER ----------------
-  async function logEncounter() {
-    if (!selectedPerson) return;
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file || !selectedPerson) return
 
-    const fullName = `${selectedPerson.first_name} ${selectedPerson.last_name}`;
+    setUploading(true)
+    setUploadError("")
 
-    await supabase.from("visitor_logs").insert({
-      person_name: fullName,
-      person_type: "barred",
-      status: "barred_encounter",
-      created_at: new Date()
-    });
+    try {
+      const { first, last } = parseName(selectedPerson.name)
+      const slug = `${first}_${last}`
+      const ext  = file.name.split(".").pop() || "jpg"
+      const path = `${slug}.${ext}`
 
-    runSearch(fullName);
+      const { data, error } = await supabase.storage
+        .from("visitor-photos")
+        .upload(path, file, { upsert: true })
+
+      if (error) {
+        setUploadError("Upload failed: " + error.message)
+        return
+      }
+
+      const { data: { publicUrl } } = supabase.storage
+        .from("visitor-photos")
+        .getPublicUrl(data.path)
+
+      setPhotoUrl(publicUrl)
+    } finally {
+      setUploading(false)
+    }
   }
-
-  // ---------------- UI ----------------
-
-  const visitCount = selectedPerson?.history?.length || 0;
-
-  const lastSeen = selectedPerson?.lastVisit?.created_at
-    ? daysAgo(selectedPerson.lastVisit.created_at)
-    : null;
 
   return (
-    <div style={styles.container}>
-      <h2>Intel Terminal</h2>
+    <div className="p-5">
+
+      <h2 className="text-2xl font-bold mb-4">Intel Terminal</h2>
 
       {/* SEARCH */}
-      <div style={styles.searchRow}>
+      <div className="flex gap-2 mb-4">
         <input
-          value={searchInput}
-          onChange={(e) => setSearchInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") runSearch(searchInput);
-          }}
-          style={styles.input}
-          placeholder="Search name..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => e.key === "Enter" && handleSearch()}
+          placeholder="Search name, unit, or OLN"
+          className="px-3 py-2 border border-gray-300 rounded-md text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-600"
         />
-
-        <button style={styles.button} onClick={() => runSearch(searchInput)}>
-          Search
+        <button
+          onClick={() => handleSearch()}
+          disabled={loading}
+          className="px-4 py-2 bg-blue-800 text-white text-sm rounded-md hover:bg-blue-900 transition-colors border-none cursor-pointer disabled:opacity-50"
+        >
+          {loading ? "Searching..." : "Search"}
         </button>
       </div>
 
-      {/* RESULTS */}
-      <div style={styles.results}>
-        {results.map(r => (
-          <div
-            key={r.id}
-            style={styles.resultCard}
-            onClick={() => loadProfile(r)}
-          >
-            {r.last_name}, {r.first_name}
-            {r.isBarred && <span style={styles.flag}> 🚨 BARRED</span>}
-          </div>
-        ))}
-      </div>
-
-      {/* PROFILE */}
-      {selectedPerson && (
-        <div style={styles.profileWrap}>
-
-          {/* LEFT */}
-          <div style={styles.leftPanel}>
-            <div style={styles.photoBox}></div>
-            <input type="file" />
-
-            <h3>
-              {selectedPerson.last_name}, {selectedPerson.first_name}
-            </h3>
-
-            <div>
-              {selectedPerson.isBarred ? "🚨 BARRED PERSON" : "🟢 Clear"}
-            </div>
-
-            {/* 🔥 NEW METRICS */}
-            <div><strong>Visits:</strong> {visitCount}</div>
-
-            <div><strong>Last Seen:</strong> {lastSeen || "-"}</div>
-
-            <div style={{ fontSize: 12, opacity: 0.7 }}>
-              {selectedPerson.lastVisit
-                ? new Date(selectedPerson.lastVisit.created_at).toLocaleString()
-                : ""}
-            </div>
-
-            <div>
-              <strong>Community:</strong>{" "}
-              {selectedPerson.watchData?.property ||
-                getCommunityName(selectedPerson.community_id) ||
-                "-"}
-            </div>
-
-            <button style={styles.button} onClick={logEncounter}>
-              🚨 Log Encounter
-            </button>
-          </div>
-
-          {/* RIGHT */}
-          <div style={styles.rightPanel}>
-
-            <h3>🚨 Ban History</h3>
-
-            {selectedPerson.watchData ? (
-              <div style={styles.historyCard}>
-
-                <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>
-                  <div>
-                    <strong>Ban Date:</strong>{" "}
-                    {selectedPerson.watchData.ban_date
-                      ? new Date(selectedPerson.watchData.ban_date).toLocaleDateString()
-                      : "-"}
-                  </div>
-
-                  <div>
-                    <strong>Community:</strong>{" "}
-                    {selectedPerson.watchData.property ||
-                      getCommunityName(selectedPerson.community_id) ||
-                      "-"}
-                  </div>
-                </div>
-
-                <div><strong>DOB:</strong> {selectedPerson.watchData.dob || "-"}</div>
-                <div><strong>OLN:</strong> {selectedPerson.watchData.oln || "-"}</div>
-                <div><strong>SSN:</strong> {selectedPerson.watchData.ssn || "-"}</div>
-                <div><strong>Banned By:</strong> {selectedPerson.watchData.banned_by || "-"}</div>
-                <div><strong>Comments:</strong> {selectedPerson.watchData.comments || "-"}</div>
-
-              </div>
-            ) : (
-              <div>No ban history</div>
-            )}
-
-            <h3 style={{ marginTop: 20 }}>📊 Visitor History</h3>
-
-            {(selectedPerson.history || []).map((v: any) => {
-
-              const isDL = v.dl_first_name && v.dl_last_name;
-
-              return (
-                <div key={v.id} style={styles.historyRow}>
-
-                  <div style={{ display: "flex", gap: 12 }}>
-                    <strong>{new Date(v.created_at).toLocaleString()}</strong>
-
-                    <span style={{
-                      fontSize: 12,
-                      padding: "2px 8px",
-                      borderRadius: 6,
-                      background: isDL ? "#065f46" : "#78350f",
-                      color: "#fff"
-                    }}>
-                      {isDL ? "DL SCAN" : "MANUAL ENTRY"}
-                    </span>
-                  </div>
-
-                  <div>Community: {getCommunityName(v.community_id) || "-"}</div>
-
-                  <div>
-                    Name: {v.first_name} {v.last_name}
-                    {isDL && ` (DL: ${v.dl_first_name} ${v.dl_last_name})`}
-                  </div>
-
-                </div>
-              );
-            })}
-
-          </div>
+      {/* ERROR */}
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4">
+          {error}
         </div>
       )}
-    </div>
-  );
-}
 
-// ---------------- STYLES ----------------
-const styles: any = {
-  container: { padding: 20 },
-  searchRow: { display: "flex", gap: 10 },
-  input: { padding: 8, border: "1px solid #ccc", borderRadius: 4 },
-  button: { padding: "8px 12px", background: "#2563eb", color: "#fff", borderRadius: 6, border: "none" },
-  results: { marginTop: 20 },
-  resultCard: { padding: 10, background: "#111", color: "#e5e7eb", marginBottom: 6, borderRadius: 6, cursor: "pointer" },
-  flag: { color: "red", marginLeft: 8 },
-  profileWrap: { display: "flex", gap: 30, marginTop: 30 },
-  leftPanel: { width: 240 },
-  rightPanel: { flex: 1 },
-  photoBox: { width: 180, height: 180, background: "#333", marginBottom: 10 },
-  historyRow: {
-    marginBottom: 10,
-    padding: 10,
-    background: "#0f172a",
-    borderRadius: 6,
-    color: "#e5e7eb",
-    border: "1px solid #1f2937"
-  },
-  historyCard: {
-    padding: 12,
-    background: "#111827",
-    borderRadius: 8,
-    color: "#e5e7eb",
-    marginBottom: 10
-  }
-};
+      {/* STATUS HEADER */}
+      {selectedPerson && (
+        <div className={`px-4 py-3 rounded-lg text-white font-bold mb-4 ${selectedPerson.status === "barred" ? "bg-red-900" : "bg-gray-900"}`}>
+          {selectedPerson.name.toUpperCase()}
+          {selectedPerson.oln && <span className="font-normal ml-2">🪪 {selectedPerson.oln}</span>}
+          {selectedPerson.status === "barred" && <span className="ml-2">🚨 BARRED</span>}
+        </div>
+      )}
+
+      <div className="flex gap-8">
+
+        {/* LEFT PANEL */}
+        <div className="w-72 flex-shrink-0">
+
+          {/* PHOTO */}
+          <div className="w-48 h-56 bg-gray-800 rounded-lg mb-3 overflow-hidden flex items-center justify-center">
+            {photoUrl ? (
+              <img
+                src={photoUrl}
+                alt="Visitor photo"
+                className="w-full h-full object-cover"
+                onError={() => setPhotoUrl("")}
+              />
+            ) : (
+              <span className="text-gray-500 text-xs">No photo</span>
+            )}
+          </div>
+
+          <div className="mb-3">
+            <label className="block text-xs font-semibold text-gray-600 mb-1">
+              {uploading ? "Uploading..." : "Upload Photo"}
+            </label>
+            <input
+              type="file"
+              accept="image/*"
+              onChange={handlePhotoUpload}
+              disabled={uploading || !selectedPerson}
+              className="text-sm text-gray-600 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 disabled:opacity-50"
+            />
+            {uploadError && (
+              <p className="text-red-600 text-xs mt-1">{uploadError}</p>
+            )}
+          </div>
+
+          {selectedPerson && (
+            <div className="flex flex-col gap-2">
+              <h3 className="font-semibold text-gray-900 capitalize">{selectedPerson.name}</h3>
+
+              <div className="text-sm">
+                Status:{" "}
+                <span className={`font-bold ${selectedPerson.status === "barred" ? "text-red-600" : "text-green-600"}`}>
+                  {selectedPerson.status}
+                </span>
+              </div>
+
+              <div className="text-sm text-gray-700">Total Visits: <strong>{selectedPerson.visits}</strong></div>
+
+              <div className="text-sm text-gray-700">
+                Last Seen:{" "}
+                {selectedPerson.last_seen
+                  ? new Date(selectedPerson.last_seen).toLocaleString()
+                  : "—"}
+              </div>
+            </div>
+          )}
+
+          {!selectedPerson && !loading && (
+            <p className="text-sm text-gray-400 italic">Search a name to load profile.</p>
+          )}
+        </div>
+
+        {/* RIGHT PANEL */}
+        <div className="flex-1">
+
+          <h3 className="text-lg font-semibold mb-3">🚨 Ban History</h3>
+
+          {banHistory.length > 0 ? (
+            banHistory.map((b, i) => (
+              <div key={i} className="bg-gray-900 text-white px-4 py-3 rounded-lg mb-3">
+                <div className="font-bold text-red-400 mb-2">🚨 {b.reason || "WATCHLIST ENTRY"}</div>
+                <div className="flex flex-col gap-1 text-sm text-gray-300">
+                  <span>Name: {b.first_name} {b.last_name}</span>
+                  {b.dob  && <span>DOB: {b.dob}</span>}
+                  {b.oln  && <span>OLN: {b.oln}</span>}
+                  {b.sex  && <span>Sex: {b.sex}</span>}
+                  {b.race && <span>Race: {b.race}</span>}
+                  {(b.notes || b.comments) && <span>Notes: {b.notes || b.comments}</span>}
+                  <span>Date Banned: {b.ban_date || b.banned_date || b.date_banned || "Unknown"}</span>
+                  <span className="opacity-60">Banned By: {b.flagged_by || b.banned_by || "Unknown"}</span>
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-gray-500 mb-6">No ban history.</p>
+          )}
+
+          <h3 className="text-lg font-semibold mb-3 mt-5">📊 Visitor History</h3>
+
+          {history.length > 0 ? (
+            history.map((v) => (
+              <div key={v.id} className="bg-gray-900 text-white px-4 py-3 rounded-lg mb-2">
+                <div className="font-medium">{v.first_name} {v.last_name}
+                  <span className="text-gray-400 font-normal ml-2 text-sm">({v.person_type})</span>
+                </div>
+                <div className="text-sm text-gray-400 mt-0.5">
+                  {getCommunityName(v.community_id || "")} · Unit: {v.unit_number || "N/A"}
+                </div>
+                <div className="text-xs text-gray-500 mt-0.5">
+                  {new Date(v.created_at).toLocaleString()}
+                </div>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-gray-500">
+              {selectedPerson ? "No visit history found." : ""}
+            </p>
+          )}
+
+        </div>
+      </div>
+    </div>
+  )
+}
