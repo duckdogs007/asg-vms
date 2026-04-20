@@ -76,18 +76,16 @@ export default function VMSPage() {
     setUnits(data || [])
   }
 
-  async function loadResidents(uid: string) {
-    setUnitId(uid)
-    if (!uid) { setResidents([]); return }
-
-    const unit = units.find(u => u.id === uid)
-    console.log("unit found:", unit, "communityId:", communityId)
-    if (!unit) { setResidents([]); return }
+  async function loadResidents(unitNumber: string) {
+    setUnitId(unitNumber)
+    if (!unitNumber) { setResidents([]); return }
 
     const { data, error } = await supabase
       .from("residents")
       .select("*")
-      .ilike("unit_number", unit.unit_number)
+      .eq("community_id", communityId)
+      .eq("unit_number", unitNumber)
+      .not("name", "is", null)
 
     if (error) { setLoadError("Failed to load residents."); return }
     setResidents(data || [])
@@ -162,8 +160,7 @@ export default function VMSPage() {
 
     try {
       const { first, last } = parseName(visitorName)
-      const selectedUnit = units.find(u => u.id === unitId)
-      const unitNumber   = selectedUnit?.unit_number || null
+      const unitNumber = unitId || null
 
       let visitorId: string | null = null
 
@@ -267,7 +264,7 @@ export default function VMSPage() {
           <select value={unitId} onChange={(e) => loadResidents(e.target.value)} className={inputCls}>
             <option value="">Select Unit</option>
             {units.map(u => (
-              <option key={u.id} value={u.id}>{u.unit_number}</option>
+              <option key={u.id} value={u.unit_number}>{u.unit_number}</option>
             ))}
           </select>
 
