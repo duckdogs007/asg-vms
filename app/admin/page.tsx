@@ -6,9 +6,10 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
 
-type Tab = "dashboard" | "watchlist" | "rentroll"
+type Tab        = "dashboard" | "watchlist" | "rentroll" | "reports"
+type ReportTab  = "daily" | "incident" | "view"
 
-export default function AdminDashboard() {
+export default function UserDashboard() {
 
   const [activeTab, setActiveTab] = useState<Tab>("dashboard")
 
@@ -17,73 +18,147 @@ export default function AdminDashboard() {
   const [communityId, setCommunityId] = useState("")
   const [message, setMessage] = useState("")
 
-  const [watchlist, setWatchlist] = useState<WatchlistEntry[]>([])
-  const [watchlistLoading, setWatchlistLoading] = useState(false)
+  const [watchlist,       setWatchlist]       = useState<WatchlistEntry[]>([])
+  const [watchlistLoading,setWatchlistLoading] = useState(false)
   const [watchlistSearch, setWatchlistSearch] = useState("")
 
-  const [rentRoll, setRentRoll] = useState<any[]>([])
-  const [rentRollLoading, setRentRollLoading] = useState(false)
-  const [rentRollSearch, setRentRollSearch] = useState("")
+  const [rentRoll,          setRentRoll]          = useState<any[]>([])
+  const [rentRollLoading,   setRentRollLoading]   = useState(false)
+  const [rentRollSearch,    setRentRollSearch]    = useState("")
   const [rentRollCommunityId, setRentRollCommunityId] = useState("")
+
+  // Officer reports
+  const [reportTab,     setReportTab]    = useState<ReportTab>("daily")
+  const [reportSaving,  setReportSaving] = useState(false)
+  const [reportMessage, setReportMessage]= useState("")
+  const [reportError,   setReportError]  = useState("")
+  const [pastReports,   setPastReports]  = useState<any[]>([])
+  const [reportsLoading,setReportsLoading] = useState(false)
+
+  // Daily log form
+  const [dailyDate,      setDailyDate]      = useState(new Date().toISOString().split("T")[0])
+  const [dailyShift,     setDailyShift]     = useState("Day")
+  const [dailyCommunity, setDailyCommunity] = useState("")
+  const [dailyOfficer,   setDailyOfficer]   = useState("")
+  const [dailyWeather,   setDailyWeather]   = useState("")
+  const [dailyNarrative, setDailyNarrative] = useState("")
+  const [dailyNotes,     setDailyNotes]     = useState("")
+
+  // Incident report form
+  const [incDate,        setIncDate]        = useState(new Date().toISOString().split("T")[0])
+  const [incTime,        setIncTime]        = useState("")
+  const [incCommunity,   setIncCommunity]   = useState("")
+  const [incLocation,    setIncLocation]    = useState("")
+  const [incType,        setIncType]        = useState("Disturbance")
+  const [incPersons,     setIncPersons]     = useState("")
+  const [incDescription, setIncDescription] = useState("")
+  const [incAction,      setIncAction]      = useState("")
+  const [incFollowUp,    setIncFollowUp]    = useState(false)
+  const [incOfficer,     setIncOfficer]     = useState("")
 
   useEffect(() => { load() }, [])
 
   useEffect(() => {
     if (activeTab === "watchlist") loadWatchlist()
-    if (activeTab === "rentroll") loadRentRoll()
+    if (activeTab === "rentroll")  loadRentRoll()
+    if (activeTab === "reports")   loadPastReports()
   }, [activeTab])
 
   async function load() {
     const { data } = await supabase.from("visitor_logs").select("*")
-    const total = data?.length || 0
     setStats({
-      total,
+      total:      data?.length || 0,
       visitor:    data?.filter(v => v.person_type?.toLowerCase() === "visitor").length    || 0,
       delivery:   data?.filter(v => v.person_type?.toLowerCase() === "delivery").length   || 0,
       contractor: data?.filter(v => v.person_type?.toLowerCase() === "contractor").length || 0
     })
     const { data: c } = await supabase.from("communities").select("*")
     setCommunities(c || [])
-    if (c?.length) setCommunityId(c[0].id)
-  }
+    if (c?.length) {
+      setCommunityId(c[0].id)
+      setDailyCommunity(c[0].id)
+      setIncCommunity(c[0].id)
+    }
 
-  async function loadRentRoll(commId?: string) {
-    setRentRollLoading(true)
-    const id = commId ?? rentRollCommunityId
-
-    // Look up community name so we can match either UUID or name string
-    const community = communities.find(c => c.id === id)
-    const commName  = community?.name || ""
-
-    const { data } = await supabase
-      .from("residents")
-      .select("*")
-      .order("unit_number", { ascending: true })
-
-    // Filter client-side — residents may store community_id as UUID or as name string
-    const filtered = (data || []).filter(r => {
-      if (!id) return true
-      return r.community_id === id || r.community_id === commName
-    })
-
-    setRentRoll(filtered)
-    setRentRollLoading(false)
+    // Pre-fill officer name from logged-in user
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user?.email) {
+      const name = user.email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, c => c.toUpperCase())
+      setDailyOfficer(name)
+      setIncOfficer(name)
+    }
   }
 
   async function loadWatchlist(commId?: string) {
     setWatchlistLoading(true)
-    let query = supabase.from("watchlist").select("*").order("last_name", { ascending: true })
     const id = commId ?? communityId
+    let query = supabase.from("watchlist").select("*").order("last_name", { ascending: true })
     if (id) query = query.eq("community_id", id)
     const { data } = await query
     setWatchlist(data || [])
     setWatchlistLoading(false)
   }
 
+  async function loadRentRoll(commId?: string) {
+    setRentRollLoading(true)
+    const id = commId ?? rentRollCommunityId
+    const community = communities.find(c => c.id === id)
+    const commName  = community?.name || ""
+    const { data } = await supabase.from("residents").select("*").order("unit_number", { ascending: true })
+    const filtered = (data || []).filter(r => {
+      if (!id) return true
+      return r.community_id === id || r.community_id === commName
+    })
+    setRentRoll(filtered)
+    setRentRollLoading(false)
+  }
+
+  async function loadPastReports() {
+    setReportsLoading(true)
+    const { data: daily }    = await supabase.from("officer_daily_logs").select("*").order("date", { ascending: false }).limit(20)
+    const { data: incidents } = await supabase.from("incident_reports").select("*").order("date", { ascending: false }).limit(20)
+    const combined = [
+      ...(daily    || []).map(r => ({ ...r, _type: "Daily Log" })),
+      ...(incidents || []).map(r => ({ ...r, _type: "Incident" }))
+    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+    setPastReports(combined)
+    setReportsLoading(false)
+  }
+
+  async function saveDailyLog() {
+    if (!dailyNarrative) { setReportError("Patrol narrative is required."); return }
+    setReportSaving(true); setReportError(""); setReportMessage("")
+    const { error } = await supabase.from("officer_daily_logs").insert({
+      date: dailyDate, shift: dailyShift, community_id: dailyCommunity,
+      officer_name: dailyOfficer, weather: dailyWeather,
+      narrative: dailyNarrative, notes: dailyNotes,
+      created_at: new Date().toISOString()
+    })
+    setReportSaving(false)
+    if (error) { setReportError(error.message); return }
+    setReportMessage("✅ Daily log submitted.")
+    setDailyNarrative(""); setDailyNotes(""); setDailyWeather("")
+  }
+
+  async function saveIncidentReport() {
+    if (!incDescription) { setReportError("Incident description is required."); return }
+    setReportSaving(true); setReportError(""); setReportMessage("")
+    const { error } = await supabase.from("incident_reports").insert({
+      date: incDate, time: incTime, community_id: incCommunity,
+      location: incLocation, incident_type: incType,
+      persons_involved: incPersons, description: incDescription,
+      action_taken: incAction, follow_up_required: incFollowUp,
+      officer_name: incOfficer, created_at: new Date().toISOString()
+    })
+    setReportSaving(false)
+    if (error) { setReportError(error.message); return }
+    setReportMessage("✅ Incident report submitted.")
+    setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLocation(""); setIncFollowUp(false)
+  }
+
   async function handleRentRollUpload(file: File) {
     const text = await file.text()
-    const rows = text.split("\n").slice(1)
-    for (let row of rows) {
+    for (let row of text.split("\n").slice(1)) {
       const [unit_number, resident_name] = row.split(",")
       if (!unit_number) continue
       await supabase.from("units").upsert([{ unit_number, community_id: communityId }])
@@ -94,8 +169,7 @@ export default function AdminDashboard() {
 
   async function handleWatchlistUpload(file: File) {
     const text = await file.text()
-    const rows = text.split("\n").slice(1)
-    for (let row of rows) {
+    for (let row of text.split("\n").slice(1)) {
       const [first_name, last_name, dob, reason, severity] = row.split(",")
       if (!last_name) continue
       await supabase.from("watchlist").upsert([{ first_name, last_name, dob, reason, severity, community_id: communityId }])
@@ -104,56 +178,49 @@ export default function AdminDashboard() {
     if (activeTab === "watchlist") loadWatchlist()
   }
 
+  const filteredWatchlist = watchlist.filter(p => {
+    if (!watchlistSearch) return true
+    const q = watchlistSearch.toLowerCase()
+    return p.first_name?.toLowerCase().includes(q) || p.last_name?.toLowerCase().includes(q) ||
+           p.oln?.toLowerCase().includes(q) || p.reason?.toLowerCase().includes(q)
+  })
+
   const filteredRentRoll = rentRoll.filter(r => {
     if (!rentRollSearch) return true
     const q = rentRollSearch.toLowerCase()
-    return (
-      r.name?.toLowerCase().includes(q) ||
-      r.unit_number?.toLowerCase().includes(q)
-    )
-  })
-
-  const filtered = watchlist.filter(p => {
-    if (!watchlistSearch) return true
-    const q = watchlistSearch.toLowerCase()
-    return (
-      p.first_name?.toLowerCase().includes(q) ||
-      p.last_name?.toLowerCase().includes(q)  ||
-      p.oln?.toLowerCase().includes(q)         ||
-      p.reason?.toLowerCase().includes(q)
-    )
+    return r.name?.toLowerCase().includes(q) || r.unit_number?.toLowerCase().includes(q)
   })
 
   const tabCls = (t: Tab) =>
     `px-5 py-2.5 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
-      activeTab === t
-        ? "border-blue-600 text-blue-600"
-        : "border-transparent text-gray-500 hover:text-gray-800"
+      activeTab === t ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-800"
     }`
+
+  const rTabCls = (t: ReportTab) =>
+    `px-4 py-2 text-sm font-medium rounded-lg transition-colors cursor-pointer border-none ${
+      reportTab === t ? "bg-blue-800 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+    }`
+
+  const inputCls = "w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+  const textareaCls = "w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white resize-none"
+  const labelCls = "block text-xs font-semibold text-gray-600 mb-1"
 
   return (
     <div className="p-5 max-w-6xl">
 
-      <h2 className="text-2xl font-bold mb-6">Admin Dashboard</h2>
+      <h2 className="text-2xl font-bold mb-6">User Dashboard</h2>
 
-      {/* TABS */}
+      {/* MAIN TABS */}
       <div className="flex border-b border-gray-200 mb-6">
-        <button className={tabCls("dashboard")} onClick={() => setActiveTab("dashboard")}>
-          ⚙️ Dashboard
-        </button>
-        <button className={tabCls("watchlist")} onClick={() => setActiveTab("watchlist")}>
-          🚨 Watchlist
-        </button>
-        <button className={tabCls("rentroll")} onClick={() => setActiveTab("rentroll")}>
-          🏠 Rent Roll
-        </button>
+        <button className={tabCls("dashboard")} onClick={() => setActiveTab("dashboard")}>⚙️ Dashboard</button>
+        <button className={tabCls("watchlist")} onClick={() => setActiveTab("watchlist")}>🚨 Watchlist</button>
+        <button className={tabCls("rentroll")}  onClick={() => setActiveTab("rentroll")}>🏠 Rent Roll</button>
+        <button className={tabCls("reports")}   onClick={() => setActiveTab("reports")}>📋 Officer Reports</button>
       </div>
 
       {/* ── DASHBOARD TAB ── */}
       {activeTab === "dashboard" && (
         <div>
-
-          {/* STATS */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
             <StatCard label="Total Entries" value={stats.total} />
             <StatCard label="Visitors"      value={stats.visitor} />
@@ -161,127 +228,69 @@ export default function AdminDashboard() {
             <StatCard label="Contractors"   value={stats.contractor} />
           </div>
 
-          {/* COMMUNITY SELECTOR */}
           <div className="mb-6">
-            <label className="block text-sm font-semibold mb-2">Community</label>
-            <select
-              value={communityId}
-              onChange={(e) => setCommunityId(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-600"
-            >
-              {communities.map(c => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
+            <label className={labelCls}>Community</label>
+            <select value={communityId} onChange={(e) => setCommunityId(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-600">
+              {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
 
-          {/* UPLOADS */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-            <UploadBox
-              title="📥 Upload Rent Roll"
-              desc="CSV format: unit_number, resident_name"
-              onChange={(f) => handleRentRollUpload(f)}
-            />
-
-            <UploadBox
-              title="🚨 Upload Watchlist"
-              desc="CSV format: first_name, last_name, dob, reason, severity"
-              onChange={(f) => handleWatchlistUpload(f)}
-            />
-
+            <UploadBox title="📥 Upload Rent Roll"  desc="CSV: unit_number, resident_name"                       onChange={handleRentRollUpload} />
+            <UploadBox title="🚨 Upload Watchlist"  desc="CSV: first_name, last_name, dob, reason, severity"    onChange={handleWatchlistUpload} />
           </div>
 
           {message && (
-            <div className="mt-5 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">
-              {message}
-            </div>
+            <div className="mt-5 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg text-sm">{message}</div>
           )}
-
         </div>
       )}
 
       {/* ── WATCHLIST TAB ── */}
       {activeTab === "watchlist" && (
         <div>
-
           <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <select
-                value={communityId}
+              <select value={communityId}
                 onChange={(e) => { setCommunityId(e.target.value); loadWatchlist(e.target.value) }}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600">
                 <option value="">All Communities</option>
-                {communities.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <span className="text-sm text-gray-500">
-                {filtered.length} {filtered.length === 1 ? "person" : "persons"}
-              </span>
+              <span className="text-sm text-gray-500">{filteredWatchlist.length} persons</span>
             </div>
-            <input
-              value={watchlistSearch}
-              onChange={(e) => setWatchlistSearch(e.target.value)}
+            <input value={watchlistSearch} onChange={(e) => setWatchlistSearch(e.target.value)}
               placeholder="Search name, OLN, or reason..."
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-600" />
           </div>
 
-          {watchlistLoading && (
-            <div className="text-gray-500 text-sm py-8 text-center">Loading watchlist...</div>
-          )}
-
-          {!watchlistLoading && filtered.length === 0 && (
-            <div className="text-gray-500 text-sm py-8 text-center">No watchlist entries found.</div>
-          )}
-
-          {!watchlistLoading && filtered.map((p, i) => (
+          {watchlistLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading...</div>}
+          {!watchlistLoading && filteredWatchlist.length === 0 && <div className="text-gray-500 text-sm py-8 text-center">No entries found.</div>}
+          {!watchlistLoading && filteredWatchlist.map((p, i) => (
             <div key={p.id || i} className="border border-gray-200 rounded-xl px-5 py-4 mb-3 bg-white hover:border-red-300 transition-colors">
               <div className="flex justify-between items-start">
-
                 <div>
-                  <div className="font-bold text-gray-900 text-base">
+                  <div className="font-bold text-gray-900">
                     {p.last_name}, {p.first_name}
-                    {p.firearm_flag && (
-                      <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-semibold">
-                        🔫 FIREARM
-                      </span>
-                    )}
+                    {p.firearm_flag && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🔫 FIREARM</span>}
                   </div>
-
-                  <div className="text-sm text-red-600 font-medium mt-0.5">
-                    🚨 {p.reason || "No reason listed"}
-                  </div>
-
+                  <div className="text-sm text-red-600 font-medium mt-0.5">🚨 {p.reason || "No reason listed"}</div>
                   <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
-                    {p.dob  && <span>DOB: {p.dob}</span>}
-                    {p.oln  && <span>OLN: {p.oln}</span>}
-                    {p.sex  && <span>Sex: {p.sex}</span>}
+                    {p.dob && <span>DOB: {p.dob}</span>}
+                    {p.oln && <span>OLN: {p.oln}</span>}
+                    {p.sex && <span>Sex: {p.sex}</span>}
                     {p.race && <span>Race: {p.race}</span>}
                   </div>
-
-                  {(p.notes || p.comments) && (
-                    <div className="text-xs text-gray-400 mt-1">
-                      Notes: {p.notes || p.comments}
-                    </div>
-                  )}
+                  {(p.notes || p.comments) && <div className="text-xs text-gray-400 mt-1">Notes: {p.notes || p.comments}</div>}
                 </div>
-
                 <div className="text-right text-xs text-gray-400 shrink-0 ml-4">
-                  {(p.ban_date || p.banned_date || p.date_banned) && (
-                    <div>Banned: {p.ban_date || p.banned_date || p.date_banned}</div>
-                  )}
-                  {(p.flagged_by || p.banned_by) && (
-                    <div>By: {p.flagged_by || p.banned_by}</div>
-                  )}
+                  {(p.ban_date || p.banned_date) && <div>Banned: {p.ban_date || p.banned_date}</div>}
+                  {(p.flagged_by || p.banned_by) && <div>By: {p.flagged_by || p.banned_by}</div>}
                 </div>
-
               </div>
             </div>
           ))}
-
         </div>
       )}
 
@@ -290,41 +299,25 @@ export default function AdminDashboard() {
         <div>
           <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
             <div className="flex items-center gap-3">
-              <select
-                value={rentRollCommunityId}
-                onChange={(e) => {
-                  setRentRollCommunityId(e.target.value)
-                  loadRentRoll(e.target.value)
-                }}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
+              <select value={rentRollCommunityId}
+                onChange={(e) => { setRentRollCommunityId(e.target.value); loadRentRoll(e.target.value) }}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600">
                 <option value="">All Communities</option>
-                {communities.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
+                {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
-              <span className="text-sm text-gray-500">
-                {filteredRentRoll.length} {filteredRentRoll.length === 1 ? "resident" : "residents"}
-              </span>
+              <span className="text-sm text-gray-500">{filteredRentRoll.length} residents</span>
             </div>
-            <input
-              value={rentRollSearch}
-              onChange={(e) => setRentRollSearch(e.target.value)}
+            <input value={rentRollSearch} onChange={(e) => setRentRollSearch(e.target.value)}
               placeholder="Search name or unit..."
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-600"
-            />
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm w-72 focus:outline-none focus:ring-2 focus:ring-blue-600" />
           </div>
 
-          {rentRollLoading && (
-            <div className="text-gray-500 text-sm py-8 text-center">Loading rent roll...</div>
-          )}
-
+          {rentRollLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading...</div>}
           {!rentRollLoading && filteredRentRoll.length === 0 && (
             <div className="text-gray-500 text-sm py-8 text-center">
-              {rentRollCommunityId ? "No residents found for this community." : "Select a community to view residents."}
+              {rentRollCommunityId ? "No residents found." : "Select a community to view residents."}
             </div>
           )}
-
           {!rentRollLoading && filteredRentRoll.length > 0 && (
             <div className="border border-gray-200 rounded-xl overflow-hidden">
               <table className="w-full text-sm">
@@ -340,7 +333,7 @@ export default function AdminDashboard() {
                   {filteredRentRoll.map((r, i) => (
                     <tr key={r.id || i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
                       <td className="px-4 py-3 font-mono font-medium text-blue-700">{r.unit_number || "—"}</td>
-                      <td className="px-4 py-3 font-medium text-gray-900">{r.name || "—"}</td>
+                      <td className="px-4 py-3 font-medium">{r.name || "—"}</td>
                       <td className="px-4 py-3 text-gray-500">{r.relationship || "—"}</td>
                       <td className="px-4 py-3 text-gray-500">{r.move_in ? new Date(r.move_in).toLocaleDateString() : "—"}</td>
                     </tr>
@@ -349,6 +342,188 @@ export default function AdminDashboard() {
               </table>
             </div>
           )}
+        </div>
+      )}
+
+      {/* ── OFFICER REPORTS TAB ── */}
+      {activeTab === "reports" && (
+        <div>
+          {/* Sub-tab buttons */}
+          <div className="flex gap-2 mb-6">
+            <button className={rTabCls("daily")}    onClick={() => setReportTab("daily")}>📝 Daily Log</button>
+            <button className={rTabCls("incident")} onClick={() => setReportTab("incident")}>🚨 Incident Report</button>
+            <button className={rTabCls("view")}     onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
+          </div>
+
+          {reportError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{reportError}</div>
+          )}
+          {reportMessage && (
+            <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg mb-4 text-sm">{reportMessage}</div>
+          )}
+
+          {/* DAILY LOG FORM */}
+          {reportTab === "daily" && (
+            <div className="max-w-2xl">
+              <h3 className="text-lg font-bold mb-4 text-gray-800">Daily Officer Log</h3>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className={labelCls}>Date</label>
+                  <input type="date" value={dailyDate} onChange={e => setDailyDate(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Shift</label>
+                  <select value={dailyShift} onChange={e => setDailyShift(e.target.value)} className={inputCls}>
+                    <option>Day</option>
+                    <option>Evening</option>
+                    <option>Night</option>
+                    <option>Overnight</option>
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Officer Name</label>
+                  <input value={dailyOfficer} onChange={e => setDailyOfficer(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Community</label>
+                  <select value={dailyCommunity} onChange={e => setDailyCommunity(e.target.value)} className={inputCls}>
+                    {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Weather Conditions</label>
+                  <input value={dailyWeather} onChange={e => setDailyWeather(e.target.value)} placeholder="e.g. Clear, Rainy" className={inputCls} />
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className={labelCls}>Patrol Narrative <span className="text-red-500">*</span></label>
+                <textarea rows={5} value={dailyNarrative} onChange={e => setDailyNarrative(e.target.value)}
+                  placeholder="Describe patrol activities, observations, and any notable events..."
+                  className={textareaCls} />
+              </div>
+              <div className="mb-5">
+                <label className={labelCls}>Additional Notes</label>
+                <textarea rows={3} value={dailyNotes} onChange={e => setDailyNotes(e.target.value)}
+                  placeholder="Shift handoff notes, maintenance issues, follow-ups..."
+                  className={textareaCls} />
+              </div>
+              <button onClick={saveDailyLog} disabled={reportSaving}
+                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 transition-colors border-none cursor-pointer disabled:opacity-50">
+                {reportSaving ? "Submitting..." : "Submit Daily Log"}
+              </button>
+            </div>
+          )}
+
+          {/* INCIDENT REPORT FORM */}
+          {reportTab === "incident" && (
+            <div className="max-w-2xl">
+              <h3 className="text-lg font-bold mb-4 text-gray-800">Incident Report</h3>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className={labelCls}>Date</label>
+                  <input type="date" value={incDate} onChange={e => setIncDate(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Time</label>
+                  <input type="time" value={incTime} onChange={e => setIncTime(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Officer Name</label>
+                  <input value={incOfficer} onChange={e => setIncOfficer(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Community</label>
+                  <select value={incCommunity} onChange={e => setIncCommunity(e.target.value)} className={inputCls}>
+                    {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Location / Unit</label>
+                  <input value={incLocation} onChange={e => setIncLocation(e.target.value)} placeholder="e.g. Unit 204, Parking Lot" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Incident Type</label>
+                  <select value={incType} onChange={e => setIncType(e.target.value)} className={inputCls}>
+                    <option>Disturbance</option>
+                    <option>Trespassing</option>
+                    <option>Theft</option>
+                    <option>Property Damage</option>
+                    <option>Medical Emergency</option>
+                    <option>Suspicious Activity</option>
+                    <option>Domestic</option>
+                    <option>Noise Complaint</option>
+                    <option>Vehicle Incident</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+              </div>
+              <div className="mb-4">
+                <label className={labelCls}>Persons Involved</label>
+                <input value={incPersons} onChange={e => setIncPersons(e.target.value)}
+                  placeholder="Names, descriptions of involved parties"
+                  className={inputCls} />
+              </div>
+              <div className="mb-4">
+                <label className={labelCls}>Incident Description <span className="text-red-500">*</span></label>
+                <textarea rows={5} value={incDescription} onChange={e => setIncDescription(e.target.value)}
+                  placeholder="Detailed description of the incident..."
+                  className={textareaCls} />
+              </div>
+              <div className="mb-4">
+                <label className={labelCls}>Action Taken</label>
+                <textarea rows={3} value={incAction} onChange={e => setIncAction(e.target.value)}
+                  placeholder="What steps were taken to resolve the incident..."
+                  className={textareaCls} />
+              </div>
+              <div className="mb-5 flex items-center gap-2">
+                <input type="checkbox" id="followup" checked={incFollowUp} onChange={e => setIncFollowUp(e.target.checked)}
+                  className="w-4 h-4 accent-blue-700" />
+                <label htmlFor="followup" className="text-sm font-medium text-gray-700">Follow-up required</label>
+              </div>
+              <button onClick={saveIncidentReport} disabled={reportSaving}
+                className="px-6 py-3 bg-red-700 text-white font-semibold rounded-lg hover:bg-red-800 transition-colors border-none cursor-pointer disabled:opacity-50">
+                {reportSaving ? "Submitting..." : "Submit Incident Report"}
+              </button>
+            </div>
+          )}
+
+          {/* VIEW REPORTS */}
+          {reportTab === "view" && (
+            <div>
+              {reportsLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading reports...</div>}
+              {!reportsLoading && pastReports.length === 0 && (
+                <div className="text-gray-500 text-sm py-8 text-center">No reports submitted yet.</div>
+              )}
+              {!reportsLoading && pastReports.map((r, i) => (
+                <div key={i} className={`border rounded-xl px-5 py-4 mb-3 ${r._type === "Incident" ? "border-red-200 bg-red-50" : "border-gray-200 bg-white"}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r._type === "Incident" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
+                          {r._type === "Incident" ? "🚨 Incident" : "📝 Daily Log"}
+                        </span>
+                        {r.incident_type && <span className="text-xs text-gray-500">{r.incident_type}</span>}
+                        {r.shift && <span className="text-xs text-gray-500">{r.shift} Shift</span>}
+                      </div>
+                      <div className="font-semibold text-gray-900 text-sm">
+                        {r.narrative || r.description || "No description"}
+                      </div>
+                      {r.action_taken && (
+                        <div className="text-xs text-gray-500 mt-1">Action: {r.action_taken}</div>
+                      )}
+                    </div>
+                    <div className="text-right text-xs text-gray-400 shrink-0 ml-4">
+                      <div>{r.date}</div>
+                      {r.time && <div>{r.time}</div>}
+                      <div className="mt-0.5">{r.officer_name}</div>
+                      {r.follow_up_required && <div className="text-orange-500 font-semibold mt-1">⚠ Follow-up needed</div>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
         </div>
       )}
 
@@ -370,12 +545,9 @@ function UploadBox({ title, desc, onChange }: { title: string; desc: string; onC
     <div className="border border-gray-200 rounded-xl p-5">
       <div className="font-semibold text-gray-800 mb-1">{title}</div>
       <div className="text-xs text-gray-400 mb-3">{desc}</div>
-      <input
-        type="file"
-        accept=".csv"
+      <input type="file" accept=".csv"
         onChange={(e) => { if (e.target.files?.[0]) onChange(e.target.files[0]) }}
-        className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900"
-      />
+        className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900" />
     </div>
   )
 }

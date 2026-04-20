@@ -11,7 +11,7 @@ export default function NavBar() {
       <Link href="/vms">VMS</Link>
       <Link href="/vms/intel">Intel Terminal</Link>
       <Link href="/vms/reports">Reports</Link>
-      <Link href="/admin">Admin Dashboard</Link>
+      <Link href="/admin">User Dashboard</Link>
 
     </div>
   )

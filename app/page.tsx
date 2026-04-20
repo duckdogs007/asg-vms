@@ -130,7 +130,7 @@ export default function Home() {
           <ModuleCard
             href="/admin"
             icon="⚙️"
-            title="Admin Dashboard"
+            title="User Dashboard"
             desc="Manage communities, units, users, and system settings."
             color="gray"
           />

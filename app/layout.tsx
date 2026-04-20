@@ -90,7 +90,7 @@ export default function RootLayout({
               <Link href="/vms" className={navLink}>VMS</Link>
               <Link href="/vms/intel" className={navLink}>Intel Terminal</Link>
               <Link href="/vms/reports" className={navLink}>Reports</Link>
-              {isAdmin && <Link href="/admin" className={navLink}>Admin Dashboard</Link>}
+              {isAdmin && <Link href="/admin" className={navLink}>User Dashboard</Link>}
             </div>
 
             <div className="flex items-center gap-3">
