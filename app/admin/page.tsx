@@ -8,7 +8,7 @@ import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
 
 type Tab        = "dashboard" | "watchlist" | "rentroll" | "reports"
-type ReportTab  = "daily" | "incident" | "view"
+type ReportTab  = "daily" | "incident" | "contact" | "view"
 
 export default function UserDashboard() {
 
@@ -54,6 +54,17 @@ export default function UserDashboard() {
   const [dailyWeather,   setDailyWeather]   = useState("")
   const [dailyNarrative, setDailyNarrative] = useState("")
   const [dailyNotes,     setDailyNotes]     = useState("")
+
+  // Field contact log form
+  const [ctFirstName,  setCtFirstName]  = useState("")
+  const [ctLastName,   setCtLastName]   = useState("")
+  const [ctDate,       setCtDate]       = useState(new Date().toISOString().split("T")[0])
+  const [ctTime,       setCtTime]       = useState("")
+  const [ctCommunity,  setCtCommunity]  = useState("")
+  const [ctLocation,   setCtLocation]   = useState("")
+  const [ctReason,     setCtReason]     = useState("")
+  const [ctOfficer,    setCtOfficer]    = useState("")
+  const [ctNotes,      setCtNotes]      = useState("")
 
   // Incident report form
   const [incDate,        setIncDate]        = useState(new Date().toISOString().split("T")[0])
@@ -179,6 +190,29 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); return }
     setReportMessage("✅ Incident report submitted.")
     setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLocation(""); setIncFollowUp(false)
+  }
+
+  async function saveContactLog() {
+    if (!ctFirstName || !ctLastName) { setReportError("First and last name are required."); return }
+    setReportSaving(true); setReportError(""); setReportMessage("")
+    const contactedAt = ctDate && ctTime
+      ? new Date(`${ctDate}T${ctTime}`).toISOString()
+      : new Date(`${ctDate}T00:00:00`).toISOString()
+    const { error } = await supabase.from("contact_history").insert({
+      first_name:   ctFirstName,
+      last_name:    ctLastName,
+      contacted_at: contactedAt,
+      location:     ctLocation || null,
+      reason:       ctReason   || null,
+      officer:      ctOfficer  || null,
+      notes:        ctNotes    || null,
+      community_id: ctCommunity || null,
+    })
+    setReportSaving(false)
+    if (error) { setReportError(error.message); return }
+    setReportMessage("✅ Field contact logged.")
+    setCtFirstName(""); setCtLastName(""); setCtLocation(""); setCtReason(""); setCtOfficer(""); setCtNotes("")
+    setCtDate(new Date().toISOString().split("T")[0]); setCtTime("")
   }
 
   async function handleRentRollUpload(file: File) {
@@ -558,6 +592,7 @@ export default function UserDashboard() {
           <div className="flex gap-2 mb-6">
             <button className={rTabCls("daily")}    onClick={() => setReportTab("daily")}>📝 Daily Log</button>
             <button className={rTabCls("incident")} onClick={() => setReportTab("incident")}>🚨 Incident Report</button>
+            <button className={rTabCls("contact")}  onClick={() => setReportTab("contact")}>📋 Field Contact</button>
             <button className={rTabCls("view")}     onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
           </div>
 
@@ -689,6 +724,60 @@ export default function UserDashboard() {
               <button onClick={saveIncidentReport} disabled={reportSaving}
                 className="px-6 py-3 bg-red-700 text-white font-semibold rounded-lg hover:bg-red-800 transition-colors border-none cursor-pointer disabled:opacity-50">
                 {reportSaving ? "Submitting..." : "Submit Incident Report"}
+              </button>
+            </div>
+          )}
+
+          {/* FIELD CONTACT LOG FORM */}
+          {reportTab === "contact" && (
+            <div className="max-w-2xl">
+              <h3 className="text-lg font-bold mb-4 text-gray-800">Log Field Contact</h3>
+              <div className="grid grid-cols-2 gap-4 mb-4">
+                <div>
+                  <label className={labelCls}>First Name <span className="text-red-500">*</span></label>
+                  <input value={ctFirstName} onChange={e => setCtFirstName(e.target.value)} placeholder="First name" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Last Name <span className="text-red-500">*</span></label>
+                  <input value={ctLastName} onChange={e => setCtLastName(e.target.value)} placeholder="Last name" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Date</label>
+                  <input type="date" value={ctDate} onChange={e => setCtDate(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Time</label>
+                  <input type="time" value={ctTime} onChange={e => setCtTime(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Community</label>
+                  <select value={ctCommunity} onChange={e => setCtCommunity(e.target.value)} className={inputCls}>
+                    <option value="">— Select —</option>
+                    {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className={labelCls}>Location</label>
+                  <input value={ctLocation} onChange={e => setCtLocation(e.target.value)} placeholder="e.g. Building 3, Parking Lot" className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Officer Name</label>
+                  <input value={ctOfficer} onChange={e => setCtOfficer(e.target.value)} className={inputCls} />
+                </div>
+                <div>
+                  <label className={labelCls}>Reason / Type</label>
+                  <input value={ctReason} onChange={e => setCtReason(e.target.value)} placeholder="e.g. Trespassing, Suspicious Activity" className={inputCls} />
+                </div>
+              </div>
+              <div className="mb-5">
+                <label className={labelCls}>Notes</label>
+                <textarea rows={4} value={ctNotes} onChange={e => setCtNotes(e.target.value)}
+                  placeholder="Details of the contact — description, outcome, follow-up needed..."
+                  className={textareaCls} />
+              </div>
+              <button onClick={saveContactLog} disabled={reportSaving}
+                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 transition-colors border-none cursor-pointer disabled:opacity-50">
+                {reportSaving ? "Saving..." : "Log Field Contact"}
               </button>
             </div>
           )}

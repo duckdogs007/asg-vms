@@ -42,6 +42,17 @@ export default function IntelPage() {
   const [uploading,  setUploading]  = useState(false)
   const [uploadError,setUploadError]= useState("")
 
+  const [showContactForm, setShowContactForm] = useState(false)
+  const [ctDate,     setCtDate]     = useState(new Date().toISOString().split("T")[0])
+  const [ctTime,     setCtTime]     = useState("")
+  const [ctLocation, setCtLocation] = useState("")
+  const [ctReason,   setCtReason]   = useState("")
+  const [ctOfficer,  setCtOfficer]  = useState("")
+  const [ctNotes,    setCtNotes]    = useState("")
+  const [ctSaving,   setCtSaving]   = useState(false)
+  const [ctError,    setCtError]    = useState("")
+  const [ctMessage,  setCtMessage]  = useState("")
+
   useEffect(() => {
     loadCommunities()
 
@@ -136,6 +147,32 @@ export default function IntelPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  async function saveContact() {
+    if (!selectedPerson) return
+    setCtSaving(true); setCtError(""); setCtMessage("")
+    const { first, last } = parseName(selectedPerson.name)
+    const contactedAt = ctDate && ctTime
+      ? new Date(`${ctDate}T${ctTime}`).toISOString()
+      : new Date(`${ctDate}T00:00:00`).toISOString()
+    const { error } = await supabase.from("contact_history").insert({
+      first_name:   first.charAt(0).toUpperCase() + first.slice(1),
+      last_name:    last.charAt(0).toUpperCase() + last.slice(1),
+      contacted_at: contactedAt,
+      location:     ctLocation || null,
+      reason:       ctReason   || null,
+      officer:      ctOfficer  || null,
+      notes:        ctNotes    || null,
+    })
+    setCtSaving(false)
+    if (error) { setCtError("Failed to save: " + error.message); return }
+    setCtMessage("✅ Contact logged.")
+    setCtLocation(""); setCtReason(""); setCtOfficer(""); setCtNotes("")
+    setCtDate(new Date().toISOString().split("T")[0]); setCtTime("")
+    setShowContactForm(false)
+    // Refresh contacts
+    handleSearch()
   }
 
   function tryLoadPhoto(slug: string) {
@@ -336,6 +373,73 @@ export default function IntelPage() {
           {/* CONTACT HISTORY TAB */}
           {rightTab === "contacts" && (
             <>
+              {/* ADD CONTACT BUTTON / FORM */}
+              {selectedPerson && !showContactForm && (
+                <div className="mb-4 flex items-center gap-3">
+                  <button
+                    onClick={() => { setShowContactForm(true); setCtMessage("") }}
+                    className="px-4 py-2 bg-blue-800 text-white text-sm rounded-lg hover:bg-blue-900 border-none cursor-pointer"
+                  >
+                    + Log Field Contact
+                  </button>
+                  {ctMessage && <span className="text-green-600 text-sm">{ctMessage}</span>}
+                </div>
+              )}
+
+              {showContactForm && selectedPerson && (
+                <div className="border border-blue-200 rounded-xl bg-blue-50 p-4 mb-4">
+                  <h4 className="font-semibold text-gray-800 mb-3">
+                    New Field Contact — {selectedPerson.name.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
+                  </h4>
+                  <div className="grid grid-cols-2 gap-3 mb-3">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Date</label>
+                      <input type="date" value={ctDate} onChange={e => setCtDate(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Time</label>
+                      <input type="time" value={ctTime} onChange={e => setCtTime(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Location</label>
+                      <input value={ctLocation} onChange={e => setCtLocation(e.target.value)}
+                        placeholder="e.g. Building 3, Parking Lot"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Reason / Type</label>
+                      <input value={ctReason} onChange={e => setCtReason(e.target.value)}
+                        placeholder="e.g. Trespassing, Suspicious Activity"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Officer</label>
+                      <input value={ctOfficer} onChange={e => setCtOfficer(e.target.value)}
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
+                      <textarea rows={3} value={ctNotes} onChange={e => setCtNotes(e.target.value)}
+                        placeholder="Details of the contact..."
+                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white resize-none" />
+                    </div>
+                  </div>
+                  {ctError && <p className="text-red-600 text-sm mb-2">{ctError}</p>}
+                  <div className="flex gap-2">
+                    <button onClick={saveContact} disabled={ctSaving}
+                      className="px-4 py-2 bg-blue-800 text-white text-sm rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                      {ctSaving ? "Saving..." : "Save Contact"}
+                    </button>
+                    <button onClick={() => setShowContactForm(false)}
+                      className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 border-none cursor-pointer">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {contacts.length > 0 ? contacts.map((c) => (
                 <div key={c.id} className="border border-gray-200 rounded-lg px-4 py-3 mb-2 bg-white">
                   <div className="flex justify-between items-start mb-1">
