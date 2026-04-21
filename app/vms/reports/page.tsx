@@ -222,7 +222,7 @@ export default function ReportsPage() {
                   <div>
                     <div className="font-semibold">{v.first_name} {v.last_name}</div>
                     <div className="text-xs text-gray-400">
-                      {v.person_type} · Unit: {v.unit_number || "—"}
+                      {v.person_type} · Unit: {v.unit_number || "—"}{(v as any).resident_name ? ` · Visiting: ${(v as any).resident_name}` : ""}
                     </div>
                   </div>
                   <div className="text-right">

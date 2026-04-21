@@ -39,7 +39,7 @@ export default function ManualEntry() {
   useEffect(() => {
     const saved = localStorage.getItem("asg-community")
     if (saved) setCommunity(saved)
-    else setCommunity("St Luke Apartments")
+    else setCommunity("")
 
     const params = new URLSearchParams(window.location.search)
     if (params.get("first")) setFirstName(params.get("first")!)
@@ -141,9 +141,14 @@ export default function ManualEntry() {
 
       const { error: logError } = await supabase.from("visitor_logs").insert([{
         visitor_id:    visitor[0].id,
-        apartment:     apartment,
+        first_name:    firstName,
+        last_name:     lastName,
+        person_type:   visitorType,
+        community_id:  community || null,
+        unit_number:   apartment || null,
+        apartment:     apartment || null,
         resident_name: residentName || null,
-        visitor_type:  visitorType
+        created_at:    new Date().toISOString()
       }])
 
       if (logError) { setError(logError.message); return }

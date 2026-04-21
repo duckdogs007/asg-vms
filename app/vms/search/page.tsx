@@ -37,8 +37,8 @@ export default function IntelTerminal(){
         first_name,
         last_name,
         visitor_logs (
-          apartment,
-          timestamp
+          unit_number,
+          created_at
         )
       `)
       .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%`)
@@ -51,8 +51,8 @@ export default function IntelTerminal(){
 
           type:"Visitor",
           name:`${v.first_name} ${v.last_name}`,
-          detail:v.visitor_logs?.[0]?.apartment || "",
-          date:v.visitor_logs?.[0]?.timestamp || ""
+          detail:v.visitor_logs?.[0]?.unit_number || "",
+          date:v.visitor_logs?.[0]?.created_at || ""
 
         })
 
@@ -66,7 +66,8 @@ export default function IntelTerminal(){
     const { data:residents } = await supabase
       .from("residents")
       .select("*")
-      .or(`first_name.ilike.%${query}%,last_name.ilike.%${query}%,apartment.ilike.%${query}%`)
+      .or(`name.ilike.%${query}%,unit_number.ilike.%${query}%`)
+      .not("name", "is", null)
 
     if(residents){
 
@@ -75,8 +76,8 @@ export default function IntelTerminal(){
         output.push({
 
           type:"Resident",
-          name:`${r.first_name} ${r.last_name}`,
-          detail:`Apt ${r.apartment}`
+          name: r.name,
+          detail:`Unit ${r.unit_number}`
 
         })
 
