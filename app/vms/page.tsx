@@ -42,14 +42,8 @@ export default function VMSPage() {
     if (returned) handleNameInput(returned)
   }, [])
 
-  useEffect(() => {
-    if (!residentId) return
-    const selected = residents.find(r => r.id === residentId)
-    if (selected) {
-      setVisitorName(selected.name)
-      setPersonType("Resident")
-    }
-  }, [residentId])
+  // Intentionally no useEffect on residentId — resident selection records who is being visited,
+  // not the visitor's own name
 
   async function loadCommunities() {
     const { data, error } = await supabase.from("communities").select("*")
@@ -186,14 +180,16 @@ export default function VMSPage() {
         visitorId = created.id
       }
 
+      const selectedResident = residents.find(r => r.id === residentId)
       const { error } = await supabase.from("visitor_logs").insert({
-        visitor_id:  visitorId,
-        first_name:  first,
-        last_name:   last,
-        person_type: personType,
-        community_id: communityId,
-        unit_number:  unitNumber,
-        created_at:   new Date().toISOString()
+        visitor_id:    visitorId,
+        first_name:    first,
+        last_name:     last,
+        person_type:   personType,
+        community_id:  communityId,
+        unit_number:   unitNumber,
+        resident_name: selectedResident?.name || null,
+        created_at:    new Date().toISOString()
       })
 
       if (error) {
@@ -266,7 +262,7 @@ export default function VMSPage() {
           <select value={unitId} onChange={(e) => loadResidents(e.target.value)} className={inputCls}>
             <option value="">Select Unit</option>
             {units.map(u => (
-              <option key={u.id} value={u.unit_number}>{u.unit_number}</option>
+              <option key={u.id} value={u.unit_number.trim()}>{u.unit_number.trim()}</option>
             ))}
           </select>
 
