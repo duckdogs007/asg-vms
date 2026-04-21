@@ -22,6 +22,13 @@ interface ContactRecord {
   officer: string | null
   notes: string | null
   community_id: string | null
+  sex: string | null
+  race: string | null
+  dob: string | null
+  ssn: string | null
+  oln: string | null
+  address: string | null
+  photo_url: string | null
 }
 
 type RightTab = "ban" | "visits" | "contacts"
@@ -49,6 +56,14 @@ export default function IntelPage() {
   const [ctReason,   setCtReason]   = useState("")
   const [ctOfficer,  setCtOfficer]  = useState("")
   const [ctNotes,    setCtNotes]    = useState("")
+  const [ctSex,      setCtSex]      = useState("")
+  const [ctRace,     setCtRace]     = useState("")
+  const [ctDob,      setCtDob]      = useState("")
+  const [ctSsn,      setCtSsn]      = useState("")
+  const [ctOln,      setCtOln]      = useState("")
+  const [ctAddress,  setCtAddress]  = useState("")
+  const [ctPhotoFile,    setCtPhotoFile]    = useState<File | null>(null)
+  const [ctPhotoPreview, setCtPhotoPreview] = useState("")
   const [ctSaving,   setCtSaving]   = useState(false)
   const [ctError,    setCtError]    = useState("")
   const [ctMessage,  setCtMessage]  = useState("")
@@ -156,6 +171,20 @@ export default function IntelPage() {
     const contactedAt = ctDate && ctTime
       ? new Date(`${ctDate}T${ctTime}`).toISOString()
       : new Date(`${ctDate}T00:00:00`).toISOString()
+
+    // Upload photo first if selected
+    let photoUrl: string | null = null
+    if (ctPhotoFile) {
+      const ext  = ctPhotoFile.name.split(".").pop() || "jpg"
+      const path = `${Date.now()}_${first}_${last}.${ext}`
+      const { data: up, error: upErr } = await supabase.storage
+        .from("contact-photos").upload(path, ctPhotoFile, { upsert: false })
+      if (!upErr && up) {
+        const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
+        photoUrl = publicUrl
+      }
+    }
+
     const { error } = await supabase.from("contact_history").insert({
       first_name:   first.charAt(0).toUpperCase() + first.slice(1),
       last_name:    last.charAt(0).toUpperCase() + last.slice(1),
@@ -164,14 +193,22 @@ export default function IntelPage() {
       reason:       ctReason   || null,
       officer:      ctOfficer  || null,
       notes:        ctNotes    || null,
+      sex:          ctSex      || null,
+      race:         ctRace     || null,
+      dob:          ctDob      || null,
+      ssn:          ctSsn      || null,
+      oln:          ctOln      || null,
+      address:      ctAddress  || null,
+      photo_url:    photoUrl,
     })
     setCtSaving(false)
     if (error) { setCtError("Failed to save: " + error.message); return }
     setCtMessage("✅ Contact logged.")
     setCtLocation(""); setCtReason(""); setCtOfficer(""); setCtNotes("")
+    setCtSex(""); setCtRace(""); setCtDob(""); setCtSsn(""); setCtOln(""); setCtAddress("")
+    setCtPhotoFile(null); setCtPhotoPreview("")
     setCtDate(new Date().toISOString().split("T")[0]); setCtTime("")
     setShowContactForm(false)
-    // Refresh contacts
     handleSearch()
   }
 
@@ -391,48 +428,75 @@ export default function IntelPage() {
                   <h4 className="font-semibold text-gray-800 mb-3">
                     New Field Contact — {selectedPerson.name.split(" ").map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(" ")}
                   </h4>
-                  <div className="grid grid-cols-2 gap-3 mb-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Date</label>
-                      <input type="date" value={ctDate} onChange={e => setCtDate(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Time</label>
-                      <input type="time" value={ctTime} onChange={e => setCtTime(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Location</label>
-                      <input value={ctLocation} onChange={e => setCtLocation(e.target.value)}
-                        placeholder="e.g. Building 3, Parking Lot"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Reason / Type</label>
-                      <input value={ctReason} onChange={e => setCtReason(e.target.value)}
-                        placeholder="e.g. Trespassing, Suspicious Activity"
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Officer</label>
-                      <input value={ctOfficer} onChange={e => setCtOfficer(e.target.value)}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
-                    </div>
-                    <div className="col-span-2">
-                      <label className="block text-xs font-semibold text-gray-600 mb-1">Notes</label>
-                      <textarea rows={3} value={ctNotes} onChange={e => setCtNotes(e.target.value)}
-                        placeholder="Details of the contact..."
-                        className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white resize-none" />
-                    </div>
-                  </div>
+                  {(() => {
+                    const f = "w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                    const lbl = "block text-xs font-semibold text-gray-600 mb-1"
+                    return (
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div><label className={lbl}>Date</label>
+                          <input type="date" value={ctDate} onChange={e => setCtDate(e.target.value)} className={f} /></div>
+                        <div><label className={lbl}>Time</label>
+                          <input type="time" value={ctTime} onChange={e => setCtTime(e.target.value)} className={f} /></div>
+                        <div><label className={lbl}>DOB</label>
+                          <input type="date" value={ctDob} onChange={e => setCtDob(e.target.value)} className={f} /></div>
+                        <div><label className={lbl}>Sex</label>
+                          <select value={ctSex} onChange={e => setCtSex(e.target.value)} className={f}>
+                            <option value="">—</option>
+                            <option>Male</option><option>Female</option><option>Other</option>
+                          </select></div>
+                        <div><label className={lbl}>Race</label>
+                          <select value={ctRace} onChange={e => setCtRace(e.target.value)} className={f}>
+                            <option value="">—</option>
+                            <option>Black</option><option>White</option><option>Hispanic</option>
+                            <option>Asian</option><option>Native American</option><option>Other</option>
+                          </select></div>
+                        <div><label className={lbl}>OLN (Driver License #)</label>
+                          <input value={ctOln} onChange={e => setCtOln(e.target.value)} className={f} /></div>
+                        <div><label className={lbl}>SSN (last 4)</label>
+                          <input value={ctSsn} onChange={e => setCtSsn(e.target.value)} placeholder="XXXX" maxLength={9} className={f} /></div>
+                        <div><label className={lbl}>Location</label>
+                          <input value={ctLocation} onChange={e => setCtLocation(e.target.value)} placeholder="e.g. Building 3, Parking Lot" className={f} /></div>
+                        <div className="col-span-2"><label className={lbl}>Address</label>
+                          <input value={ctAddress} onChange={e => setCtAddress(e.target.value)} placeholder="Street address" className={f} /></div>
+                        <div><label className={lbl}>Reason / Type</label>
+                          <input value={ctReason} onChange={e => setCtReason(e.target.value)} placeholder="e.g. Trespassing, Suspicious Activity" className={f} /></div>
+                        <div><label className={lbl}>Officer</label>
+                          <input value={ctOfficer} onChange={e => setCtOfficer(e.target.value)} className={f} /></div>
+                        <div className="col-span-2"><label className={lbl}>Notes</label>
+                          <textarea rows={3} value={ctNotes} onChange={e => setCtNotes(e.target.value)}
+                            placeholder="Details of the contact..." className={f + " resize-none"} /></div>
+
+                        {/* PHOTO */}
+                        <div className="col-span-2">
+                          <label className={lbl}>Person Photo</label>
+                          <div className="flex items-start gap-4">
+                            <div className="w-28 h-32 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
+                              {ctPhotoPreview
+                                ? <img src={ctPhotoPreview} alt="preview" className="w-full h-full object-cover" />
+                                : <span className="text-gray-400 text-xs text-center px-1">No photo</span>}
+                            </div>
+                            <div className="flex-1">
+                              <input type="file" accept="image/*"
+                                onChange={e => {
+                                  const file = e.target.files?.[0] || null
+                                  setCtPhotoFile(file)
+                                  setCtPhotoPreview(file ? URL.createObjectURL(file) : "")
+                                }}
+                                className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
+                              <p className="text-xs text-gray-400 mt-1">JPG, PNG accepted</p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })()}
                   {ctError && <p className="text-red-600 text-sm mb-2">{ctError}</p>}
                   <div className="flex gap-2">
                     <button onClick={saveContact} disabled={ctSaving}
                       className="px-4 py-2 bg-blue-800 text-white text-sm rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
                       {ctSaving ? "Saving..." : "Save Contact"}
                     </button>
-                    <button onClick={() => setShowContactForm(false)}
+                    <button onClick={() => { setShowContactForm(false); setCtPhotoPreview(""); setCtPhotoFile(null) }}
                       className="px-4 py-2 bg-gray-200 text-gray-700 text-sm rounded-lg hover:bg-gray-300 border-none cursor-pointer">
                       Cancel
                     </button>
@@ -441,26 +505,29 @@ export default function IntelPage() {
               )}
 
               {contacts.length > 0 ? contacts.map((c) => (
-                <div key={c.id} className="border border-gray-200 rounded-lg px-4 py-3 mb-2 bg-white">
-                  <div className="flex justify-between items-start mb-1">
-                    <div className="font-semibold text-gray-900 text-sm">
-                      {c.reason || "Field Contact"}
-                    </div>
-                    <div className="text-xs text-gray-400">
-                      {new Date(c.contacted_at).toLocaleString()}
+                <div key={c.id} className="border border-gray-200 rounded-lg px-4 py-3 mb-3 bg-white">
+                  <div className="flex gap-3">
+                    {c.photo_url && (
+                      <img src={c.photo_url} alt="contact" className="w-16 h-20 object-cover rounded-md flex-shrink-0 border border-gray-200" />
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex justify-between items-start mb-1">
+                        <div className="font-semibold text-gray-900 text-sm">{c.reason || "Field Contact"}</div>
+                        <div className="text-xs text-gray-400 ml-2 flex-shrink-0">{new Date(c.contacted_at).toLocaleString()}</div>
+                      </div>
+                      <div className="grid grid-cols-2 gap-x-4 text-xs text-gray-600 mb-1">
+                        {c.sex      && <span>Sex: {c.sex}</span>}
+                        {c.race     && <span>Race: {c.race}</span>}
+                        {c.dob      && <span>DOB: {c.dob}</span>}
+                        {c.oln      && <span>OLN: {c.oln}</span>}
+                        {c.ssn      && <span>SSN: {c.ssn}</span>}
+                        {c.location && <span>📍 {c.location}</span>}
+                        {c.address  && <span className="col-span-2">Address: {c.address}</span>}
+                      </div>
+                      {c.officer && <div className="text-xs text-gray-500">Officer: {c.officer}</div>}
+                      {c.notes   && <div className="text-sm text-gray-700 mt-2 border-t border-gray-100 pt-2">{c.notes}</div>}
                     </div>
                   </div>
-                  {c.location && (
-                    <div className="text-sm text-gray-600">📍 {c.location}</div>
-                  )}
-                  {c.officer && (
-                    <div className="text-xs text-gray-500 mt-1">Officer: {c.officer}</div>
-                  )}
-                  {c.notes && (
-                    <div className="text-sm text-gray-700 mt-2 border-t border-gray-100 pt-2">
-                      {c.notes}
-                    </div>
-                  )}
                 </div>
               )) : (
                 <div className="text-center py-10 text-gray-400">

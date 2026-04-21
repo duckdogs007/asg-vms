@@ -65,6 +65,14 @@ export default function UserDashboard() {
   const [ctReason,     setCtReason]     = useState("")
   const [ctOfficer,    setCtOfficer]    = useState("")
   const [ctNotes,      setCtNotes]      = useState("")
+  const [ctSex,        setCtSex]        = useState("")
+  const [ctRace,       setCtRace]       = useState("")
+  const [ctDob,        setCtDob]        = useState("")
+  const [ctSsn,        setCtSsn]        = useState("")
+  const [ctOln,        setCtOln]        = useState("")
+  const [ctAddress,    setCtAddress]    = useState("")
+  const [ctPhotoFile,    setCtPhotoFile]    = useState<File | null>(null)
+  const [ctPhotoPreview, setCtPhotoPreview] = useState("")
 
   // Incident report form
   const [incDate,        setIncDate]        = useState(new Date().toISOString().split("T")[0])
@@ -198,20 +206,42 @@ export default function UserDashboard() {
     const contactedAt = ctDate && ctTime
       ? new Date(`${ctDate}T${ctTime}`).toISOString()
       : new Date(`${ctDate}T00:00:00`).toISOString()
+
+    let photoUrl: string | null = null
+    if (ctPhotoFile) {
+      const ext  = ctPhotoFile.name.split(".").pop() || "jpg"
+      const path = `${Date.now()}_${ctFirstName}_${ctLastName}.${ext}`
+      const { data: up, error: upErr } = await supabase.storage
+        .from("contact-photos").upload(path, ctPhotoFile, { upsert: false })
+      if (!upErr && up) {
+        const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
+        photoUrl = publicUrl
+      }
+    }
+
     const { error } = await supabase.from("contact_history").insert({
       first_name:   ctFirstName,
       last_name:    ctLastName,
       contacted_at: contactedAt,
-      location:     ctLocation || null,
-      reason:       ctReason   || null,
-      officer:      ctOfficer  || null,
-      notes:        ctNotes    || null,
+      location:     ctLocation  || null,
+      reason:       ctReason    || null,
+      officer:      ctOfficer   || null,
+      notes:        ctNotes     || null,
       community_id: ctCommunity || null,
+      sex:          ctSex       || null,
+      race:         ctRace      || null,
+      dob:          ctDob       || null,
+      ssn:          ctSsn       || null,
+      oln:          ctOln       || null,
+      address:      ctAddress   || null,
+      photo_url:    photoUrl,
     })
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
     setReportMessage("✅ Field contact logged.")
     setCtFirstName(""); setCtLastName(""); setCtLocation(""); setCtReason(""); setCtOfficer(""); setCtNotes("")
+    setCtSex(""); setCtRace(""); setCtDob(""); setCtSsn(""); setCtOln(""); setCtAddress("")
+    setCtPhotoFile(null); setCtPhotoPreview("")
     setCtDate(new Date().toISOString().split("T")[0]); setCtTime("")
   }
 
@@ -733,48 +763,72 @@ export default function UserDashboard() {
             <div className="max-w-2xl">
               <h3 className="text-lg font-bold mb-4 text-gray-800">Log Field Contact</h3>
               <div className="grid grid-cols-2 gap-4 mb-4">
-                <div>
-                  <label className={labelCls}>First Name <span className="text-red-500">*</span></label>
-                  <input value={ctFirstName} onChange={e => setCtFirstName(e.target.value)} placeholder="First name" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Last Name <span className="text-red-500">*</span></label>
-                  <input value={ctLastName} onChange={e => setCtLastName(e.target.value)} placeholder="Last name" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Date</label>
-                  <input type="date" value={ctDate} onChange={e => setCtDate(e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Time</label>
-                  <input type="time" value={ctTime} onChange={e => setCtTime(e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Community</label>
+                <div><label className={labelCls}>First Name <span className="text-red-500">*</span></label>
+                  <input value={ctFirstName} onChange={e => setCtFirstName(e.target.value)} placeholder="First name" className={inputCls} /></div>
+                <div><label className={labelCls}>Last Name <span className="text-red-500">*</span></label>
+                  <input value={ctLastName} onChange={e => setCtLastName(e.target.value)} placeholder="Last name" className={inputCls} /></div>
+                <div><label className={labelCls}>Date</label>
+                  <input type="date" value={ctDate} onChange={e => setCtDate(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Time</label>
+                  <input type="time" value={ctTime} onChange={e => setCtTime(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>DOB</label>
+                  <input type="date" value={ctDob} onChange={e => setCtDob(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Sex</label>
+                  <select value={ctSex} onChange={e => setCtSex(e.target.value)} className={inputCls}>
+                    <option value="">—</option><option>Male</option><option>Female</option><option>Other</option>
+                  </select></div>
+                <div><label className={labelCls}>Race</label>
+                  <select value={ctRace} onChange={e => setCtRace(e.target.value)} className={inputCls}>
+                    <option value="">—</option><option>Black</option><option>White</option>
+                    <option>Hispanic</option><option>Asian</option><option>Native American</option><option>Other</option>
+                  </select></div>
+                <div><label className={labelCls}>OLN (Driver License #)</label>
+                  <input value={ctOln} onChange={e => setCtOln(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>SSN (last 4)</label>
+                  <input value={ctSsn} onChange={e => setCtSsn(e.target.value)} placeholder="XXXX" maxLength={9} className={inputCls} /></div>
+                <div><label className={labelCls}>Community</label>
                   <select value={ctCommunity} onChange={e => setCtCommunity(e.target.value)} className={inputCls}>
                     <option value="">— Select —</option>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label className={labelCls}>Location</label>
-                  <input value={ctLocation} onChange={e => setCtLocation(e.target.value)} placeholder="e.g. Building 3, Parking Lot" className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Officer Name</label>
-                  <input value={ctOfficer} onChange={e => setCtOfficer(e.target.value)} className={inputCls} />
-                </div>
-                <div>
-                  <label className={labelCls}>Reason / Type</label>
-                  <input value={ctReason} onChange={e => setCtReason(e.target.value)} placeholder="e.g. Trespassing, Suspicious Activity" className={inputCls} />
-                </div>
+                  </select></div>
+                <div className="col-span-2"><label className={labelCls}>Address</label>
+                  <input value={ctAddress} onChange={e => setCtAddress(e.target.value)} placeholder="Street address" className={inputCls} /></div>
+                <div><label className={labelCls}>Location</label>
+                  <input value={ctLocation} onChange={e => setCtLocation(e.target.value)} placeholder="e.g. Building 3, Parking Lot" className={inputCls} /></div>
+                <div><label className={labelCls}>Reason / Type</label>
+                  <input value={ctReason} onChange={e => setCtReason(e.target.value)} placeholder="e.g. Trespassing, Suspicious Activity" className={inputCls} /></div>
+                <div className="col-span-2"><label className={labelCls}>Officer Name</label>
+                  <input value={ctOfficer} onChange={e => setCtOfficer(e.target.value)} className={inputCls} /></div>
               </div>
-              <div className="mb-5">
+              <div className="mb-4">
                 <label className={labelCls}>Notes</label>
                 <textarea rows={4} value={ctNotes} onChange={e => setCtNotes(e.target.value)}
                   placeholder="Details of the contact — description, outcome, follow-up needed..."
                   className={textareaCls} />
               </div>
+
+              {/* PHOTO */}
+              <div className="mb-5">
+                <label className={labelCls}>Person Photo</label>
+                <div className="flex items-start gap-4">
+                  <div className="w-28 h-36 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
+                    {ctPhotoPreview
+                      ? <img src={ctPhotoPreview} alt="preview" className="w-full h-full object-cover" />
+                      : <span className="text-gray-400 text-xs text-center px-2">No photo</span>}
+                  </div>
+                  <div className="flex-1 pt-1">
+                    <input type="file" accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files?.[0] || null
+                        setCtPhotoFile(file)
+                        setCtPhotoPreview(file ? URL.createObjectURL(file) : "")
+                      }}
+                      className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
+                    <p className="text-xs text-gray-400 mt-1">JPG, PNG accepted</p>
+                  </div>
+                </div>
+              </div>
+
               <button onClick={saveContactLog} disabled={reportSaving}
                 className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 transition-colors border-none cursor-pointer disabled:opacity-50">
                 {reportSaving ? "Saving..." : "Log Field Contact"}
