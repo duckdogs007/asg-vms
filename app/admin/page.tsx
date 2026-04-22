@@ -437,6 +437,11 @@ export default function UserDashboard() {
     loadBolos()
   }
 
+  async function reactivateBolo(id: string) {
+    await supabase.from("bolos").update({ active: true }).eq("id", id)
+    loadBolos()
+  }
+
   // ── HELPERS ──
   const filteredWatchlist = watchlist.filter(p => {
     if (!watchlistSearch) return true
@@ -1164,12 +1169,19 @@ export default function UserDashboard() {
                       🚗 <span className="font-medium">Vehicle:</span> {b.vehicle}
                     </div>
                   )}
-                  {b.active && (
-                    <button onClick={() => resolveBolo(b.id)}
-                      className="mt-3 px-3 py-1.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 border-none cursor-pointer">
-                      ✓ Mark Resolved
-                    </button>
-                  )}
+                  <div className="flex gap-2 mt-3">
+                    {b.active ? (
+                      <button onClick={() => resolveBolo(b.id)}
+                        className="px-3 py-1.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 border-none cursor-pointer">
+                        ✓ Mark Resolved
+                      </button>
+                    ) : (
+                      <button onClick={() => reactivateBolo(b.id)}
+                        className="px-3 py-1.5 text-xs font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 border-none cursor-pointer">
+                        🔴 Reactivate
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
