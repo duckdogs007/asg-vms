@@ -61,3 +61,14 @@ body{
   object-fit:cover;
   border-radius:4px;
 }
+
+@keyframes marquee {
+  0%   { transform: translateX(100vw); }
+  100% { transform: translateX(-100%); }
+}
+
+.ticker-scroll {
+  display: inline-block;
+  animation: marquee 60s linear infinite;
+  white-space: nowrap;
+}

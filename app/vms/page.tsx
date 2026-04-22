@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { Community, Unit, Resident } from "@/lib/types"
+import CadTicker from "@/components/CadTicker"
 
 type MatchStatus = "none" | "verify" | "confirmed" | "cleared"
 
@@ -211,7 +212,7 @@ export default function VMSPage() {
   const inputCls = "px-2 py-2 rounded border border-gray-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-600"
 
   return (
-    <div className="p-5">
+    <div className="p-5 pb-12">
       <h2 className="text-2xl font-bold mb-5">ASG Visitor Management System</h2>
 
       {loadError && (
@@ -347,6 +348,8 @@ export default function VMSPage() {
 
         </div>
       </div>
+
+      <CadTicker />
     </div>
   )
 }
