@@ -7,20 +7,20 @@ import { VisitorLog } from "@/lib/types"
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
-function toLocal(ts: string) {
-  const d = new Date(ts)
-  return new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+function utc(ts: string) {
+  if (!ts) return ts
+  return ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z"
 }
 
 function formatTime(ts: string) {
-  return toLocal(ts).toLocaleString("en-US", {
+  return new Date(utc(ts)).toLocaleString("en-US", {
     month: "numeric", day: "numeric", year: "numeric",
     hour: "numeric", minute: "2-digit"
   })
 }
 
 function timeAgo(ts: string) {
-  const diff = Date.now() - toLocal(ts).getTime()
+  const diff = Date.now() - new Date(utc(ts)).getTime()
   if (diff < 0) return "Just now"
   const mins = Math.floor(diff / 60000)
   const hrs  = Math.floor(diff / 3600000)

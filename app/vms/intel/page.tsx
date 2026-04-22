@@ -4,6 +4,11 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
 
+function fmtDate(ts: string) {
+  const s = ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z"
+  return new Date(s).toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+}
+
 interface PersonProfile {
   name: string
   status: "barred" | "clear"
@@ -339,7 +344,7 @@ export default function IntelPage() {
               <div className="text-sm text-gray-700">Total Visits: <strong>{selectedPerson.visits}</strong></div>
               <div className="text-sm text-gray-700">
                 Last Seen:{" "}
-                {selectedPerson.last_seen ? new Date(selectedPerson.last_seen).toLocaleString() : "—"}
+                {selectedPerson.last_seen ? fmtDate(selectedPerson.last_seen) : "—"}
               </div>
               {contacts.length > 0 && (
                 <div className="text-sm text-gray-700">Field Contacts: <strong>{contacts.length}</strong></div>

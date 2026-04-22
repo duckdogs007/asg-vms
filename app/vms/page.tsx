@@ -34,6 +34,7 @@ export default function VMSPage() {
   const [saving,       setSaving]        = useState(false)
   const [saveError,    setSaveError]     = useState("")
   const [loadError,    setLoadError]     = useState("")
+  const [confirmed,    setConfirmed]     = useState<string | null>(null)
 
   useEffect(() => {
     loadCommunities()
@@ -42,6 +43,13 @@ export default function VMSPage() {
     const returned = params.get("return")
     if (returned) handleNameInput(returned)
   }, [])
+
+  useEffect(() => {
+    if (!confirmed) return
+    const handler = (e: KeyboardEvent) => { if (e.key === "Enter") setConfirmed(null) }
+    window.addEventListener("keydown", handler)
+    return () => window.removeEventListener("keydown", handler)
+  }, [confirmed])
 
   // Intentionally no useEffect on residentId — resident selection records who is being visited,
   // not the visitor's own name
@@ -198,12 +206,20 @@ export default function VMSPage() {
         return
       }
 
-      alert("Visitor Logged ✅")
+      const displayName = `${first} ${last}`.trim()
+      setConfirmed(displayName)
       setVisitorName("")
+      setUnitId("")
+      setResidentId("")
+      setResidents([])
+      setPersonType("Visitor")
       setMatchStatus("none")
       setResolvedName("")
       setStatusMessage("")
       setAlertMode(false)
+      setPossibleMatches([])
+      setSelectedPerson(null)
+      setEnteredDOB("")
     } finally {
       setSaving(false)
     }
@@ -294,56 +310,73 @@ export default function VMSPage() {
         {/* RIGHT */}
         <div className="flex-1 min-w-0">
 
-          <div className={`px-4 py-3 rounded-lg text-white font-medium mb-3 ${alertMode ? "bg-red-900 border-2 border-red-500" : "bg-gray-900"}`}>
-            <div className="text-lg">{resolvedName || visitorName || "—"}</div>
-            {statusMessage && <div className="text-sm mt-1">{statusMessage}</div>}
-          </div>
-
-          {matchStatus === "verify" && (
-            <div className="bg-gray-900 text-white rounded-lg p-4">
-              <div className="text-sm font-semibold mb-3 text-yellow-400">Possible Matches — Verify Identity</div>
-              {possibleMatches.map(p => (
-                <div key={p.id} className="bg-gray-800 rounded-md p-3 mb-2">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      {p.first_name} {p.last_name}
-                      <span className="text-red-400 ml-2 text-sm">🚨 BARRED</span>
-                    </div>
-                    <button
-                      onClick={() => setSelectedPerson(p)}
-                      className="text-xs px-3 py-1 bg-blue-700 rounded hover:bg-blue-600 border-none cursor-pointer text-white"
-                    >
-                      Select
-                    </button>
-                  </div>
-
-                  {selectedPerson?.id === p.id && (
-                    <div className="mt-3 flex flex-col gap-2">
-                      <label className="text-xs text-gray-400">Verify DOB</label>
-                      <input
-                        type="date"
-                        value={enteredDOB}
-                        onChange={(e) => {
-                          const v = e.target.value
-                          setEnteredDOB(v)
-                          if (v.length === 10) setTimeout(() => validateDOB(v), 50)
-                        }}
-                        className="px-2 py-1.5 rounded border border-gray-600 bg-gray-700 text-white text-sm focus:outline-none"
-                      />
-
-                      {statusMessage.includes("Mismatch") && (
-                        <button
-                          onClick={() => window.location.href = `/vms/intel?search=${encodeURIComponent(`${p.first_name} ${p.last_name}`)}`}
-                          className="text-xs px-3 py-1.5 bg-yellow-700 rounded hover:bg-yellow-600 border-none cursor-pointer text-white"
-                        >
-                          🔎 Investigate
-                        </button>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))}
+          {confirmed ? (
+            <div className="flex flex-col items-center justify-center gap-4 bg-green-900 border-2 border-green-500 rounded-lg px-6 py-8 text-white text-center">
+              <div className="text-3xl font-bold tracking-wide">✅ VISITOR LOGGED</div>
+              <div className="text-xl font-semibold">{confirmed}</div>
+              <div className="text-green-300 text-lg font-bold">🟢 CLEAR</div>
+              <button
+                onClick={() => setConfirmed(null)}
+                className="mt-2 px-8 py-2 bg-green-600 hover:bg-green-500 text-white rounded-md font-semibold border-none cursor-pointer text-sm transition-colors"
+              >
+                ENTER — Continue
+              </button>
+              <div className="text-green-400 text-xs">Press Enter or click to log next visitor</div>
             </div>
+          ) : (
+          <>
+            <div className={`px-4 py-3 rounded-lg text-white font-medium mb-3 ${alertMode ? "bg-red-900 border-2 border-red-500" : "bg-gray-900"}`}>
+              <div className="text-lg">{resolvedName || visitorName || "—"}</div>
+              {statusMessage && <div className="text-sm mt-1">{statusMessage}</div>}
+            </div>
+
+            {matchStatus === "verify" && (
+              <div className="bg-gray-900 text-white rounded-lg p-4">
+                <div className="text-sm font-semibold mb-3 text-yellow-400">Possible Matches — Verify Identity</div>
+                {possibleMatches.map(p => (
+                  <div key={p.id} className="bg-gray-800 rounded-md p-3 mb-2">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        {p.first_name} {p.last_name}
+                        <span className="text-red-400 ml-2 text-sm">🚨 BARRED</span>
+                      </div>
+                      <button
+                        onClick={() => setSelectedPerson(p)}
+                        className="text-xs px-3 py-1 bg-blue-700 rounded hover:bg-blue-600 border-none cursor-pointer text-white"
+                      >
+                        Select
+                      </button>
+                    </div>
+
+                    {selectedPerson?.id === p.id && (
+                      <div className="mt-3 flex flex-col gap-2">
+                        <label className="text-xs text-gray-400">Verify DOB</label>
+                        <input
+                          type="date"
+                          value={enteredDOB}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            setEnteredDOB(v)
+                            if (v.length === 10) setTimeout(() => validateDOB(v), 50)
+                          }}
+                          className="px-2 py-1.5 rounded border border-gray-600 bg-gray-700 text-white text-sm focus:outline-none"
+                        />
+
+                        {statusMessage.includes("Mismatch") && (
+                          <button
+                            onClick={() => window.location.href = `/vms/intel?search=${encodeURIComponent(`${p.first_name} ${p.last_name}`)}`}
+                            className="text-xs px-3 py-1.5 bg-yellow-700 rounded hover:bg-yellow-600 border-none cursor-pointer text-white"
+                          >
+                            🔎 Investigate
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
           )}
 
         </div>
