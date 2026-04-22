@@ -2,9 +2,24 @@ import { NextResponse } from "next/server"
 
 const FEED_URL = "https://ppd.henrico.gov/rss/cad.aspx?sra=312"
 
+function decodeHtml(str: string): string {
+  return str
+    .replace(/<br\s*\/?>/gi, " ")
+    .replace(/<strong>(.*?)<\/strong>/gi, "$1")
+    .replace(/<[^>]+>/g, "")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&nbsp;/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 function extractTag(xml: string, tag: string): string {
   const match = xml.match(new RegExp(`<${tag}[^>]*><!\\[CDATA\\[([\\s\\S]*?)\\]\\]><\\/${tag}>|<${tag}[^>]*>([^<]*)<\\/${tag}>`))
-  return (match?.[1] ?? match?.[2] ?? "").trim()
+  return decodeHtml(match?.[1] ?? match?.[2] ?? "")
 }
 
 export async function GET() {
