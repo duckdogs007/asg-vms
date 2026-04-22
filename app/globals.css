@@ -55,6 +55,93 @@ body{
   color:var(--success);
 }
 
+/* ── DARK MODE: FORM ELEMENTS ── */
+body.dark input,
+body.dark input[type="date"],
+body.dark input[type="time"],
+body.dark input[type="text"],
+body.dark input[type="email"],
+body.dark input[type="password"] {
+  background-color: #1e2733;
+  border-color: #374151;
+  color: #e6edf3;
+}
+
+body.dark select {
+  background-color: #1e2733;
+  border-color: #374151;
+  color: #e6edf3;
+}
+
+body.dark textarea {
+  background-color: #1e2733;
+  border-color: #374151;
+  color: #e6edf3;
+}
+
+body.dark input::placeholder,
+body.dark textarea::placeholder {
+  color: #6b7280;
+}
+
+/* ── DARK MODE: FILTER / CARD CONTAINERS ── */
+body.dark .bg-gray-50 {
+  background-color: #161b22 !important;
+  border-color: #30363d !important;
+}
+
+body.dark .bg-white {
+  background-color: #1c2128 !important;
+  color: #e6edf3;
+}
+
+body.dark .border-gray-200 {
+  border-color: #30363d !important;
+}
+
+body.dark .border-gray-100 {
+  border-color: #21262d !important;
+}
+
+body.dark .text-gray-800,
+body.dark .text-gray-900 {
+  color: #e6edf3 !important;
+}
+
+body.dark .text-gray-700 {
+  color: #c9d1d9 !important;
+}
+
+body.dark .text-gray-600 {
+  color: #8b949e !important;
+}
+
+body.dark .text-gray-500 {
+  color: #6e7681 !important;
+}
+
+body.dark .text-gray-400 {
+  color: #484f58 !important;
+}
+
+/* ── DARK MODE: TABLE ROWS ── */
+body.dark .bg-gray-50.border-b {
+  background-color: #161b22 !important;
+}
+
+body.dark tr:nth-child(even) td {
+  background-color: #161b22;
+}
+
+body.dark tr:nth-child(odd) td {
+  background-color: #1c2128;
+}
+
+body.dark thead th {
+  background-color: #0d1117 !important;
+  color: #8b949e;
+}
+
 .photo-thumb{
   width:52px;
   height:62px;
