@@ -3,18 +3,25 @@ import { NextResponse } from "next/server"
 const FEED_URL = "https://ppd.henrico.gov/rss/cad.aspx?sra=312"
 
 function decodeHtml(str: string): string {
-  return str
+  // Decode entities first (may be double-encoded), then strip all HTML tags
+  let s = str
+  // Two passes handles double-encoding like &amp;lt;
+  for (let i = 0; i < 2; i++) {
+    s = s
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&amp;/g, "&")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/&nbsp;/g, " ")
+  }
+  // Strip all HTML tags
+  s = s
     .replace(/<br\s*\/?>/gi, " ")
-    .replace(/<strong>(.*?)<\/strong>/gi, "$1")
     .replace(/<[^>]+>/g, "")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&nbsp;/g, " ")
     .replace(/\s+/g, " ")
     .trim()
+  return s
 }
 
 function extractTag(xml: string, tag: string): string {
