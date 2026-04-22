@@ -212,11 +212,18 @@ export default function IntelPage() {
     handleSearch()
   }
 
-  function tryLoadPhoto(slug: string) {
-    const { data } = supabase.storage
-      .from("visitor-photos")
-      .getPublicUrl(`${slug}.jpg`)
-    if (data?.publicUrl) setPhotoUrl(data.publicUrl)
+  async function tryLoadPhoto(slug: string) {
+    try {
+      const { data, error } = await supabase.storage
+        .from("photos")
+        .list("", { search: slug })
+      if (!error && data && data.some(f => f.name.startsWith(slug))) {
+        const { data: { publicUrl } } = supabase.storage
+          .from("photos")
+          .getPublicUrl(`${slug}.jpg`)
+        setPhotoUrl(publicUrl)
+      }
+    } catch {}
   }
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -233,13 +240,13 @@ export default function IntelPage() {
       const path = `${slug}.${ext}`
 
       const { data, error } = await supabase.storage
-        .from("visitor-photos")
+        .from("photos")
         .upload(path, file, { upsert: true })
 
       if (error) { setUploadError("Upload failed: " + error.message); return }
 
       const { data: { publicUrl } } = supabase.storage
-        .from("visitor-photos")
+        .from("photos")
         .getPublicUrl(data.path)
 
       setPhotoUrl(publicUrl)
