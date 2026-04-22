@@ -94,6 +94,15 @@ export default function ReportsPage() {
 
   const [stats, setStats] = useState<Stats>(EMPTY_STATS)
 
+  useEffect(() => {
+    supabase.from("communities").select("id,name").then(({ data }) => {
+      if (!data) return
+      const stLuke = data.find(c => c.name.toLowerCase().includes("st. luke") || c.name.toLowerCase().includes("st luke"))
+      if (stLuke) setCommunity(stLuke.id)
+      else if (data.length) setCommunity(data[0].id)
+    })
+  }, [])
+
   useEffect(() => { if (community) loadData() }, [community, dateFrom, dateTo])
 
   useEffect(() => {
