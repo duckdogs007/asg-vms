@@ -12,7 +12,7 @@ type ReportTab = "daily" | "incident" | "contact" | "view"
 
 export default function UserDashboard() {
 
-  const [activeTab,   setActiveTab]   = useState<Tab>("watchlist")
+  const [activeTab,   setActiveTab]   = useState<Tab>("passdown")
   const [communities, setCommunities] = useState<any[]>([])
   const [communityId, setCommunityId] = useState("")
   const [officerName, setOfficerName] = useState("")

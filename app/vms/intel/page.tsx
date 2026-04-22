@@ -43,7 +43,7 @@ export default function IntelPage() {
   const [communities,    setCommunities]    = useState<Community[]>([])
   const [loading,        setLoading]        = useState(false)
   const [error,          setError]          = useState("")
-  const [rightTab,       setRightTab]       = useState<RightTab>("visits")
+  const [rightTab,       setRightTab]       = useState<RightTab>("ban")
 
   const [photoUrl,   setPhotoUrl]   = useState("")
   const [uploading,  setUploading]  = useState(false)
