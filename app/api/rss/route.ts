@@ -45,12 +45,16 @@ export async function GET() {
     const items: { title: string; description: string; pubDate: string }[] = []
     const matches = [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)]
 
+    const cutoff = Date.now() - 72 * 60 * 60 * 1000
+
     for (const match of matches) {
-      const block = match[1]
+      const block   = match[1]
+      const pubDate = extractTag(block, "pubDate")
+      if (pubDate && new Date(pubDate).getTime() < cutoff) continue
       items.push({
         title:       extractTag(block, "title"),
         description: extractTag(block, "description"),
-        pubDate:     extractTag(block, "pubDate"),
+        pubDate,
       })
     }
 
