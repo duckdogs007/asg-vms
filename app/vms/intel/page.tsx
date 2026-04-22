@@ -300,10 +300,10 @@ export default function IntelPage() {
         </div>
       )}
 
-      <div className="flex gap-8">
+      <div className="flex flex-col lg:flex-row gap-5 lg:gap-8">
 
         {/* LEFT PANEL */}
-        <div className="w-72 flex-shrink-0">
+        <div className="w-full lg:w-72 lg:flex-shrink-0">
 
           <div className="w-48 h-56 bg-gray-800 rounded-lg mb-3 overflow-hidden flex items-center justify-center">
             {photoUrl ? (

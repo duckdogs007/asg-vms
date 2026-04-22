@@ -166,7 +166,7 @@ export default function ManualEntry() {
   const inputCls = "px-3 py-2.5 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
 
   return (
-    <main className="p-8 max-w-lg">
+    <main className="p-4 sm:p-8 max-w-lg">
 
       <SecurityAlert person={alertPerson} onClose={() => setAlertPerson(null)} />
 

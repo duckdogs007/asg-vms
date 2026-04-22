@@ -220,10 +220,10 @@ export default function VMSPage() {
         </div>
       )}
 
-      <div className="flex gap-8">
+      <div className="flex flex-col lg:flex-row gap-5 lg:gap-8">
 
         {/* LEFT */}
-        <div className="flex-1 flex flex-col gap-3 max-w-xs">
+        <div className="w-full lg:max-w-xs flex flex-col gap-3">
 
           <label className="text-sm font-medium text-gray-700">Community</label>
           <select
@@ -291,7 +291,7 @@ export default function VMSPage() {
         </div>
 
         {/* RIGHT */}
-        <div className="flex-1">
+        <div className="flex-1 min-w-0">
 
           <div className={`px-4 py-3 rounded-lg text-white font-medium mb-3 ${alertMode ? "bg-red-900 border-2 border-red-500" : "bg-gray-900"}`}>
             <div className="text-lg">{resolvedName || visitorName || "—"}</div>

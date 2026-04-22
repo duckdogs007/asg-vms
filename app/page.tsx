@@ -64,7 +64,7 @@ export default function Home() {
     <div className="min-h-screen bg-gray-950 text-white">
 
       {/* HERO HEADER */}
-      <div className="border-b border-gray-800 px-10 py-8">
+      <div className="border-b border-gray-800 px-4 sm:px-10 py-6 sm:py-8">
         <div className="flex justify-between items-center max-w-6xl mx-auto">
           <div>
             <div className="text-3xl font-bold tracking-wide text-white">
@@ -83,7 +83,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-10 py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-10 py-6 sm:py-8">
 
         {/* STAT CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">

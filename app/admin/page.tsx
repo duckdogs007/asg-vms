@@ -531,7 +531,7 @@ export default function UserDashboard() {
           {showAddWatchlist && (
             <div className="border border-red-200 rounded-xl bg-red-50 p-5 mb-5">
               <h3 className="font-bold text-gray-800 mb-3">Add to Watchlist</h3>
-              <div className="grid grid-cols-2 gap-3 mb-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                 <div><label className={labelCls}>First Name</label>
                   <input value={wlFirst} onChange={e => setWlFirst(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Last Name <span className="text-red-500">*</span></label>
@@ -547,9 +547,9 @@ export default function UserDashboard() {
                   </select></div>
                 <div><label className={labelCls}>Reason / Ban Type <span className="text-red-500">*</span></label>
                   <input value={wlReason} onChange={e => setWlReason(e.target.value)} placeholder="e.g. Trespassing, Theft" className={inputCls} /></div>
-                <div className="col-span-2"><label className={labelCls}>Notes</label>
+                <div className="sm:col-span-2"><label className={labelCls}>Notes</label>
                   <input value={wlNotes} onChange={e => setWlNotes(e.target.value)} placeholder="Additional details..." className={inputCls} /></div>
-                <div className="col-span-2 flex items-center gap-2">
+                <div className="sm:col-span-2 flex items-center gap-2">
                   <input type="checkbox" id="wlFirearm" checked={wlFirearm} onChange={e => setWlFirearm(e.target.checked)} className="w-4 h-4 accent-red-700" />
                   <label htmlFor="wlFirearm" className="text-sm font-medium text-gray-700">🔫 Firearm flag — known to carry</label>
                 </div>
@@ -733,7 +733,7 @@ export default function UserDashboard() {
           {reportTab === "daily" && (
             <div className="max-w-2xl">
               <h3 className="text-lg font-bold mb-4 text-gray-800">Daily Officer Log</h3>
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div><label className={labelCls}>Date</label>
                   <input type="date" value={dailyDate} onChange={e => setDailyDate(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Shift</label>
@@ -772,7 +772,7 @@ export default function UserDashboard() {
           {reportTab === "incident" && (
             <div className="max-w-2xl">
               <h3 className="text-lg font-bold mb-4 text-gray-800">Incident Report</h3>
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div><label className={labelCls}>Date</label>
                   <input type="date" value={incDate} onChange={e => setIncDate(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Time</label>
@@ -823,7 +823,7 @@ export default function UserDashboard() {
           {reportTab === "contact" && (
             <div className="max-w-2xl">
               <h3 className="text-lg font-bold mb-4 text-gray-800">Log Field Contact</h3>
-              <div className="grid grid-cols-2 gap-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div><label className={labelCls}>First Name <span className="text-red-500">*</span></label>
                   <input value={ctFirstName} onChange={e => setCtFirstName(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Last Name <span className="text-red-500">*</span></label>
@@ -852,13 +852,13 @@ export default function UserDashboard() {
                     <option value="">— Select —</option>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select></div>
-                <div className="col-span-2"><label className={labelCls}>Address</label>
+                <div className="sm:col-span-2"><label className={labelCls}>Address</label>
                   <input value={ctAddress} onChange={e => setCtAddress(e.target.value)} placeholder="Street address" className={inputCls} /></div>
                 <div><label className={labelCls}>Location</label>
                   <input value={ctLocation} onChange={e => setCtLocation(e.target.value)} placeholder="e.g. Building 3, Parking Lot" className={inputCls} /></div>
                 <div><label className={labelCls}>Reason / Type</label>
                   <input value={ctReason} onChange={e => setCtReason(e.target.value)} placeholder="e.g. Trespassing, Suspicious Activity" className={inputCls} /></div>
-                <div className="col-span-2"><label className={labelCls}>Officer Name</label>
+                <div className="sm:col-span-2"><label className={labelCls}>Officer Name</label>
                   <input value={ctOfficer} onChange={e => setCtOfficer(e.target.value)} className={inputCls} /></div>
               </div>
               <div className="mb-4">
@@ -939,7 +939,7 @@ export default function UserDashboard() {
                   </div>
                   {expandedReport === i && (
                     <div className="px-5 py-4 border-t border-gray-100 bg-white">
-                      <div className="grid grid-cols-2 gap-4 mb-4 text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 text-sm">
                         <Field label="Date"    value={r.date} />
                         {r.time             && <Field label="Time"           value={r.time} />}
                         <Field label="Officer" value={r.officer_name} />
@@ -988,7 +988,7 @@ export default function UserDashboard() {
             <div>
               <h3 className="text-lg font-bold mb-4 text-gray-800">Submit Passdown</h3>
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
-                <div className="grid grid-cols-2 gap-3 mb-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
                   <div><label className={labelCls}>Date</label>
                     <input type="date" value={pdDate} onChange={e => setPdDate(e.target.value)} className={inputCls} /></div>
                   <div><label className={labelCls}>Outgoing Shift</label>
@@ -1085,12 +1085,12 @@ export default function UserDashboard() {
           {showAddBolo && (
             <div className="border-2 border-red-300 rounded-xl bg-red-50 p-5 mb-6">
               <h4 className="font-bold text-red-800 mb-3 text-sm uppercase tracking-wide">New BOLO Entry</h4>
-              <div className="grid grid-cols-2 gap-3 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
                 <div><label className={labelCls}>Subject Name</label>
                   <input value={boloName} onChange={e => setBoloName(e.target.value)} placeholder="First Last" className={inputCls} /></div>
                 <div><label className={labelCls}>Reason / Alert Type</label>
                   <input value={boloReason} onChange={e => setBoloReason(e.target.value)} placeholder="e.g. Trespassing, Theft, Warrant" className={inputCls} /></div>
-                <div className="col-span-2"><label className={labelCls}>Description</label>
+                <div className="sm:col-span-2"><label className={labelCls}>Description</label>
                   <textarea rows={3} value={boloDesc} onChange={e => setBoloDesc(e.target.value)}
                     placeholder="Physical description, clothing, identifying features, last known location..."
                     className={textareaCls} /></div>
@@ -1105,7 +1105,7 @@ export default function UserDashboard() {
                   <input value={boloAddedBy} onChange={e => setBoloAddedBy(e.target.value)} className={inputCls} /></div>
 
                 {/* PHOTO */}
-                <div className="col-span-2">
+                <div className="sm:col-span-2">
                   <label className={labelCls}>Subject Photo</label>
                   <div className="flex items-start gap-4">
                     <div className="w-24 h-28 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
