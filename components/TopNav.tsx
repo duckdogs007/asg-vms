@@ -77,9 +77,9 @@ export default function TopNav() {
         <div className="hidden md:flex gap-5">
           <Link href="/"            className={navLinkCls}>Home</Link>
           <Link href="/vms"         className={navLinkCls}>VMS</Link>
+          {isAdmin && <Link href="/admin" className={navLinkCls}>User Dashboard</Link>}
           <Link href="/vms/intel"   className={navLinkCls}>Intel Terminal</Link>
           <Link href="/vms/reports" className={navLinkCls}>Reports</Link>
-          {isAdmin && <Link href="/admin" className={navLinkCls}>User Dashboard</Link>}
         </div>
 
         {/* LEFT — mobile hamburger */}
@@ -144,9 +144,9 @@ export default function TopNav() {
         <div className="md:hidden border-t border-gray-100 bg-white">
           <Link href="/"            className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
           <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🪪 VMS</Link>
+          {isAdmin && <Link href="/admin" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ User Dashboard</Link>}
           <Link href="/vms/intel"   className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
           <Link href="/vms/reports" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
-          {isAdmin && <Link href="/admin" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ User Dashboard</Link>}
           <div className="px-4 py-3 text-xs text-gray-400">{currentTime}</div>
         </div>
       )}
