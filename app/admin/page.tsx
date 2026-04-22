@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
 
-type Tab       = "watchlist" | "rentroll" | "reports" | "passdown" | "bolo"
+type Tab       = "watchlist" | "rentroll" | "reports" | "passdown" | "bolo" | "audit"
 type ReportTab = "daily" | "incident" | "contact" | "vfi" | "view"
 
 export default function UserDashboard() {
@@ -56,6 +56,12 @@ export default function UserDashboard() {
   const [pastReports,   setPastReports]   = useState<any[]>([])
   const [reportsLoading,setReportsLoading]= useState(false)
   const [expandedReport,setExpandedReport]= useState<number | null>(null)
+  const [editingReport, setEditingReport] = useState<number | null>(null)
+  const [editFields,    setEditFields]    = useState<Record<string, any>>({})
+
+  // Audit log
+  const [auditLogs,    setAuditLogs]    = useState<any[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
 
   // Daily log
   const [dailyDate,      setDailyDate]      = useState(new Date().toISOString().split("T")[0])
@@ -156,6 +162,7 @@ export default function UserDashboard() {
     if (activeTab === "reports")   loadPastReports()
     if (activeTab === "passdown")  loadPassdowns()
     if (activeTab === "bolo")      loadBolos()
+    if (activeTab === "audit")     loadAuditLog()
   }, [activeTab])
 
   async function loadInit() {
@@ -207,6 +214,7 @@ export default function UserDashboard() {
     setWlMessage("✅ Person added to watchlist.")
     setWlFirst(""); setWlLast(""); setWlDob(""); setWlOln(""); setWlReason(""); setWlNotes(""); setWlFirearm(false)
     setShowAddWatchlist(false)
+    await logActivity("created", "Watchlist", "", `Added ${wlFirst} ${wlLast} to watchlist`)
     loadWatchlist()
   }
 
@@ -326,6 +334,7 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); return }
     setReportMessage("✅ Daily log submitted.")
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather("")
+    logActivity("created", "Daily Log", "", `Daily log submitted — ${dailyDate}`)
   }
 
   async function saveIncidentReport() {
@@ -342,6 +351,7 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); return }
     setReportMessage("✅ Incident report submitted.")
     setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLocation(""); setIncFollowUp(false)
+    logActivity("created", "Incident", "", `Incident report submitted — ${incDate}`)
   }
 
   async function saveContactLog() {
@@ -372,6 +382,7 @@ export default function UserDashboard() {
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
     setReportMessage("✅ Field contact logged.")
+    logActivity("created", "Field Contact", "", `Field contact logged — ${ctFirstName} ${ctLastName}`)
     setCtFirstName(""); setCtLastName(""); setCtLocation(""); setCtReason(""); setCtOfficer(""); setCtNotes("")
     setCtSex(""); setCtRace(""); setCtDob(""); setCtSsn(""); setCtOln(""); setCtAddress("")
     setCtPhotoFile(null); setCtPhotoPreview("")
@@ -412,11 +423,59 @@ export default function UserDashboard() {
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
     setReportMessage("✅ Vehicle FI logged.")
+    logActivity("created", "Vehicle FI", "", `Vehicle FI logged — ${vfiPlate || vfiMake} ${vfiDate}`)
     setVfiLocation(""); setVfiMake(""); setVfiModel(""); setVfiColor(""); setVfiYear("")
     setVfiState(""); setVfiPlate(""); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
     setVfiFollowUp(false); setVfiViolation(false); setVfiViolationNum("")
     setVfiPhotoFile(null); setVfiPhotoPreview("")
     setVfiDate(new Date().toISOString().split("T")[0]); setVfiTime("")
+  }
+
+  // ── AUDIT ──
+  async function logActivity(action: string, resourceType: string, resourceId: string, detail: string) {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from("audit_logs").insert({
+      user_email: user?.email || "unknown",
+      action, resource_type: resourceType, resource_id: resourceId, detail,
+      created_at: new Date().toISOString()
+    })
+  }
+
+  async function loadAuditLog() {
+    setAuditLoading(true)
+    const { data } = await supabase.from("audit_logs")
+      .select("*").order("created_at", { ascending: false }).limit(100)
+    setAuditLogs(data || [])
+    setAuditLoading(false)
+  }
+
+  const REPORT_TABLE: Record<string, string> = {
+    "Daily Log":     "officer_daily_logs",
+    "Incident":      "incident_reports",
+    "Field Contact": "contact_history",
+    "Vehicle FI":    "vehicle_fi_logs",
+  }
+
+  async function deleteReport(r: any) {
+    if (!window.confirm(`Delete this ${r._type} report? This cannot be undone.`)) return
+    const table = REPORT_TABLE[r._type]
+    if (!table) return
+    const { error } = await supabase.from(table).delete().eq("id", r.id)
+    if (error) { alert("Delete failed: " + error.message); return }
+    await logActivity("deleted", r._type, r.id, `Deleted ${r._type} — ${r.date}`)
+    setExpandedReport(null)
+    loadPastReports()
+  }
+
+  async function saveEditedReport(r: any) {
+    const table = REPORT_TABLE[r._type]
+    if (!table) return
+    const { error } = await supabase.from(table).update(editFields).eq("id", r.id)
+    if (error) { alert("Save failed: " + error.message); return }
+    await logActivity("edited", r._type, r.id, `Edited ${r._type} — ${r.date}`)
+    setEditingReport(null)
+    setEditFields({})
+    loadPastReports()
   }
 
   function exportCSV() {
@@ -466,6 +525,7 @@ export default function UserDashboard() {
     setPdSaving(false)
     if (error) { setPdError(error.message); return }
     setPdMessage("✅ Passdown submitted.")
+    logActivity("created", "Passdown", "", `Passdown submitted — ${pdDate} ${pdShift}`)
     setPdNotes("")
     loadPassdowns()
   }
@@ -503,6 +563,7 @@ export default function UserDashboard() {
     setBoloSaving(false)
     if (error) { setBoloError(error.message); return }
     setBoloMessage("✅ BOLO added.")
+    logActivity("created", "BOLO", "", `BOLO added — ${boloName || boloDesc}`)
     setBoloName(""); setBoloDesc(""); setBoloReason(""); setBoloVehicle("")
     setBoloPhotoFile(null); setBoloPhotoPreview(""); setShowAddBolo(false)
     loadBolos()
@@ -510,11 +571,13 @@ export default function UserDashboard() {
 
   async function resolveBolo(id: string) {
     await supabase.from("bolos").update({ active: false }).eq("id", id)
+    logActivity("resolved", "BOLO", id, "BOLO marked resolved")
     loadBolos()
   }
 
   async function reactivateBolo(id: string) {
     await supabase.from("bolos").update({ active: true }).eq("id", id)
+    logActivity("reactivated", "BOLO", id, "BOLO reactivated")
     loadBolos()
   }
 
@@ -569,6 +632,7 @@ export default function UserDashboard() {
         <button className={tabCls("reports")}   onClick={() => setActiveTab("reports")}>📋 Officer Reports</button>
         <button className={tabCls("watchlist")} onClick={() => setActiveTab("watchlist")}>🚨 Watchlist</button>
         <button className={tabCls("rentroll")}  onClick={() => setActiveTab("rentroll")}>🏠 Rent Roll</button>
+        <button className={tabCls("audit")}     onClick={() => setActiveTab("audit")}>🔒 Audit Log</button>
       </div>
 
       {/* ── WATCHLIST TAB ── */}
@@ -1123,64 +1187,194 @@ export default function UserDashboard() {
                   </div>
                   {expandedReport === i && (
                     <div className="px-5 py-4 border-t border-gray-100 bg-white">
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 text-sm">
-                        <Field label="Date"    value={r.date} />
-                        {r.time             && <Field label="Time"           value={r.time} />}
-                        <Field label="Officer" value={r.officer_name || r.officer || "—"} />
-                        {r.shift            && <Field label="Shift"          value={r.shift} />}
-                        {r.weather          && <Field label="Weather"        value={r.weather} />}
-                        {r.incident_type    && <Field label="Incident Type"  value={r.incident_type} />}
-                        {r.location         && <Field label="Location"       value={r.location} />}
-                        {r.persons_involved && <Field label="Persons"        value={r.persons_involved} />}
-                        {/* Field Contact fields */}
-                        {r.first_name       && <Field label="Subject"        value={`${r.first_name} ${r.last_name}`} />}
-                        {r.dob              && <Field label="DOB"            value={r.dob} />}
-                        {r.sex              && <Field label="Sex"            value={r.sex} />}
-                        {r.race             && <Field label="Race"           value={r.race} />}
-                        {r.oln              && <Field label="OLN"            value={r.oln} />}
-                        {r.address          && <Field label="Address"        value={r.address} />}
-                        {r.reason           && <Field label="Reason"         value={r.reason} />}
-                        {/* Vehicle FI fields */}
-                        {r.make             && <Field label="Make"           value={r.make} />}
-                        {r.model            && <Field label="Model"          value={r.model} />}
-                        {r.color            && <Field label="Color"          value={r.color} />}
-                        {r.year             && <Field label="Year"           value={r.year} />}
-                        {r.plate            && <Field label="Plate"          value={`${r.plate}${r.state ? " (" + r.state + ")" : ""}`} />}
-                        {r.descriptors      && <Field label="Descriptors"    value={r.descriptors} />}
-                        {r.violation_issued && <Field label="Violation #"    value={r.violation_number || "Issued"} />}
+
+                      {/* Admin action buttons */}
+                      <div className="flex gap-2 mb-4">
+                        {editingReport === i ? (
+                          <>
+                            <button onClick={() => saveEditedReport(r)}
+                              className="px-4 py-1.5 bg-green-700 text-white text-xs font-semibold rounded-lg hover:bg-green-800 border-none cursor-pointer">
+                              💾 Save Changes
+                            </button>
+                            <button onClick={() => { setEditingReport(null); setEditFields({}) }}
+                              className="px-4 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300 border-none cursor-pointer">
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button onClick={() => { setEditingReport(i); setEditFields({ ...r }) }}
+                              className="px-4 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer">
+                              ✏️ Edit
+                            </button>
+                            <button onClick={() => deleteReport(r)}
+                              className="px-4 py-1.5 bg-red-700 text-white text-xs font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
+                              🗑 Delete
+                            </button>
+                          </>
+                        )}
                       </div>
-                      {(r.narrative || r.description) && (
-                        <div className="mb-3">
-                          <div className="text-xs font-semibold text-gray-500 mb-1">{r._type === "Incident" ? "Incident Description" : "Patrol Narrative"}</div>
-                          <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">{r.narrative || r.description}</div>
+
+                      {editingReport === i ? (
+                        /* ── EDIT MODE ── */
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div><label className={labelCls}>Date</label>
+                            <input type="date" value={editFields.date || ""} onChange={e => setEditFields(f => ({ ...f, date: e.target.value }))} className={inputCls} /></div>
+                          {("time" in r) && <div><label className={labelCls}>Time</label>
+                            <input type="time" value={editFields.time || ""} onChange={e => setEditFields(f => ({ ...f, time: e.target.value }))} className={inputCls} /></div>}
+                          <div><label className={labelCls}>Officer</label>
+                            <input value={editFields.officer_name || editFields.officer || ""} onChange={e => setEditFields(f => ({ ...f, [r.officer_name !== undefined ? "officer_name" : "officer"]: e.target.value }))} className={inputCls} /></div>
+                          {r.shift !== undefined && <div><label className={labelCls}>Shift</label>
+                            <select value={editFields.shift || ""} onChange={e => setEditFields(f => ({ ...f, shift: e.target.value }))} className={inputCls}>
+                              <option>Day</option><option>Evening</option><option>Night</option><option>Overnight</option>
+                            </select></div>}
+                          {r.location !== undefined && <div><label className={labelCls}>Location</label>
+                            <input value={editFields.location || ""} onChange={e => setEditFields(f => ({ ...f, location: e.target.value }))} className={inputCls} /></div>}
+                          {r.weather !== undefined && <div><label className={labelCls}>Weather</label>
+                            <input value={editFields.weather || ""} onChange={e => setEditFields(f => ({ ...f, weather: e.target.value }))} className={inputCls} /></div>}
+                          {r.incident_type !== undefined && <div><label className={labelCls}>Incident Type</label>
+                            <input value={editFields.incident_type || ""} onChange={e => setEditFields(f => ({ ...f, incident_type: e.target.value }))} className={inputCls} /></div>}
+                          {r.persons_involved !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Persons Involved</label>
+                            <input value={editFields.persons_involved || ""} onChange={e => setEditFields(f => ({ ...f, persons_involved: e.target.value }))} className={inputCls} /></div>}
+                          {r.reason !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Reason</label>
+                            <input value={editFields.reason || ""} onChange={e => setEditFields(f => ({ ...f, reason: e.target.value }))} className={inputCls} /></div>}
+                          {/* Vehicle FI edit fields */}
+                          {r.make  !== undefined && <div><label className={labelCls}>Make</label><input value={editFields.make || ""} onChange={e => setEditFields(f => ({ ...f, make: e.target.value }))} className={inputCls} /></div>}
+                          {r.model !== undefined && <div><label className={labelCls}>Model</label><input value={editFields.model || ""} onChange={e => setEditFields(f => ({ ...f, model: e.target.value }))} className={inputCls} /></div>}
+                          {r.color !== undefined && <div><label className={labelCls}>Color</label><input value={editFields.color || ""} onChange={e => setEditFields(f => ({ ...f, color: e.target.value }))} className={inputCls} /></div>}
+                          {r.year  !== undefined && <div><label className={labelCls}>Year</label><input value={editFields.year || ""} onChange={e => setEditFields(f => ({ ...f, year: e.target.value }))} className={inputCls} /></div>}
+                          {r.plate !== undefined && <div><label className={labelCls}>Plate</label><input value={editFields.plate || ""} onChange={e => setEditFields(f => ({ ...f, plate: e.target.value }))} className={inputCls} /></div>}
+                          {r.state !== undefined && <div><label className={labelCls}>State</label><input value={editFields.state || ""} onChange={e => setEditFields(f => ({ ...f, state: e.target.value }))} className={inputCls} /></div>}
+                          {r.descriptors !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Descriptors</label><input value={editFields.descriptors || ""} onChange={e => setEditFields(f => ({ ...f, descriptors: e.target.value }))} className={inputCls} /></div>}
+                          {r.violation_number !== undefined && <div><label className={labelCls}>Violation #</label><input value={editFields.violation_number || ""} onChange={e => setEditFields(f => ({ ...f, violation_number: e.target.value }))} className={inputCls} /></div>}
+                          {/* Long text fields */}
+                          {r.narrative !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Patrol Narrative</label>
+                            <textarea rows={4} value={editFields.narrative || ""} onChange={e => setEditFields(f => ({ ...f, narrative: e.target.value }))} className={textareaCls} /></div>}
+                          {r.description !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Incident Description</label>
+                            <textarea rows={4} value={editFields.description || ""} onChange={e => setEditFields(f => ({ ...f, description: e.target.value }))} className={textareaCls} /></div>}
+                          {r.action_taken !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Action Taken</label>
+                            <textarea rows={3} value={editFields.action_taken || ""} onChange={e => setEditFields(f => ({ ...f, action_taken: e.target.value }))} className={textareaCls} /></div>}
+                          {r.notes !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Notes</label>
+                            <textarea rows={3} value={editFields.notes || ""} onChange={e => setEditFields(f => ({ ...f, notes: e.target.value }))} className={textareaCls} /></div>}
                         </div>
-                      )}
-                      {r.action_taken && (
-                        <div className="mb-3">
-                          <div className="text-xs font-semibold text-gray-500 mb-1">Action Taken</div>
-                          <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">{r.action_taken}</div>
-                        </div>
-                      )}
-                      {r.notes && (
-                        <div className="mb-3">
-                          <div className="text-xs font-semibold text-gray-500 mb-1">Notes</div>
-                          <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">{r.notes}</div>
-                        </div>
-                      )}
-                      {r.photo_url && (
-                        <div className="mb-3">
-                          <div className="text-xs font-semibold text-gray-500 mb-2">Photo</div>
-                          <img src={r.photo_url} alt="report photo" className="max-h-48 rounded-lg border border-gray-200 object-cover" />
-                        </div>
-                      )}
-                      {(r.follow_up_required || r.follow_up) && (
-                        <div className="bg-orange-50 border border-orange-200 text-orange-700 text-sm px-4 py-2 rounded-lg font-medium">⚠ Follow-up action required</div>
+                      ) : (
+                        /* ── VIEW MODE ── */
+                        <>
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 text-sm">
+                            <Field label="Date"    value={r.date} />
+                            {r.time             && <Field label="Time"           value={r.time} />}
+                            <Field label="Officer" value={r.officer_name || r.officer || "—"} />
+                            {r.shift            && <Field label="Shift"          value={r.shift} />}
+                            {r.weather          && <Field label="Weather"        value={r.weather} />}
+                            {r.incident_type    && <Field label="Incident Type"  value={r.incident_type} />}
+                            {r.location         && <Field label="Location"       value={r.location} />}
+                            {r.persons_involved && <Field label="Persons"        value={r.persons_involved} />}
+                            {r.first_name       && <Field label="Subject"        value={`${r.first_name} ${r.last_name}`} />}
+                            {r.dob              && <Field label="DOB"            value={r.dob} />}
+                            {r.sex              && <Field label="Sex"            value={r.sex} />}
+                            {r.race             && <Field label="Race"           value={r.race} />}
+                            {r.oln              && <Field label="OLN"            value={r.oln} />}
+                            {r.address          && <Field label="Address"        value={r.address} />}
+                            {r.reason           && <Field label="Reason"         value={r.reason} />}
+                            {r.make             && <Field label="Make"           value={r.make} />}
+                            {r.model            && <Field label="Model"          value={r.model} />}
+                            {r.color            && <Field label="Color"          value={r.color} />}
+                            {r.year             && <Field label="Year"           value={r.year} />}
+                            {r.plate            && <Field label="Plate"          value={`${r.plate}${r.state ? " (" + r.state + ")" : ""}`} />}
+                            {r.descriptors      && <Field label="Descriptors"    value={r.descriptors} />}
+                            {r.violation_issued && <Field label="Violation #"    value={r.violation_number || "Issued"} />}
+                          </div>
+                          {(r.narrative || r.description) && (
+                            <div className="mb-3">
+                              <div className="text-xs font-semibold text-gray-500 mb-1">{r._type === "Incident" ? "Incident Description" : "Patrol Narrative"}</div>
+                              <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">{r.narrative || r.description}</div>
+                            </div>
+                          )}
+                          {r.action_taken && (
+                            <div className="mb-3">
+                              <div className="text-xs font-semibold text-gray-500 mb-1">Action Taken</div>
+                              <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">{r.action_taken}</div>
+                            </div>
+                          )}
+                          {r.notes && (
+                            <div className="mb-3">
+                              <div className="text-xs font-semibold text-gray-500 mb-1">Notes</div>
+                              <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">{r.notes}</div>
+                            </div>
+                          )}
+                          {r.photo_url && (
+                            <div className="mb-3">
+                              <div className="text-xs font-semibold text-gray-500 mb-2">Photo</div>
+                              <img src={r.photo_url} alt="report photo" className="max-h-48 rounded-lg border border-gray-200 object-cover" />
+                            </div>
+                          )}
+                          {(r.follow_up_required || r.follow_up) && (
+                            <div className="bg-orange-50 border border-orange-200 text-orange-700 text-sm px-4 py-2 rounded-lg font-medium">⚠ Follow-up action required</div>
+                          )}
+                        </>
                       )}
                     </div>
                   )}
                 </div>
                 )
               })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── AUDIT LOG TAB ── */}
+      {activeTab === "audit" && (
+        <div>
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <h3 className="text-lg font-bold text-gray-800">Activity Audit Log</h3>
+              <p className="text-xs text-gray-500 mt-0.5">All system actions logged chronologically — read only</p>
+            </div>
+            <button onClick={loadAuditLog}
+              className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 border-none cursor-pointer">
+              ↻ Refresh
+            </button>
+          </div>
+          {auditLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading...</div>}
+          {!auditLoading && auditLogs.length === 0 && (
+            <div className="text-gray-500 text-sm py-8 text-center">No activity recorded yet.</div>
+          )}
+          {!auditLoading && auditLogs.length > 0 && (
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Timestamp</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">User</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Action</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log, i) => {
+                    const actionColor =
+                      log.action === "deleted"     ? "text-red-600 font-semibold" :
+                      log.action === "edited"      ? "text-blue-600 font-semibold" :
+                      log.action === "resolved"    ? "text-orange-500 font-semibold" :
+                      log.action === "reactivated" ? "text-purple-600 font-semibold" :
+                                                     "text-green-600 font-semibold"
+                    return (
+                      <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
+                        <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                          {new Date(log.created_at.endsWith("Z") || log.created_at.includes("+") ? log.created_at : log.created_at + "Z")
+                            .toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-gray-700">{log.user_email}</td>
+                        <td className={`px-4 py-2.5 text-xs ${actionColor}`}>{log.action}</td>
+                        <td className="px-4 py-2.5 text-xs text-gray-600">{log.resource_type}</td>
+                        <td className="px-4 py-2.5 text-xs text-gray-500">{log.detail}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
