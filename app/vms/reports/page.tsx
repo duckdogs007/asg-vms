@@ -154,7 +154,7 @@ export default function ReportsPage() {
     // By calendar date (for daily chart)
     const byDay: Record<string, number> = {}
     logs.forEach(v => {
-      const d = toLocal(v.created_at).toISOString().split("T")[0]
+      const d = new Date(utc(v.created_at)).toLocaleDateString("en-CA")
       byDay[d] = (byDay[d] || 0) + 1
     })
 
