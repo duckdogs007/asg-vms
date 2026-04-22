@@ -297,12 +297,18 @@ export default function UserDashboard() {
   // ── OFFICER REPORTS ──
   async function loadPastReports() {
     setReportsLoading(true)
-    const { data: daily }     = await supabase.from("officer_daily_logs").select("*").order("date", { ascending: false }).limit(20)
-    const { data: incidents } = await supabase.from("incident_reports").select("*").order("date", { ascending: false }).limit(20)
+    const [{ data: daily }, { data: incidents }, { data: contacts }, { data: vfi }] = await Promise.all([
+      supabase.from("officer_daily_logs").select("*").order("date", { ascending: false }).limit(20),
+      supabase.from("incident_reports").select("*").order("date", { ascending: false }).limit(20),
+      supabase.from("contact_history").select("*").order("created_at", { ascending: false }).limit(20),
+      supabase.from("vehicle_fi_logs").select("*").order("date", { ascending: false }).limit(20),
+    ])
     const combined = [
-      ...(daily     || []).map(r => ({ ...r, _type: "Daily Log" })),
-      ...(incidents || []).map(r => ({ ...r, _type: "Incident"  }))
-    ].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+      ...(daily     || []).map(r => ({ ...r, _type: "Daily Log"     })),
+      ...(incidents || []).map(r => ({ ...r, _type: "Incident"      })),
+      ...(contacts  || []).map(r => ({ ...r, _type: "Field Contact", date: r.contacted_at?.split("T")[0] || r.created_at?.split("T")[0] })),
+      ...(vfi       || []).map(r => ({ ...r, _type: "Vehicle FI"    })),
+    ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
     setPastReports(combined)
     setReportsLoading(false)
   }
@@ -416,13 +422,20 @@ export default function UserDashboard() {
   function exportCSV() {
     const rows = pastReports.map(r => ({
       Type: r._type, Date: r.date, Time: r.time || "",
-      Officer: r.officer_name || "", Shift: r.shift || "",
+      Officer: r.officer_name || r.officer || "", Shift: r.shift || "",
       "Incident Type": r.incident_type || "", Location: r.location || "",
       "Persons Involved": r.persons_involved || "",
-      Narrative: r.narrative || r.description || "",
+      "Subject Name": r.first_name ? `${r.first_name} ${r.last_name}` : "",
+      Narrative: r.narrative || r.description || r.notes || "",
       "Action Taken": r.action_taken || "",
-      "Follow-Up": r.follow_up_required ? "Yes" : "",
-      Weather: r.weather || "", Notes: r.notes || "",
+      "Follow-Up": (r.follow_up_required || r.follow_up) ? "Yes" : "",
+      Weather: r.weather || "",
+      "Vehicle Make": r.make || "", "Vehicle Model": r.model || "",
+      "Vehicle Color": r.color || "", "Vehicle Year": r.year || "",
+      "Plate": r.plate || "", "Plate State": r.state || "",
+      "Violation Issued": r.violation_issued ? "Yes" : "",
+      "Violation #": r.violation_number || "",
+      Reason: r.reason || "",
     }))
     const csv  = Papa.unparse(rows)
     const blob = new Blob([csv], { type: "text/csv" })
@@ -1061,28 +1074,49 @@ export default function UserDashboard() {
               )}
               {reportsLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading reports...</div>}
               {!reportsLoading && pastReports.length === 0 && <div className="text-gray-500 text-sm py-8 text-center">No reports submitted yet.</div>}
-              {!reportsLoading && pastReports.map((r, i) => (
-                <div key={i} className={`border rounded-xl mb-3 overflow-hidden ${r._type === "Incident" ? "border-red-200" : "border-gray-200"}`}>
+              {!reportsLoading && pastReports.map((r, i) => {
+                const badgeCls =
+                  r._type === "Incident"      ? "bg-red-100 text-red-700" :
+                  r._type === "Field Contact" ? "bg-purple-100 text-purple-700" :
+                  r._type === "Vehicle FI"    ? "bg-orange-100 text-orange-700" :
+                                                "bg-blue-100 text-blue-700"
+                const rowBg =
+                  r._type === "Incident"      ? "bg-red-50 hover:bg-red-100" :
+                  r._type === "Field Contact" ? "bg-purple-50 hover:bg-purple-100" :
+                  r._type === "Vehicle FI"    ? "bg-orange-50 hover:bg-orange-100" :
+                                                "bg-white hover:bg-gray-50"
+                const borderCls =
+                  r._type === "Incident"      ? "border-red-200" :
+                  r._type === "Field Contact" ? "border-purple-200" :
+                  r._type === "Vehicle FI"    ? "border-orange-200" :
+                                                "border-gray-200"
+                const badge =
+                  r._type === "Incident"      ? "🚨 Incident" :
+                  r._type === "Field Contact" ? "👤 Field Contact" :
+                  r._type === "Vehicle FI"    ? "🚗 Vehicle FI" :
+                                                "📝 Daily Log"
+                const summary =
+                  r._type === "Field Contact" ? `${r.first_name || ""} ${r.last_name || ""}`.trim() || r.reason || "No name" :
+                  r._type === "Vehicle FI"    ? [r.year, r.color, r.make, r.model, r.plate ? `· ${r.plate}` : ""].filter(Boolean).join(" ") || r.reason || "No vehicle" :
+                  (r.narrative || r.description || r.notes || "No description").slice(0, 80)
+                const followUp = r.follow_up_required || r.follow_up
+                return (
+                <div key={i} className={`border rounded-xl mb-3 overflow-hidden ${borderCls}`}>
                   <div
-                    className={`px-5 py-4 flex justify-between items-center cursor-pointer ${r._type === "Incident" ? "bg-red-50 hover:bg-red-100" : "bg-white hover:bg-gray-50"}`}
+                    className={`px-5 py-4 flex justify-between items-center cursor-pointer ${rowBg}`}
                     onClick={() => setExpandedReport(expandedReport === i ? null : i)}
                   >
-                    <div className="flex items-center gap-3">
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full ${r._type === "Incident" ? "bg-red-100 text-red-700" : "bg-blue-100 text-blue-700"}`}>
-                        {r._type === "Incident" ? "🚨 Incident" : "📝 Daily Log"}
-                      </span>
-                      {r.incident_type && <span className="text-xs text-gray-500">{r.incident_type}</span>}
-                      {r.shift         && <span className="text-xs text-gray-500">{r.shift} Shift</span>}
-                      <span className="text-sm font-semibold text-gray-800 line-clamp-1">
-                        {(r.narrative || r.description || "No description").slice(0, 80)}
-                        {(r.narrative || r.description || "").length > 80 ? "…" : ""}
-                      </span>
+                    <div className="flex items-center gap-3 min-w-0">
+                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${badgeCls}`}>{badge}</span>
+                      {r.incident_type && <span className="text-xs text-gray-500 shrink-0">{r.incident_type}</span>}
+                      {r.shift         && <span className="text-xs text-gray-500 shrink-0">{r.shift} Shift</span>}
+                      <span className="text-sm font-semibold text-gray-800 truncate">{summary}</span>
                     </div>
                     <div className="flex items-center gap-4 shrink-0 ml-3">
                       <div className="text-right text-xs text-gray-400">
                         <div>{r.date}{r.time ? " · " + r.time : ""}</div>
-                        <div>{r.officer_name}</div>
-                        {r.follow_up_required && <div className="text-orange-500 font-semibold">⚠ Follow-up</div>}
+                        <div>{r.officer_name || r.officer}</div>
+                        {followUp && <div className="text-orange-500 font-semibold">⚠ Follow-up</div>}
                       </div>
                       <span className="text-gray-400 text-sm">{expandedReport === i ? "▲" : "▼"}</span>
                     </div>
@@ -1092,12 +1126,28 @@ export default function UserDashboard() {
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4 text-sm">
                         <Field label="Date"    value={r.date} />
                         {r.time             && <Field label="Time"           value={r.time} />}
-                        <Field label="Officer" value={r.officer_name} />
+                        <Field label="Officer" value={r.officer_name || r.officer || "—"} />
                         {r.shift            && <Field label="Shift"          value={r.shift} />}
                         {r.weather          && <Field label="Weather"        value={r.weather} />}
                         {r.incident_type    && <Field label="Incident Type"  value={r.incident_type} />}
                         {r.location         && <Field label="Location"       value={r.location} />}
                         {r.persons_involved && <Field label="Persons"        value={r.persons_involved} />}
+                        {/* Field Contact fields */}
+                        {r.first_name       && <Field label="Subject"        value={`${r.first_name} ${r.last_name}`} />}
+                        {r.dob              && <Field label="DOB"            value={r.dob} />}
+                        {r.sex              && <Field label="Sex"            value={r.sex} />}
+                        {r.race             && <Field label="Race"           value={r.race} />}
+                        {r.oln              && <Field label="OLN"            value={r.oln} />}
+                        {r.address          && <Field label="Address"        value={r.address} />}
+                        {r.reason           && <Field label="Reason"         value={r.reason} />}
+                        {/* Vehicle FI fields */}
+                        {r.make             && <Field label="Make"           value={r.make} />}
+                        {r.model            && <Field label="Model"          value={r.model} />}
+                        {r.color            && <Field label="Color"          value={r.color} />}
+                        {r.year             && <Field label="Year"           value={r.year} />}
+                        {r.plate            && <Field label="Plate"          value={`${r.plate}${r.state ? " (" + r.state + ")" : ""}`} />}
+                        {r.descriptors      && <Field label="Descriptors"    value={r.descriptors} />}
+                        {r.violation_issued && <Field label="Violation #"    value={r.violation_number || "Issued"} />}
                       </div>
                       {(r.narrative || r.description) && (
                         <div className="mb-3">
@@ -1117,13 +1167,20 @@ export default function UserDashboard() {
                           <div className="text-sm text-gray-800 bg-gray-50 rounded-lg px-4 py-3 whitespace-pre-wrap">{r.notes}</div>
                         </div>
                       )}
-                      {r.follow_up_required && (
+                      {r.photo_url && (
+                        <div className="mb-3">
+                          <div className="text-xs font-semibold text-gray-500 mb-2">Photo</div>
+                          <img src={r.photo_url} alt="report photo" className="max-h-48 rounded-lg border border-gray-200 object-cover" />
+                        </div>
+                      )}
+                      {(r.follow_up_required || r.follow_up) && (
                         <div className="bg-orange-50 border border-orange-200 text-orange-700 text-sm px-4 py-2 rounded-lg font-medium">⚠ Follow-up action required</div>
                       )}
                     </div>
                   )}
                 </div>
-              ))}
+                )
+              })}
             </div>
           )}
         </div>
