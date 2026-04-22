@@ -481,13 +481,13 @@ export default function UserDashboard() {
 
       {/* MAIN TABS */}
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
-        <button className={tabCls("watchlist")} onClick={() => setActiveTab("watchlist")}>🚨 Watchlist</button>
-        <button className={tabCls("rentroll")}  onClick={() => setActiveTab("rentroll")}>🏠 Rent Roll</button>
-        <button className={tabCls("reports")}   onClick={() => setActiveTab("reports")}>📋 Officer Reports</button>
         <button className={tabCls("passdown")}  onClick={() => setActiveTab("passdown")}>🔁 Passdown Log</button>
         <button className={tabCls("bolo")}      onClick={() => setActiveTab("bolo")}>
           🔍 BOLO {activeBoloCount > 0 && <span className="ml-1.5 bg-red-600 text-white text-xs rounded-full px-1.5 py-0.5">{activeBoloCount}</span>}
         </button>
+        <button className={tabCls("reports")}   onClick={() => setActiveTab("reports")}>📋 Officer Reports</button>
+        <button className={tabCls("watchlist")} onClick={() => setActiveTab("watchlist")}>🚨 Watchlist</button>
+        <button className={tabCls("rentroll")}  onClick={() => setActiveTab("rentroll")}>🏠 Rent Roll</button>
       </div>
 
       {/* ── WATCHLIST TAB ── */}
