@@ -8,7 +8,7 @@ import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
 
 type Tab       = "watchlist" | "rentroll" | "reports" | "passdown" | "bolo"
-type ReportTab = "daily" | "incident" | "contact" | "view"
+type ReportTab = "daily" | "incident" | "contact" | "vfi" | "view"
 
 export default function UserDashboard() {
 
@@ -85,6 +85,27 @@ export default function UserDashboard() {
   const [ctPhotoFile,   setCtPhotoFile]   = useState<File | null>(null)
   const [ctPhotoPreview,setCtPhotoPreview]= useState("")
 
+  // Vehicle FI
+  const [vfiDate,         setVfiDate]         = useState(new Date().toISOString().split("T")[0])
+  const [vfiTime,         setVfiTime]         = useState("")
+  const [vfiCommunity,    setVfiCommunity]    = useState("")
+  const [vfiOfficer,      setVfiOfficer]      = useState("")
+  const [vfiLocation,     setVfiLocation]     = useState("")
+  const [vfiMake,         setVfiMake]         = useState("")
+  const [vfiModel,        setVfiModel]        = useState("")
+  const [vfiColor,        setVfiColor]        = useState("")
+  const [vfiYear,         setVfiYear]         = useState("")
+  const [vfiState,        setVfiState]        = useState("")
+  const [vfiPlate,        setVfiPlate]        = useState("")
+  const [vfiDescriptors,  setVfiDescriptors]  = useState("")
+  const [vfiReason,       setVfiReason]       = useState("")
+  const [vfiFollowUp,     setVfiFollowUp]     = useState(false)
+  const [vfiViolation,    setVfiViolation]    = useState(false)
+  const [vfiViolationNum, setVfiViolationNum] = useState("")
+  const [vfiNotes,        setVfiNotes]        = useState("")
+  const [vfiPhotoFile,    setVfiPhotoFile]    = useState<File | null>(null)
+  const [vfiPhotoPreview, setVfiPhotoPreview] = useState("")
+
   // Incident report
   const [incDate,        setIncDate]        = useState(new Date().toISOString().split("T")[0])
   const [incTime,        setIncTime]        = useState("")
@@ -147,11 +168,12 @@ export default function UserDashboard() {
       setWlCommunity(c[0].id)
       setPdCommunity(c[0].id)
       setBoloCommunity(c[0].id)
+      setVfiCommunity(c[0].id)
     }
     const { data: { user } } = await supabase.auth.getUser()
     if (user?.email) {
       const name = user.email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, ch => ch.toUpperCase())
-      setDailyOfficer(name); setIncOfficer(name); setPdOfficer(name); setBoloAddedBy(name)
+      setDailyOfficer(name); setIncOfficer(name); setPdOfficer(name); setBoloAddedBy(name); setVfiOfficer(name)
       setOfficerName(name)
     }
   }
@@ -348,6 +370,47 @@ export default function UserDashboard() {
     setCtSex(""); setCtRace(""); setCtDob(""); setCtSsn(""); setCtOln(""); setCtAddress("")
     setCtPhotoFile(null); setCtPhotoPreview("")
     setCtDate(new Date().toISOString().split("T")[0]); setCtTime("")
+  }
+
+  async function saveVehicleFI() {
+    if (!vfiPlate && !vfiMake) { setReportError("Plate or Make is required."); return }
+    setReportSaving(true); setReportError(""); setReportMessage("")
+    let photoUrl: string | null = null
+    if (vfiPhotoFile) {
+      const ext  = vfiPhotoFile.name.split(".").pop() || "jpg"
+      const path = `vfi_${Date.now()}.${ext}`
+      const { data: up, error: upErr } = await supabase.storage
+        .from("contact-photos").upload(path, vfiPhotoFile, { upsert: false })
+      if (!upErr && up) {
+        const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
+        photoUrl = publicUrl
+      }
+    }
+    const { error } = await supabase.from("vehicle_fi_logs").insert({
+      date: vfiDate, time: vfiTime || null,
+      community_id: vfiCommunity || null,
+      officer_name: vfiOfficer || null,
+      location: vfiLocation || null,
+      make: vfiMake || null, model: vfiModel || null,
+      color: vfiColor || null, year: vfiYear || null,
+      state: vfiState || null, plate: vfiPlate || null,
+      descriptors: vfiDescriptors || null,
+      reason: vfiReason || null,
+      follow_up: vfiFollowUp,
+      violation_issued: vfiViolation,
+      violation_number: vfiViolation ? (vfiViolationNum || null) : null,
+      notes: vfiNotes || null,
+      photo_url: photoUrl,
+      created_at: new Date().toISOString()
+    })
+    setReportSaving(false)
+    if (error) { setReportError(error.message); return }
+    setReportMessage("✅ Vehicle FI logged.")
+    setVfiLocation(""); setVfiMake(""); setVfiModel(""); setVfiColor(""); setVfiYear("")
+    setVfiState(""); setVfiPlate(""); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
+    setVfiFollowUp(false); setVfiViolation(false); setVfiViolationNum("")
+    setVfiPhotoFile(null); setVfiPhotoPreview("")
+    setVfiDate(new Date().toISOString().split("T")[0]); setVfiTime("")
   }
 
   function exportCSV() {
@@ -723,6 +786,7 @@ export default function UserDashboard() {
             <button className={rTabCls("daily")}    onClick={() => setReportTab("daily")}>📝 Daily Log</button>
             <button className={rTabCls("incident")} onClick={() => setReportTab("incident")}>🚨 Incident Report</button>
             <button className={rTabCls("contact")}  onClick={() => setReportTab("contact")}>📋 Field Contact</button>
+            <button className={rTabCls("vfi")}      onClick={() => setReportTab("vfi")}>🚗 Vehicle FI</button>
             <button className={rTabCls("view")}     onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
           </div>
 
@@ -890,6 +954,92 @@ export default function UserDashboard() {
               <button onClick={saveContactLog} disabled={reportSaving}
                 className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
                 {reportSaving ? "Saving..." : "Log Field Contact"}
+              </button>
+            </div>
+          )}
+
+          {/* VEHICLE FI */}
+          {reportTab === "vfi" && (
+            <div className="max-w-2xl">
+              <h3 className="text-lg font-bold mb-4 text-gray-800">Vehicle Field Investigation</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div><label className={labelCls}>Date</label>
+                  <input type="date" value={vfiDate} onChange={e => setVfiDate(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Time</label>
+                  <input type="time" value={vfiTime} onChange={e => setVfiTime(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Officer Name</label>
+                  <input value={vfiOfficer} onChange={e => setVfiOfficer(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Community</label>
+                  <select value={vfiCommunity} onChange={e => setVfiCommunity(e.target.value)} className={inputCls}>
+                    {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select></div>
+                <div className="sm:col-span-2"><label className={labelCls}>Location</label>
+                  <input value={vfiLocation} onChange={e => setVfiLocation(e.target.value)} placeholder="e.g. Building 3 Parking, Entrance Gate" className={inputCls} /></div>
+                <div><label className={labelCls}>Make <span className="text-red-500">*</span></label>
+                  <input value={vfiMake} onChange={e => setVfiMake(e.target.value)} placeholder="e.g. Ford, Toyota" className={inputCls} /></div>
+                <div><label className={labelCls}>Model</label>
+                  <input value={vfiModel} onChange={e => setVfiModel(e.target.value)} placeholder="e.g. F-150, Camry" className={inputCls} /></div>
+                <div><label className={labelCls}>Color</label>
+                  <input value={vfiColor} onChange={e => setVfiColor(e.target.value)} placeholder="e.g. Black, Silver" className={inputCls} /></div>
+                <div><label className={labelCls}>Year</label>
+                  <input value={vfiYear} onChange={e => setVfiYear(e.target.value)} placeholder="e.g. 2019" maxLength={4} className={inputCls} /></div>
+                <div><label className={labelCls}>Tag # (Plate) <span className="text-red-500">*</span></label>
+                  <input value={vfiPlate} onChange={e => setVfiPlate(e.target.value.toUpperCase())} placeholder="ABC1234" className={inputCls} /></div>
+                <div><label className={labelCls}>State</label>
+                  <input value={vfiState} onChange={e => setVfiState(e.target.value.toUpperCase())} placeholder="VA" maxLength={2} className={inputCls} /></div>
+                <div className="sm:col-span-2"><label className={labelCls}>Other Descriptors</label>
+                  <input value={vfiDescriptors} onChange={e => setVfiDescriptors(e.target.value)}
+                    placeholder="e.g. Tinted windows, dents, stickers, body type" className={inputCls} /></div>
+                <div className="sm:col-span-2"><label className={labelCls}>Reason for VFI</label>
+                  <input value={vfiReason} onChange={e => setVfiReason(e.target.value)}
+                    placeholder="e.g. Suspicious activity, no parking permit, loitering" className={inputCls} /></div>
+              </div>
+              <div className="mb-4">
+                <label className={labelCls}>Notes</label>
+                <textarea rows={4} value={vfiNotes} onChange={e => setVfiNotes(e.target.value)}
+                  placeholder="Details of the vehicle investigation — outcome, occupants, follow-up..."
+                  className={textareaCls} />
+              </div>
+              <div className="mb-4 flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="vfiFollowUp" checked={vfiFollowUp} onChange={e => setVfiFollowUp(e.target.checked)} className="w-4 h-4 accent-blue-700" />
+                  <label htmlFor="vfiFollowUp" className="text-sm font-medium text-gray-700">Follow-up required</label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="vfiViolation" checked={vfiViolation} onChange={e => setVfiViolation(e.target.checked)} className="w-4 h-4 accent-orange-600" />
+                  <label htmlFor="vfiViolation" className="text-sm font-medium text-gray-700">Violation Notice Issued</label>
+                </div>
+                {vfiViolation && (
+                  <div className="ml-6 max-w-xs">
+                    <label className={labelCls}>Violation #</label>
+                    <input value={vfiViolationNum} onChange={e => setVfiViolationNum(e.target.value)}
+                      placeholder="Citation / notice number" className={inputCls} />
+                  </div>
+                )}
+              </div>
+              <div className="mb-5">
+                <label className={labelCls}>Vehicle Photo</label>
+                <div className="flex items-start gap-4">
+                  <div className="w-36 h-28 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
+                    {vfiPhotoPreview
+                      ? <img src={vfiPhotoPreview} alt="preview" className="w-full h-full object-cover" />
+                      : <span className="text-gray-400 text-xs text-center px-2">No photo</span>}
+                  </div>
+                  <div className="flex-1 pt-1">
+                    <input type="file" accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files?.[0] || null
+                        setVfiPhotoFile(file)
+                        setVfiPhotoPreview(file ? URL.createObjectURL(file) : "")
+                      }}
+                      className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
+                    <p className="text-xs text-gray-400 mt-1">JPG, PNG accepted</p>
+                  </div>
+                </div>
+              </div>
+              <button onClick={saveVehicleFI} disabled={reportSaving}
+                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                {reportSaving ? "Saving..." : "Log Vehicle FI"}
               </button>
             </div>
           )}
