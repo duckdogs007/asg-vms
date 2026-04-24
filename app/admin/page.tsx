@@ -470,13 +470,14 @@ export default function UserDashboard() {
   async function saveEditedReport(r: any) {
     const table = REPORT_TABLE[r._type]
     if (!table) return
-    const { _type, ...fields } = editFields
-    const { error } = await supabase.from(table).update(fields).eq("id", r.id)
+    const { _type, id, created_at, ...fields } = editFields
+    const { error, count } = await supabase.from(table).update(fields).eq("id", r.id).select()
     if (error) { alert("Save failed: " + error.message); return }
+    if (count === 0) { alert("Save blocked — check Supabase UPDATE policy for " + table); return }
     await logActivity("edited", r._type, r.id, `Edited ${r._type} — ${r.date}`)
     setEditingReport(null)
     setEditFields({})
-    loadPastReports()
+    await loadPastReports()
   }
 
   function exportCSV() {
