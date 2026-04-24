@@ -470,7 +470,8 @@ export default function UserDashboard() {
   async function saveEditedReport(r: any) {
     const table = REPORT_TABLE[r._type]
     if (!table) return
-    const { error } = await supabase.from(table).update(editFields).eq("id", r.id)
+    const { _type, ...fields } = editFields
+    const { error } = await supabase.from(table).update(fields).eq("id", r.id)
     if (error) { alert("Save failed: " + error.message); return }
     await logActivity("edited", r._type, r.id, `Edited ${r._type} — ${r.date}`)
     setEditingReport(null)
