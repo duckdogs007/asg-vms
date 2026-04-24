@@ -203,11 +203,11 @@ export default function UserDashboard() {
     const { error } = await supabase.from("watchlist").insert({
       first_name: wlFirst || null, last_name: wlLast,
       dob: wlDob || null, oln: wlOln || null,
-      reason: wlReason, notes: wlNotes || null,
-      firearm_flag: wlFirearm,
+      reason: wlReason, comments: wlNotes || null,
       community_id: wlCommunity || null,
-      flagged_by: officerName || null,
+      banned_by: officerName || null,
       ban_date: new Date().toISOString().split("T")[0],
+      status: "Active",
     })
     setWlSaving(false)
     if (error) { setWlError(error.message); return }
@@ -711,7 +711,6 @@ export default function UserDashboard() {
                 <div>
                   <div className="font-bold text-gray-900">
                     {p.last_name}, {p.first_name}
-                    {p.firearm_flag && <span className="ml-2 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">🔫 FIREARM</span>}
                   </div>
                   <div className="text-sm text-red-600 font-medium mt-0.5">🚨 {p.reason || "No reason listed"}</div>
                   <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
@@ -724,7 +723,7 @@ export default function UserDashboard() {
                 </div>
                 <div className="text-right text-xs text-gray-400 shrink-0 ml-4">
                   {(p.ban_date || p.banned_date) && <div>Banned: {p.ban_date || p.banned_date}</div>}
-                  {(p.flagged_by || p.banned_by) && <div>By: {p.flagged_by || p.banned_by}</div>}
+                  {p.banned_by && <div>By: {p.banned_by}</div>}
                 </div>
               </div>
             </div>
