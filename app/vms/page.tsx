@@ -233,7 +233,7 @@ export default function VMSPage() {
       <div className="flex flex-col lg:flex-row gap-5 lg:gap-8">
 
         {/* ── LEFT: FORM ── */}
-        <div className="w-full lg:max-w-sm flex flex-col gap-4">
+        <div className="w-full lg:max-w-xl flex flex-col gap-4">
 
           {/* SECTION 1: Location */}
           <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
@@ -266,55 +266,60 @@ export default function VMSPage() {
             </div>
           </div>
 
-          {/* SECTION 2: Visitor Identity */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Visitor Identity</div>
-            <div>
-              <label className={labelCls}>Visitor Name</label>
-              <input
-                value={visitorName}
-                onChange={(e) => handleNameInput(e.target.value)}
-                placeholder="First Last  or  Last, First"
-                className={inputCls}
-                autoComplete="off"
-              />
-            </div>
-            <button
-              onClick={() => router.push("/vms/scan")}
-              className="w-full py-2 bg-gray-800 text-white rounded-md text-sm font-medium hover:bg-gray-900 transition-colors border-none cursor-pointer"
-            >
-              📷 Scan Driver License Instead
-            </button>
-          </div>
+          {/* SECTIONS 2 + 3: Visitor Identity and Log Entry side by side */}
+          <div className="flex flex-col sm:flex-row gap-4">
 
-          {/* SECTION 3: Classification + Submit */}
-          <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Log Entry</div>
-            <div>
-              <label className={labelCls}>Person Type</label>
-              <select value={personType} onChange={(e) => setPersonType(e.target.value)} className={inputCls}>
-                <option>Visitor</option>
-                <option>Delivery</option>
-                <option>Contractor</option>
-              </select>
-            </div>
-
-            {saveError && (
-              <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-xs">
-                {saveError}
+            {/* SECTION 2: Visitor Identity */}
+            <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Visitor Identity</div>
+              <div>
+                <label className={labelCls}>Visitor Name</label>
+                <input
+                  value={visitorName}
+                  onChange={(e) => handleNameInput(e.target.value)}
+                  placeholder="First Last  or  Last, First"
+                  className={inputCls}
+                  autoComplete="off"
+                />
               </div>
-            )}
+              <button
+                onClick={() => router.push("/vms/scan")}
+                className="w-full py-2 bg-gray-800 text-white rounded-md text-sm font-medium hover:bg-gray-900 transition-colors border-none cursor-pointer"
+              >
+                📷 Scan Driver License Instead
+              </button>
+            </div>
 
-            <button
-              onClick={matchStatus === "confirmed" ? undefined : handleProceedCheckIn}
-              disabled={saving || matchStatus === "confirmed"}
-              className={checkInBtnCls}
-            >
-              {saving ? "Saving..." : matchStatus === "confirmed" ? "🚫 ENTRY DENIED — BARRED" : "✅ Proceed Check-In"}
-            </button>
-            {matchStatus === "confirmed" && (
-              <div className="text-xs text-red-600 text-center font-medium">Contact supervisor before proceeding</div>
-            )}
+            {/* SECTION 3: Classification + Submit */}
+            <div className="flex-1 bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Log Entry</div>
+              <div>
+                <label className={labelCls}>Person Type</label>
+                <select value={personType} onChange={(e) => setPersonType(e.target.value)} className={inputCls}>
+                  <option>Visitor</option>
+                  <option>Delivery</option>
+                  <option>Contractor</option>
+                </select>
+              </div>
+
+              {saveError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-xs">
+                  {saveError}
+                </div>
+              )}
+
+              <button
+                onClick={matchStatus === "confirmed" ? undefined : handleProceedCheckIn}
+                disabled={saving || matchStatus === "confirmed"}
+                className={checkInBtnCls}
+              >
+                {saving ? "Saving..." : matchStatus === "confirmed" ? "🚫 ENTRY DENIED — BARRED" : "✅ Proceed Check-In"}
+              </button>
+              {matchStatus === "confirmed" && (
+                <div className="text-xs text-red-600 text-center font-medium">Contact supervisor before proceeding</div>
+              )}
+            </div>
+
           </div>
 
         </div>
