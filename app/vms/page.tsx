@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { Community, Unit, Resident } from "@/lib/types"
@@ -44,6 +44,10 @@ export default function VMSPage() {
   const [loadError,      setLoadError]      = useState("")
   const [confirmed,      setConfirmed]      = useState<string | null>(null)
   const [recentEntries,  setRecentEntries]  = useState<RecentEntry[]>([])
+
+  // Guards against firing the watchlist-hit alert + denied_entries insert more
+  // than once per BARRED confirmation (DOB input can re-fire on backspace/retype).
+  const barredFiredRef = useRef(false)
 
   useEffect(() => {
     loadCommunities()
@@ -116,7 +120,7 @@ export default function VMSPage() {
     )
   }
 
-  function validateDOB(inputDOB?: string) {
+  async function validateDOB(inputDOB?: string) {
     if (!selectedPerson?.dob) return
     const dbDOB   = String(selectedPerson.dob).slice(0, 10)
     const entered = inputDOB || enteredDOB
@@ -124,8 +128,35 @@ export default function VMSPage() {
       setMatchStatus("confirmed")
       setAlertMode(true)
       setStatusMessage("🚨 BARRED PERSON — CONFIRMED")
-      // Fire watchlist-hit alert (fire-and-forget; UI must not block)
-      const communityName = communities.find(c => c.id === communityId)?.name || "Unknown"
+
+      // Dedupe: only fire alert + log denied entry once per BARRED confirmation
+      if (barredFiredRef.current) return
+      barredFiredRef.current = true
+
+      const communityName  = communities.find(c => c.id === communityId)?.name || "Unknown"
+      const selectedRes    = residents.find(r => r.id === residentId)
+
+      // 1. Audit: log denied entry to DB so the attempt is recorded even if
+      //    the Teams alert is missed. Fire-and-forget.
+      const { data: { user } } = await supabase.auth.getUser()
+      supabase.from("denied_entries").insert({
+        watchlist_id:   selectedPerson.id || null,
+        first_name:     selectedPerson.first_name,
+        last_name:      selectedPerson.last_name,
+        dob:            dbDOB,
+        oln:            selectedPerson.oln || null,
+        community_id:   communityId || null,
+        community_name: communityName,
+        unit_number:    unitId || null,
+        resident_name:  selectedRes?.name || null,
+        guard_email:    user?.email || null,
+        reason:         selectedPerson.reason || null,
+        alert_sent:     true,
+      }).then(({ error }) => {
+        if (error) console.error("[denied_entries] insert failed:", error)
+      })
+
+      // 2. Real-time alert to Teams (fire-and-forget; UI must not block)
       fireAlert({
         type:         "watchlist_hit",
         severity:     "critical",
@@ -149,6 +180,23 @@ export default function VMSPage() {
       setStatusMessage("⚠️ DOB Mismatch — Investigate")
       setMatchStatus("verify")
     }
+  }
+
+  function resetForm() {
+    barredFiredRef.current = false
+    setVisitorName("")
+    setUnitId("")
+    setResidentId("")
+    setResidents([])
+    setPersonType("Visitor")
+    setMatchStatus("none")
+    setResolvedName("")
+    setStatusMessage("")
+    setAlertMode(false)
+    setPossibleMatches([])
+    setSelectedPerson(null)
+    setEnteredDOB("")
+    setSaveError("")
   }
 
   async function handleNameInput(input: string) {
@@ -215,18 +263,7 @@ export default function VMSPage() {
         ...prev.slice(0, 4)
       ])
       setConfirmed(displayName)
-      setVisitorName("")
-      setUnitId("")
-      setResidentId("")
-      setResidents([])
-      setPersonType("Visitor")
-      setMatchStatus("none")
-      setResolvedName("")
-      setStatusMessage("")
-      setAlertMode(false)
-      setPossibleMatches([])
-      setSelectedPerson(null)
-      setEnteredDOB("")
+      resetForm()
     } finally {
       setSaving(false)
     }
@@ -338,7 +375,15 @@ export default function VMSPage() {
                 {saving ? "Saving..." : matchStatus === "confirmed" ? "🚫 ENTRY DENIED — BARRED" : "✅ Proceed Check-In"}
               </button>
               {matchStatus === "confirmed" && (
-                <div className="text-xs text-red-600 text-center font-medium">Contact supervisor before proceeding</div>
+                <>
+                  <div className="text-xs text-red-600 text-center font-medium">Contact supervisor before proceeding</div>
+                  <button
+                    onClick={resetForm}
+                    className="w-full py-2 mt-1 bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer transition-colors"
+                  >
+                    ✓ Acknowledge & Clear — Next Visitor
+                  </button>
+                </>
               )}
             </div>
 
