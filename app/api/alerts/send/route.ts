@@ -28,8 +28,11 @@ async function sendToTeams(
               : severity === "high"     ? "Warning"
               : "Default"
 
+  // Pull Community out so we can render it prominently above the body
+  const community = (meta.Community as string) || ""
+
   const facts = Object.entries(meta)
-    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .filter(([k, v]) => k !== "Community" && v !== undefined && v !== null && v !== "")
     .map(([k, v]) => ({ title: k, value: String(v) }))
 
   const card = {
@@ -52,6 +55,17 @@ async function sendToTeams(
               color,
               wrap: true,
             },
+            ...(community
+              ? [{
+                  type: "TextBlock",
+                  text: `📍 ${community}`,
+                  weight: "Bolder",
+                  size: "Medium",
+                  color,
+                  spacing: "Small",
+                  wrap: true,
+                }]
+              : []),
             ...(body
               ? [{ type: "TextBlock", text: body, wrap: true, spacing: "Small" }]
               : []),
