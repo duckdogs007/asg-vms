@@ -13,36 +13,31 @@ interface AlertPayload {
   payload?:      Record<string, unknown>
 }
 
-// Sends via FormSubmit.co — no API key required.
-// First-ever POST to a new recipient triggers a one-time confirmation email
-// from FormSubmit; the recipient must click the activation link before later
-// alerts will deliver. Subsequent alerts deliver automatically.
-async function sendViaFormSubmit(
-  recipient: string,
+// Sends via Web3Forms (web3forms.com). One Access Key = one recipient inbox.
+// Set WEB3FORMS_ACCESS_KEY in Vercel + .env.local. Sign up takes ~60 seconds
+// at https://web3forms.com — they email you the key.
+async function sendViaWeb3Forms(
   subject: string,
   body: string,
   meta: Record<string, unknown>,
 ): Promise<{ ok: boolean; error?: string }> {
+  const accessKey = process.env.WEB3FORMS_ACCESS_KEY
+  if (!accessKey) return { ok: false, error: "WEB3FORMS_ACCESS_KEY not set" }
   try {
-    const r = await fetch(`https://formsubmit.co/ajax/${encodeURIComponent(recipient)}`, {
+    const r = await fetch("https://api.web3forms.com/submit", {
       method:  "POST",
       headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify({
-        _subject:   subject,
-        _template:  "table",
-        _captcha:   "false",
-        Alert:      subject,
-        Message:    body,
+        access_key: accessKey,
+        subject,
+        from_name:  "ASG VMS",
+        message:    body,
         ...meta,
       }),
     })
-    if (!r.ok) {
-      const text = await r.text()
-      return { ok: false, error: `FormSubmit ${r.status}: ${text.slice(0, 300)}` }
-    }
-    const json = await r.json().catch(() => ({}))
-    if (json && json.success === "false") {
-      return { ok: false, error: `FormSubmit refused: ${json.message || "unknown"}` }
+    const json = await r.json().catch(() => ({} as any))
+    if (!r.ok || json?.success === false) {
+      return { ok: false, error: `Web3Forms ${r.status}: ${json?.message || "unknown"}` }
     }
     return { ok: true }
   } catch (e: any) {
@@ -76,13 +71,13 @@ export async function POST(req: Request) {
 
   const subject = input.subject || `ASG VMS Alert — ${input.type.replace(/_/g, " ")}`
   const body    = input.body    || ""
-  const meta    = { ...(input.payload || {}), TriggeredBy: user.email || "" }
+  const meta    = {
+    ...(input.payload || {}),
+    TriggeredBy: user.email || "",
+    Recipients:  recipients.join(", "),
+  }
 
-  const results = await Promise.all(
-    recipients.map(r => sendViaFormSubmit(r, subject, body, meta))
-  )
-  const failures = results.filter(r => !r.ok)
-  const ok       = failures.length === 0
+  const result = await sendViaWeb3Forms(subject, body, meta)
 
   await supabase.from("alerts").insert({
     type:         input.type,
@@ -91,10 +86,10 @@ export async function POST(req: Request) {
     payload:      input.payload || {},
     recipients,
     triggered_by: user.email || null,
-    status:       ok ? "sent" : "failed",
-    error:        ok ? null   : failures.map(f => f.error).join(" | "),
+    status:       result.ok ? "sent" : "failed",
+    error:        result.ok ? null   : result.error,
   })
 
-  if (!ok) return NextResponse.json({ error: failures.map(f => f.error).join(" | ") }, { status: 502 })
+  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 })
   return NextResponse.json({ ok: true, recipients })
 }
