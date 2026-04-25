@@ -74,7 +74,11 @@ async function sendToTeams(
               : []),
             {
               type: "TextBlock",
-              text: `ASG VMS · ${new Date().toLocaleString("en-US")}`,
+              text: `ASG VMS · ${new Date().toLocaleString("en-US", {
+                timeZone: "America/New_York",
+                dateStyle: "medium",
+                timeStyle: "short",
+              })} ET`,
               size: "Small",
               isSubtle: true,
               spacing: "Medium",
