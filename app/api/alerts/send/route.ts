@@ -13,31 +13,73 @@ interface AlertPayload {
   payload?:      Record<string, unknown>
 }
 
-// Sends via Web3Forms (web3forms.com). One Access Key = one recipient inbox.
-// Set WEB3FORMS_ACCESS_KEY in Vercel + .env.local. Sign up takes ~60 seconds
-// at https://web3forms.com — they email you the key.
-async function sendViaWeb3Forms(
+// Sends to a Microsoft Teams "Workflows" Incoming Webhook (Power Automate).
+// Set TEAMS_WEBHOOK_URL in Vercel env. The URL is itself the credential.
+async function sendToTeams(
   subject: string,
   body: string,
   meta: Record<string, unknown>,
+  severity: string,
 ): Promise<{ ok: boolean; error?: string }> {
-  const accessKey = process.env.WEB3FORMS_ACCESS_KEY
-  if (!accessKey) return { ok: false, error: "WEB3FORMS_ACCESS_KEY not set" }
+  const url = process.env.TEAMS_WEBHOOK_URL
+  if (!url) return { ok: false, error: "TEAMS_WEBHOOK_URL not set" }
+
+  const color = severity === "critical" ? "Attention"
+              : severity === "high"     ? "Warning"
+              : "Default"
+
+  const facts = Object.entries(meta)
+    .filter(([, v]) => v !== undefined && v !== null && v !== "")
+    .map(([k, v]) => ({ title: k, value: String(v) }))
+
+  const card = {
+    type: "message",
+    attachments: [
+      {
+        contentType: "application/vnd.microsoft.card.adaptive",
+        contentUrl:  null,
+        content: {
+          $schema: "http://adaptivecards.io/schemas/adaptive-card.json",
+          type:    "AdaptiveCard",
+          version: "1.5",
+          msteams: { width: "Full" },
+          body: [
+            {
+              type: "TextBlock",
+              text: subject,
+              weight: "Bolder",
+              size: "Large",
+              color,
+              wrap: true,
+            },
+            ...(body
+              ? [{ type: "TextBlock", text: body, wrap: true, spacing: "Small" }]
+              : []),
+            ...(facts.length
+              ? [{ type: "FactSet", facts, spacing: "Medium" }]
+              : []),
+            {
+              type: "TextBlock",
+              text: `ASG VMS · ${new Date().toLocaleString("en-US")}`,
+              size: "Small",
+              isSubtle: true,
+              spacing: "Medium",
+            },
+          ],
+        },
+      },
+    ],
+  }
+
   try {
-    const r = await fetch("https://api.web3forms.com/submit", {
+    const r = await fetch(url, {
       method:  "POST",
-      headers: { "Content-Type": "application/json", "Accept": "application/json" },
-      body: JSON.stringify({
-        access_key: accessKey,
-        subject,
-        from_name:  "ASG VMS",
-        message:    body,
-        ...meta,
-      }),
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify(card),
     })
-    const json = await r.json().catch(() => ({} as any))
-    if (!r.ok || json?.success === false) {
-      return { ok: false, error: `Web3Forms ${r.status}: ${json?.message || "unknown"}` }
+    if (!r.ok) {
+      const text = await r.text().catch(() => "")
+      return { ok: false, error: `Teams ${r.status}: ${text.slice(0, 300)}` }
     }
     return { ok: true }
   } catch (e: any) {
@@ -65,23 +107,23 @@ export async function POST(req: Request) {
     .filter(r => !cid || !r.communities?.length || r.communities.includes(cid))
     .map(r => r.email as string)
 
-  if (recipients.length === 0) {
-    return NextResponse.json({ error: "no recipients in notification_recipients table" }, { status: 422 })
-  }
-
-  const subject = input.subject || `ASG VMS Alert — ${input.type.replace(/_/g, " ")}`
-  const body    = input.body    || ""
-  const meta    = {
+  // Teams webhook is broadcast to a channel — recipients table now informational
+  // (lets us add per-community routing later).
+  const subject  = input.subject || `ASG VMS Alert — ${input.type.replace(/_/g, " ")}`
+  const body     = input.body    || ""
+  const severity = input.severity || "high"
+  const meta     = {
     ...(input.payload || {}),
     TriggeredBy: user.email || "",
-    Recipients:  recipients.join(", "),
+    AlertType:   input.type,
+    Severity:    severity,
   }
 
-  const result = await sendViaWeb3Forms(subject, body, meta)
+  const result = await sendToTeams(subject, body, meta, severity)
 
   await supabase.from("alerts").insert({
     type:         input.type,
-    severity:     input.severity || "high",
+    severity,
     community_id: cid,
     payload:      input.payload || {},
     recipients,
@@ -91,5 +133,5 @@ export async function POST(req: Request) {
   })
 
   if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 })
-  return NextResponse.json({ ok: true, recipients })
+  return NextResponse.json({ ok: true, channel: "teams" })
 }
