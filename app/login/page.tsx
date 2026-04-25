@@ -23,7 +23,7 @@ export default function LoginPage() {
       if (error) {
         setError(error.message)
       } else if (data.session) {
-        window.location.href = "/vms"
+        window.location.href = "/"
       } else {
         setError("Login failed — no session returned")
       }
