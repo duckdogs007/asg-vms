@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import { fireAlert } from "@/lib/alerts"
 
 export default function TopNav() {
 
@@ -17,6 +18,9 @@ export default function TopNav() {
   const [userEmail,      setUserEmail]      = useState("")
   const [isAdmin,        setIsAdmin]        = useState(false)
   const [nightMode,      setNightMode]      = useState(false)
+  const [sosOpen,        setSosOpen]        = useState(false)
+  const [sosSending,     setSosSending]     = useState(false)
+  const [sosResult,      setSosResult]      = useState<"" | "ok" | "fail">("")
 
   useEffect(() => {
     const saved = localStorage.getItem("asg-night-mode") === "true"
@@ -56,6 +60,44 @@ export default function TopNav() {
   async function handleLogout() {
     await supabase.auth.signOut()
     router.push("/login")
+  }
+
+  async function fireSos() {
+    setSosSending(true); setSosResult("")
+    let coords = ""
+    if (typeof navigator !== "undefined" && navigator.geolocation) {
+      coords = await new Promise<string>(resolve => {
+        navigator.geolocation.getCurrentPosition(
+          p => resolve(`${p.coords.latitude.toFixed(5)}, ${p.coords.longitude.toFixed(5)}`),
+          () => resolve(""),
+          { timeout: 4000, enableHighAccuracy: true }
+        )
+      })
+    }
+    try {
+      const r = await fetch("/api/alerts/send", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type:     "panic_sos",
+          severity: "critical",
+          subject:  `🆘 PANIC / SOS — ${userEmail || "Unknown user"}`,
+          body:     `An officer has triggered the panic / SOS button. Respond immediately.`,
+          payload: {
+            User:      userEmail || "—",
+            Page:      pathname,
+            Location:  coords || "unavailable",
+            Time:      new Date().toLocaleString("en-US"),
+            UserAgent: typeof navigator !== "undefined" ? navigator.userAgent : "—",
+          },
+        }),
+      })
+      setSosResult(r.ok ? "ok" : "fail")
+    } catch {
+      setSosResult("fail")
+    } finally {
+      setSosSending(false)
+    }
   }
 
   const displayName = userEmail
@@ -122,6 +164,17 @@ export default function TopNav() {
             )}
           </div>
 
+          {/* Panic / SOS — visible to all signed-in users */}
+          {userEmail && (
+            <button
+              onClick={() => { setSosResult(""); setSosOpen(true) }}
+              title="Panic / SOS"
+              className="px-2 sm:px-3 py-1.5 bg-red-700 text-white text-xs rounded-md hover:bg-red-800 transition-colors border-none cursor-pointer font-bold"
+            >
+              🆘<span className="hidden sm:inline"> SOS</span>
+            </button>
+          )}
+
           {/* Night mode */}
           <button
             onClick={() => {
@@ -138,6 +191,42 @@ export default function TopNav() {
 
         </div>
       </div>
+
+      {/* SOS confirmation modal */}
+      {sosOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/60 flex items-center justify-center p-4" onClick={() => !sosSending && setSosOpen(false)}>
+          <div className="bg-white rounded-lg shadow-2xl max-w-md w-full p-6" onClick={e => e.stopPropagation()}>
+            <div className="text-2xl font-bold text-red-700 mb-2">🆘 Confirm Panic / SOS</div>
+            <div className="text-sm text-gray-700 mb-4">
+              This will immediately email all on-call recipients with your identity, page, and (if permitted) GPS location. Use only in a real emergency.
+            </div>
+            {sosResult === "ok" && (
+              <div className="bg-green-50 border border-green-200 text-green-800 text-sm rounded px-3 py-2 mb-3">Alert sent. Help has been notified.</div>
+            )}
+            {sosResult === "fail" && (
+              <div className="bg-red-50 border border-red-200 text-red-800 text-sm rounded px-3 py-2 mb-3">Failed to send. Try again or call dispatch directly.</div>
+            )}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setSosOpen(false)}
+                disabled={sosSending}
+                className="px-4 py-2 bg-gray-200 text-gray-800 rounded text-sm font-semibold border-none cursor-pointer hover:bg-gray-300 disabled:opacity-50"
+              >
+                {sosResult === "ok" ? "Close" : "Cancel"}
+              </button>
+              {sosResult !== "ok" && (
+                <button
+                  onClick={fireSos}
+                  disabled={sosSending}
+                  className="px-4 py-2 bg-red-700 text-white rounded text-sm font-bold border-none cursor-pointer hover:bg-red-800 disabled:opacity-50"
+                >
+                  {sosSending ? "Sending…" : "Send SOS"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MOBILE NAV DROPDOWN */}
       {mobileNavOpen && (

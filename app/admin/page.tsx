@@ -6,6 +6,21 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
+import { fireAlert } from "@/lib/alerts"
+
+const HIGH_PRIORITY_INCIDENT_TYPES = [
+  "weapons", "weapon", "firearm",
+  "domestic", "domestic dispute", "domestic violence",
+  "missing person", "missing",
+  "fire",
+  "bolo", "bolo sighting",
+] as const
+
+function isHighPriorityIncident(t: string | undefined): boolean {
+  if (!t) return false
+  const s = t.toLowerCase().trim()
+  return HIGH_PRIORITY_INCIDENT_TYPES.some(k => s.includes(k))
+}
 
 type Tab       = "watchlist" | "rentroll" | "reports" | "passdown" | "bolo" | "audit"
 type ReportTab = "daily" | "incident" | "contact" | "vfi" | "view"
@@ -350,6 +365,27 @@ export default function UserDashboard() {
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
     setReportMessage("✅ Incident report submitted.")
+    if (isHighPriorityIncident(incType)) {
+      const communityName = communities.find(c => c.id === incCommunity)?.name || "Unknown"
+      fireAlert({
+        type:         "incident_high_priority",
+        severity:     "critical",
+        community_id: incCommunity || null,
+        subject:      `🚨 ${incType.toUpperCase()} — ${communityName}`,
+        body:         `A high-priority incident has been reported.\n\n${incDescription}`,
+        payload: {
+          Community:    communityName,
+          Date:         incDate,
+          Time:         incTime,
+          Location:     incLocation || "—",
+          Type:         incType,
+          Officer:      incOfficer || "—",
+          Persons:      incPersons || "—",
+          ActionTaken:  incAction || "—",
+          FollowUp:     incFollowUp ? "yes" : "no",
+        },
+      })
+    }
     setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLocation(""); setIncFollowUp(false)
     logActivity("created", "Incident", "", `Incident report submitted — ${incDate}`)
   }

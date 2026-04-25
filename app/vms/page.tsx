@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { Community, Unit, Resident } from "@/lib/types"
 import CadTicker from "@/components/CadTicker"
+import { fireAlert } from "@/lib/alerts"
 
 type MatchStatus = "none" | "verify" | "confirmed" | "cleared"
 
@@ -123,6 +124,27 @@ export default function VMSPage() {
       setMatchStatus("confirmed")
       setAlertMode(true)
       setStatusMessage("🚨 BARRED PERSON — CONFIRMED")
+      // Fire watchlist-hit alert (fire-and-forget; UI must not block)
+      const communityName = communities.find(c => c.id === communityId)?.name || "Unknown"
+      fireAlert({
+        type:         "watchlist_hit",
+        severity:     "critical",
+        community_id: communityId || null,
+        subject:      `🚨 BARRED PERSON CONFIRMED — ${communityName}`,
+        body:         `A confirmed watchlist match has occurred at ${communityName}. The check-in was blocked.`,
+        payload: {
+          Community:   communityName,
+          Unit:        unitId || "—",
+          Visitor:     `${selectedPerson.first_name} ${selectedPerson.last_name}`,
+          DOB:         dbDOB,
+          OLN:         selectedPerson.oln || "",
+          Reason:      selectedPerson.reason || "",
+          Comments:    selectedPerson.comments || "",
+          BannedBy:    selectedPerson.banned_by || "",
+          BanDate:     selectedPerson.ban_date || "",
+          Time:        new Date().toLocaleString("en-US"),
+        },
+      })
     } else {
       setStatusMessage("⚠️ DOB Mismatch — Investigate")
       setMatchStatus("verify")
