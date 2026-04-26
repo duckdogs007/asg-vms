@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
 import { fireAlert } from "@/lib/alerts"
+import { maskSSN } from "@/lib/format"
 
 const HIGH_PRIORITY_INCIDENT_TYPES = [
   "weapons", "weapon", "firearm",
@@ -756,7 +757,7 @@ export default function UserDashboard() {
                   <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
                     {p.dob  && <span>DOB: {p.dob}</span>}
                     {p.oln  && <span>OLN: {p.oln}</span>}
-                    {p.ssn  && <span>SSN: {p.ssn}</span>}
+                    {p.ssn  && <span>SSN: {maskSSN(p.ssn)}</span>}
                     {p.sex  && <span>Sex: {p.sex}</span>}
                     {p.race && <span>Race: {p.race}</span>}
                   </div>

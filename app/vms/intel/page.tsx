@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
+import { maskSSN } from "@/lib/format"
 
 function fmtDate(ts: string) {
   const s = ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z"
@@ -493,7 +494,7 @@ export default function IntelPage() {
                     <span>Name: {b.first_name} {b.last_name}</span>
                     {b.dob  && <span>DOB: {b.dob}</span>}
                     {b.oln  && <span>OLN: {b.oln}</span>}
-                    {(b as any).ssn && <span>SSN: {(b as any).ssn}</span>}
+                    {(b as any).ssn && <span>SSN: {maskSSN((b as any).ssn)}</span>}
                     {b.sex  && <span>Sex: {b.sex}</span>}
                     {b.race && <span>Race: {b.race}</span>}
                     {(b.notes || b.comments) && <span>Notes: {b.notes || b.comments}</span>}
@@ -644,7 +645,7 @@ export default function IntelPage() {
                         {c.race     && <span>Race: {c.race}</span>}
                         {c.dob      && <span>DOB: {c.dob}</span>}
                         {c.oln      && <span>OLN: {c.oln}</span>}
-                        {c.ssn      && <span>SSN: {c.ssn}</span>}
+                        {c.ssn      && <span>SSN: {maskSSN(c.ssn)}</span>}
                         {c.location && <span>📍 {c.location}</span>}
                         {c.address  && <span className="col-span-2">Address: {c.address}</span>}
                       </div>
