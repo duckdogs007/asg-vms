@@ -11,13 +11,15 @@ interface Stats {
   deliveries: number
   watchlistCount: number
   recentEntry: string
+  openAlerts: number
 }
 
 export default function Home() {
 
   const [stats, setStats] = useState<Stats>({
     todayTotal: 0, visitors: 0, contractors: 0,
-    deliveries: 0, watchlistCount: 0, recentEntry: ""
+    deliveries: 0, watchlistCount: 0, recentEntry: "",
+    openAlerts: 0,
   })
   const [time, setTime] = useState("")
 
@@ -45,6 +47,12 @@ export default function Home() {
       .from("watchlist")
       .select("*", { count: "exact", head: true })
 
+    const { count: openAlerts } = await supabase
+      .from("alerts")
+      .select("*", { count: "exact", head: true })
+      .is("ack_at", null)
+      .eq("status", "sent")
+
     const entries = logs || []
     const recent = entries[0]
       ? `${entries[0].first_name} ${entries[0].last_name}`
@@ -56,7 +64,8 @@ export default function Home() {
       contractors:    entries.filter(e => e.person_type?.toLowerCase() === "contractor").length,
       deliveries:     entries.filter(e => e.person_type?.toLowerCase() === "delivery").length,
       watchlistCount: watchlistCount || 0,
-      recentEntry:    recent
+      recentEntry:    recent,
+      openAlerts:     openAlerts || 0,
     })
   }
 
@@ -136,7 +145,15 @@ export default function Home() {
           />
 
           <ComingSoon icon="📷" title="Camera Systems"  desc="Integrated live feed and recording access." />
-          <ComingSoon icon="🔔" title="Alerts & Notify" desc="Push alerts, SMS, and incident escalation." />
+
+          <ModuleCard
+            href="/alerts"
+            icon="🔔"
+            title="Alerts & Notify"
+            desc="Watchlist hits, incident escalations, and panic SOS — live feed."
+            color="red"
+            badge={stats.openAlerts > 0 ? `${stats.openAlerts} open` : undefined}
+          />
 
         </div>
 
@@ -161,18 +178,24 @@ function StatCard({ label, value, accent }: { label: string; value: number; acce
   )
 }
 
-function ModuleCard({ href, icon, title, desc, color }: {
-  href: string; icon: string; title: string; desc: string; color: string
+function ModuleCard({ href, icon, title, desc, color, badge }: {
+  href: string; icon: string; title: string; desc: string; color: string; badge?: string
 }) {
   const borders: Record<string, string> = {
     blue:   "hover:border-blue-600",
     indigo: "hover:border-indigo-600",
     teal:   "hover:border-teal-600",
     gray:   "hover:border-gray-500",
+    red:    "hover:border-red-600",
   }
   return (
     <Link href={href}>
-      <div className={`bg-gray-900 border border-gray-700 rounded-xl p-5 cursor-pointer transition-all hover:bg-gray-800 ${borders[color]} group h-full`}>
+      <div className={`relative bg-gray-900 border border-gray-700 rounded-xl p-5 cursor-pointer transition-all hover:bg-gray-800 ${borders[color]} group h-full`}>
+        {badge && (
+          <span className="absolute top-3 right-3 bg-red-700 text-white text-[11px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+            {badge}
+          </span>
+        )}
         <div className="text-3xl mb-3">{icon}</div>
         <div className="font-bold text-white text-base mb-1 group-hover:text-blue-300 transition-colors">{title}</div>
         <div className="text-sm text-gray-400">{desc}</div>
