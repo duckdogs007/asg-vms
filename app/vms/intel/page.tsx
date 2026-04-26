@@ -126,8 +126,9 @@ export default function IntelPage() {
   const [uploadError,setUploadError]= useState("")
 
   // OSINT tab state
-  const [osintQuery,   setOsintQuery]   = useState("")
-  const [osintHistory, setOsintHistory] = useState<OsintHistoryRow[]>([])
+  const [osintQuery,    setOsintQuery]    = useState("")
+  const [osintHistory,  setOsintHistory]  = useState<OsintHistoryRow[]>([])
+  const [osintExpanded, setOsintExpanded] = useState(false)
 
   const [showContactForm, setShowContactForm] = useState(false)
   const [ctDate,     setCtDate]     = useState(new Date().toISOString().split("T")[0])
@@ -720,26 +721,38 @@ export default function IntelPage() {
                 {osintHistory.length === 0 ? (
                   <div className="p-6 text-center text-sm text-gray-500">No OSINT searches logged yet.</div>
                 ) : (
-                  <table className="w-full text-sm">
-                    <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-                      <tr>
-                        <th className="px-3 py-2 text-left">When</th>
-                        <th className="px-3 py-2 text-left">Query</th>
-                        <th className="px-3 py-2 text-left">Source</th>
-                        <th className="px-3 py-2 text-left">User</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {osintHistory.map(h => (
-                        <tr key={h.id} className="border-t border-gray-100 hover:bg-gray-50">
-                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">{fmtDate(h.searched_at)}</td>
-                          <td className="px-3 py-2 font-medium">{h.query}</td>
-                          <td className="px-3 py-2 text-gray-700 text-xs">{h.source}</td>
-                          <td className="px-3 py-2 text-gray-500 text-xs">{h.user_email || "—"}</td>
+                  <>
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                        <tr>
+                          <th className="px-3 py-2 text-left">When</th>
+                          <th className="px-3 py-2 text-left">Query</th>
+                          <th className="px-3 py-2 text-left">Source</th>
+                          <th className="px-3 py-2 text-left">User</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                      </thead>
+                      <tbody>
+                        {(osintExpanded ? osintHistory : osintHistory.slice(0, 5)).map(h => (
+                          <tr key={h.id} className="border-t border-gray-100 hover:bg-gray-50">
+                            <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">{fmtDate(h.searched_at)}</td>
+                            <td className="px-3 py-2 font-medium">{h.query}</td>
+                            <td className="px-3 py-2 text-gray-700 text-xs">{h.source}</td>
+                            <td className="px-3 py-2 text-gray-500 text-xs">{h.user_email || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {osintHistory.length > 5 && (
+                      <button
+                        onClick={() => setOsintExpanded(v => !v)}
+                        className="w-full text-center px-3 py-2 bg-gray-50 hover:bg-gray-100 text-blue-700 hover:text-blue-900 text-xs font-semibold border-t border-gray-200 cursor-pointer transition-colors"
+                      >
+                        {osintExpanded
+                          ? `▴ Show Less`
+                          : `▾ Click for more — ${osintHistory.length - 5} additional`}
+                      </button>
+                    )}
+                  </>
                 )}
               </div>
             </>
