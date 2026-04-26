@@ -42,6 +42,7 @@ export default function UserDashboard() {
   const [wlLast,     setWlLast]     = useState("")
   const [wlDob,      setWlDob]      = useState("")
   const [wlOln,      setWlOln]      = useState("")
+  const [wlSsn,      setWlSsn]      = useState("")
   const [wlReason,   setWlReason]   = useState("")
   const [wlNotes,    setWlNotes]    = useState("")
   const [wlFirearm,  setWlFirearm]  = useState(false)
@@ -218,6 +219,7 @@ export default function UserDashboard() {
     const { error } = await supabase.from("watchlist").insert({
       first_name: wlFirst || null, last_name: wlLast,
       dob: wlDob || null, oln: wlOln || null,
+      ssn: wlSsn || null,
       reason: wlReason, comments: wlNotes || null,
       community_id: wlCommunity || null,
       banned_by: officerName || null,
@@ -227,7 +229,7 @@ export default function UserDashboard() {
     setWlSaving(false)
     if (error) { setWlError(error.message); return }
     setWlMessage("✅ Person added to watchlist.")
-    setWlFirst(""); setWlLast(""); setWlDob(""); setWlOln(""); setWlReason(""); setWlNotes(""); setWlFirearm(false)
+    setWlFirst(""); setWlLast(""); setWlDob(""); setWlOln(""); setWlSsn(""); setWlReason(""); setWlNotes(""); setWlFirearm(false)
     setShowAddWatchlist(false)
     await logActivity("created", "Watchlist", "", `Added ${wlFirst} ${wlLast} to watchlist`)
     loadWatchlist()
@@ -718,6 +720,8 @@ export default function UserDashboard() {
                   <input type="date" value={wlDob} onChange={e => setWlDob(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>OLN (Driver License #)</label>
                   <input value={wlOln} onChange={e => setWlOln(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>SSN</label>
+                  <input value={wlSsn} onChange={e => setWlSsn(e.target.value)} placeholder="XXX-XX-XXXX or last 4" maxLength={11} className={inputCls} /></div>
                 <div><label className={labelCls}>Community</label>
                   <select value={wlCommunity} onChange={e => setWlCommunity(e.target.value)} className={inputCls}>
                     <option value="">— Select —</option>
@@ -752,6 +756,7 @@ export default function UserDashboard() {
                   <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
                     {p.dob  && <span>DOB: {p.dob}</span>}
                     {p.oln  && <span>OLN: {p.oln}</span>}
+                    {p.ssn  && <span>SSN: {p.ssn}</span>}
                     {p.sex  && <span>Sex: {p.sex}</span>}
                     {p.race && <span>Race: {p.race}</span>}
                   </div>

@@ -493,6 +493,7 @@ export default function IntelPage() {
                     <span>Name: {b.first_name} {b.last_name}</span>
                     {b.dob  && <span>DOB: {b.dob}</span>}
                     {b.oln  && <span>OLN: {b.oln}</span>}
+                    {(b as any).ssn && <span>SSN: {(b as any).ssn}</span>}
                     {b.sex  && <span>Sex: {b.sex}</span>}
                     {b.race && <span>Race: {b.race}</span>}
                     {(b.notes || b.comments) && <span>Notes: {b.notes || b.comments}</span>}
