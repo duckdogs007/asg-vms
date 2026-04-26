@@ -73,29 +73,29 @@ export default function Home() {
     <div className="min-h-screen bg-gray-950 text-white">
 
       {/* HERO HEADER */}
-      <div className="border-b border-gray-800 px-4 sm:px-10 py-6 sm:py-8">
+      <div className="border-b border-gray-800 px-4 sm:px-10 py-3 sm:py-4">
         <div className="flex justify-between items-center max-w-6xl mx-auto">
           <div>
-            <div className="text-3xl font-bold tracking-wide text-white">
+            <div className="text-xl sm:text-2xl font-bold tracking-wide text-white">
               🛡️ American Security Group
             </div>
-            <div className="text-gray-400 text-sm mt-1">Integrated Property Solutions Platform</div>
+            <div className="text-gray-400 text-xs mt-0.5">Integrated Property Solutions Platform</div>
           </div>
           <div className="text-right">
-            <div className="text-xs text-gray-500 uppercase tracking-widest mb-1">System Time</div>
-            <div className="text-sm text-green-400 font-mono">{time}</div>
-            <div className="flex items-center gap-1.5 justify-end mt-1">
-              <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-              <span className="text-xs text-green-500">All Systems Operational</span>
+            <div className="text-[10px] text-gray-500 uppercase tracking-widest">System Time</div>
+            <div className="text-xs text-green-400 font-mono">{time}</div>
+            <div className="flex items-center gap-1.5 justify-end mt-0.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
+              <span className="text-[10px] text-green-500">All Systems Operational</span>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-10 py-6 sm:py-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-10 py-3 sm:py-4">
 
         {/* STAT CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-10">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
           <StatCard label="Today's Entries"  value={stats.todayTotal}     accent="blue" />
           <StatCard label="Visitors"         value={stats.visitors}       accent="indigo" />
           <StatCard label="Contractors"      value={stats.contractors}    accent="violet" />
@@ -104,13 +104,13 @@ export default function Home() {
         </div>
 
         {/* RECENT ENTRY BANNER */}
-        <div className="bg-gray-900 border border-gray-700 rounded-xl px-5 py-3 mb-10 flex items-center gap-3">
-          <span className="text-gray-500 text-sm">Most Recent Entry:</span>
-          <span className="text-white font-semibold">{stats.recentEntry}</span>
+        <div className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 mb-3 flex items-center gap-3">
+          <span className="text-gray-500 text-xs">Most Recent Entry:</span>
+          <span className="text-white font-semibold text-sm">{stats.recentEntry}</span>
         </div>
 
         {/* NAV MODULES — operational */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-3">
 
           <ModuleCard
             href="/vms"
@@ -139,7 +139,7 @@ export default function Home() {
         </div>
 
         {/* DASHBOARDS — split row */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
 
           <ModuleCard
             href="/admin"
@@ -160,7 +160,7 @@ export default function Home() {
         </div>
 
         {/* MODULES — secondary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
 
           <ComingSoon icon="📷" title="Camera Systems"  desc="Integrated live feed and recording access." />
 
@@ -189,9 +189,9 @@ function StatCard({ label, value, accent }: { label: string; value: number; acce
     red:    "border-red-700 text-red-400",
   }
   return (
-    <div className={`bg-gray-900 border rounded-xl px-4 py-4 ${colors[accent]}`}>
-      <div className="text-3xl font-bold">{value}</div>
-      <div className="text-xs text-gray-400 mt-1">{label}</div>
+    <div className={`bg-gray-900 border rounded-lg px-3 py-2 ${colors[accent]}`}>
+      <div className="text-xl font-bold leading-tight">{value}</div>
+      <div className="text-[10px] text-gray-400 mt-0.5 uppercase tracking-wider">{label}</div>
     </div>
   )
 }
@@ -208,15 +208,15 @@ function ModuleCard({ href, icon, title, desc, color, badge }: {
   }
   return (
     <Link href={href}>
-      <div className={`relative bg-gray-900 border border-gray-700 rounded-xl p-5 cursor-pointer transition-all hover:bg-gray-800 ${borders[color]} group h-full`}>
+      <div className={`relative bg-gray-900 border border-gray-700 rounded-lg p-3 cursor-pointer transition-all hover:bg-gray-800 ${borders[color]} group h-full`}>
         {badge && (
-          <span className="absolute top-3 right-3 bg-red-700 text-white text-[11px] font-bold px-2 py-0.5 rounded-full animate-pulse">
+          <span className="absolute top-2 right-2 bg-red-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
             {badge}
           </span>
         )}
-        <div className="text-3xl mb-3">{icon}</div>
-        <div className="font-bold text-white text-base mb-1 group-hover:text-blue-300 transition-colors">{title}</div>
-        <div className="text-sm text-gray-400">{desc}</div>
+        <div className="text-2xl mb-1.5">{icon}</div>
+        <div className="font-bold text-white text-sm mb-0.5 group-hover:text-blue-300 transition-colors">{title}</div>
+        <div className="text-xs text-gray-400 leading-snug">{desc}</div>
       </div>
     </Link>
   )
@@ -224,11 +224,11 @@ function ModuleCard({ href, icon, title, desc, color, badge }: {
 
 function ComingSoon({ icon, title, desc }: { icon: string; title: string; desc: string }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-xl p-5 opacity-50 cursor-not-allowed">
-      <div className="text-3xl mb-3">{icon}</div>
-      <div className="font-bold text-gray-400 text-base mb-1">{title}</div>
-      <div className="text-sm text-gray-600">{desc}</div>
-      <div className="text-xs text-gray-600 mt-2 uppercase tracking-widest">Coming Soon</div>
+    <div className="bg-gray-900 border border-gray-800 rounded-lg p-3 opacity-50 cursor-not-allowed">
+      <div className="text-2xl mb-1.5">{icon}</div>
+      <div className="font-bold text-gray-400 text-sm mb-0.5">{title}</div>
+      <div className="text-xs text-gray-600 leading-snug">{desc}</div>
+      <div className="text-[10px] text-gray-600 mt-1 uppercase tracking-widest">Coming Soon</div>
     </div>
   )
 }
