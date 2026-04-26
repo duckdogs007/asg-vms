@@ -36,7 +36,92 @@ interface ContactRecord {
   photo_url: string | null
 }
 
-type RightTab = "ban" | "visits" | "contacts"
+type RightTab = "ban" | "visits" | "contacts" | "osint"
+
+interface OsintSource {
+  id:    string
+  name:  string
+  desc:  string
+  icon:  string
+  build: (q: string) => string
+}
+
+// Curated OSINT sources. Each opens the source's own search page with the
+// query pre-filled. We never scrape — clicks just open in a new tab and log
+// the click to osint_search_history for audit.
+const OSINT_SOURCES: OsintSource[] = [
+  {
+    id:   "va_arrests",
+    name: "Virginia Arrests",
+    desc: "virginia.arrests.org — public arrest aggregator",
+    icon: "🚓",
+    build: q => `https://virginia.arrests.org/?ms_search=${encodeURIComponent(q)}`,
+  },
+  {
+    id:   "va_courts",
+    name: "VA Court Records",
+    desc: "eapps.courts.state.va.us — district + circuit case search",
+    icon: "⚖️",
+    build: () => `https://eapps.courts.state.va.us/ocis/search`,
+  },
+  {
+    id:   "vine_va",
+    name: "VINELink VA",
+    desc: "Virginia incarceration + offender tracking",
+    icon: "🔒",
+    build: () => `https://www.vinelink.com/`,
+  },
+  {
+    id:   "va_sor",
+    name: "VA Sex Offender Registry",
+    desc: "Virginia State Police registry search",
+    icon: "📛",
+    build: q => `https://sex-offender.vsp.virginia.gov/sor/search.html?searchType=name&searchTerm=${encodeURIComponent(q)}`,
+  },
+  {
+    id:   "fbi_wanted",
+    name: "FBI Most Wanted",
+    desc: "fbi.gov/wanted — all categories",
+    icon: "🎯",
+    build: q => `https://www.fbi.gov/wanted/search?search=${encodeURIComponent(q)}`,
+  },
+  {
+    id:   "us_marshals",
+    name: "US Marshals Wanted",
+    desc: "usmarshals.gov fugitive list",
+    icon: "🤠",
+    build: q => `https://www.usmarshals.gov/wanted/search?search_api_fulltext=${encodeURIComponent(q)}`,
+  },
+  {
+    id:   "henrico_pd",
+    name: "Henrico Police News",
+    desc: "henrico.us police arrests + press releases",
+    icon: "📰",
+    build: q => `https://www.google.com/search?q=site%3Ahenrico.us+%22${encodeURIComponent(q)}%22`,
+  },
+  {
+    id:   "google_arrest",
+    name: "Google: name + arrest",
+    desc: "Web search — \"NAME\" + arrest + Virginia",
+    icon: "🔎",
+    build: q => `https://www.google.com/search?q=%22${encodeURIComponent(q)}%22+arrest+Virginia`,
+  },
+  {
+    id:   "google_news",
+    name: "Google News",
+    desc: "Recent news mentions",
+    icon: "🗞️",
+    build: q => `https://news.google.com/search?q=%22${encodeURIComponent(q)}%22+arrest+OR+wanted`,
+  },
+]
+
+interface OsintHistoryRow {
+  id:          string
+  user_email:  string | null
+  query:       string
+  source:      string
+  searched_at: string
+}
 
 export default function IntelPage() {
 
@@ -53,6 +138,10 @@ export default function IntelPage() {
   const [photoUrl,   setPhotoUrl]   = useState("")
   const [uploading,  setUploading]  = useState(false)
   const [uploadError,setUploadError]= useState("")
+
+  // OSINT tab state
+  const [osintQuery,   setOsintQuery]   = useState("")
+  const [osintHistory, setOsintHistory] = useState<OsintHistoryRow[]>([])
 
   const [showContactForm, setShowContactForm] = useState(false)
   const [ctDate,     setCtDate]     = useState(new Date().toISOString().split("T")[0])
@@ -147,6 +236,7 @@ export default function IntelPage() {
         last_seen: visitData[0]?.created_at || null,
         oln: watchMatch?.oln || null
       })
+      setOsintQuery(query)
       setBanHistory(watchMatch ? [watchMatch] : [])
 
       // Load contact history
@@ -260,6 +350,39 @@ export default function IntelPage() {
     }
   }
 
+  async function loadOsintHistory(query?: string) {
+    let q = supabase.from("osint_search_history").select("*")
+      .order("searched_at", { ascending: false }).limit(20)
+    if (query) q = q.ilike("query", query)
+    const { data } = await q
+    setOsintHistory(data || [])
+  }
+
+  async function fireOsint(src: OsintSource) {
+    const query = osintQuery.trim()
+    if (!query) { setError("Enter a name to search."); return }
+    const url = src.build(query)
+
+    // Open in a new tab right away so the popup blocker doesn't fire
+    window.open(url, "_blank", "noopener,noreferrer")
+
+    // Log fire-and-forget
+    const { data: { user } } = await supabase.auth.getUser()
+    supabase.from("osint_search_history").insert({
+      user_email: user?.email || null,
+      query,
+      source:     src.id,
+      source_url: url,
+    }).then(({ error }) => {
+      if (error) console.error("[osint] history insert failed:", error)
+      else loadOsintHistory()
+    })
+  }
+
+  useEffect(() => {
+    if (rightTab === "osint") loadOsintHistory()
+  }, [rightTab])
+
   const tabCls = (t: RightTab) =>
     `px-4 py-2 text-sm font-medium border-b-2 transition-colors cursor-pointer ${
       rightTab === t
@@ -370,6 +493,7 @@ export default function IntelPage() {
                 <span className="ml-1.5 bg-blue-700 text-white text-xs rounded-full px-1.5 py-0.5">{contacts.length}</span>
               )}
             </button>
+            <button className={tabCls("osint")} onClick={() => setRightTab("osint")}>🌐 OSINT</button>
           </div>
 
           {/* BAN HISTORY TAB */}
@@ -549,6 +673,82 @@ export default function IntelPage() {
                   </div>
                 </div>
               )}
+            </>
+          )}
+
+          {/* OSINT TAB */}
+          {rightTab === "osint" && (
+            <>
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-600 mb-1">Search query</label>
+                <div className="flex gap-2">
+                  <input
+                    value={osintQuery}
+                    onChange={e => setOsintQuery(e.target.value)}
+                    placeholder="Name to search across public sources"
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                  />
+                  <button
+                    onClick={() => loadOsintHistory(osintQuery.trim() || undefined)}
+                    className="px-3 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold rounded-md border-none cursor-pointer"
+                  >
+                    Filter History
+                  </button>
+                </div>
+                <p className="text-xs text-gray-500 mt-1">
+                  Each click opens the source in a new tab and logs the search to the audit trail. We never scrape or store the source's content — these are pivot links.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-6">
+                {OSINT_SOURCES.map(src => (
+                  <button
+                    key={src.id}
+                    onClick={() => fireOsint(src)}
+                    disabled={!osintQuery.trim()}
+                    className="text-left bg-white border border-gray-200 hover:border-blue-500 hover:shadow-md rounded-lg p-3 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <div className="flex items-start gap-2">
+                      <span className="text-xl shrink-0">{src.icon}</span>
+                      <div className="min-w-0">
+                        <div className="font-semibold text-gray-900 text-sm">{src.name}</div>
+                        <div className="text-xs text-gray-500 leading-snug">{src.desc}</div>
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+
+              <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                <div className="px-3 py-2 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider flex justify-between items-center">
+                  <span>Recent Searches</span>
+                  <button onClick={() => loadOsintHistory()} className="text-blue-700 hover:text-blue-900 normal-case font-medium border-none bg-transparent cursor-pointer">↻ Refresh</button>
+                </div>
+                {osintHistory.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-gray-500">No OSINT searches logged yet.</div>
+                ) : (
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                      <tr>
+                        <th className="px-3 py-2 text-left">When</th>
+                        <th className="px-3 py-2 text-left">Query</th>
+                        <th className="px-3 py-2 text-left">Source</th>
+                        <th className="px-3 py-2 text-left">User</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {osintHistory.map(h => (
+                        <tr key={h.id} className="border-t border-gray-100 hover:bg-gray-50">
+                          <td className="px-3 py-2 text-gray-600 whitespace-nowrap text-xs">{fmtDate(h.searched_at)}</td>
+                          <td className="px-3 py-2 font-medium">{h.query}</td>
+                          <td className="px-3 py-2 text-gray-700 text-xs">{h.source}</td>
+                          <td className="px-3 py-2 text-gray-500 text-xs">{h.user_email || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </>
           )}
 
