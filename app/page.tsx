@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import pkg from "../package.json"
 
 interface Stats {
   todayTotal: number
@@ -180,6 +181,13 @@ export default function Home() {
             badge={stats.openAlerts > 0 ? `${stats.openAlerts} open` : undefined}
           />
 
+        </div>
+
+        {/* FOOTER */}
+        <div className="mt-6 pt-3 border-t border-gray-200 text-center text-[11px] text-gray-500">
+          © {new Date().getFullYear()} American Security Group. All rights reserved.
+          <span className="mx-1.5 text-gray-300">·</span>
+          ASG VMS v{pkg.version}
         </div>
 
       </div>
