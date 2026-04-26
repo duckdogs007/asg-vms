@@ -109,7 +109,7 @@ export default function Home() {
           <span className="text-white font-semibold">{stats.recentEntry}</span>
         </div>
 
-        {/* NAV MODULES */}
+        {/* NAV MODULES — operational */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-5">
 
           <ModuleCard
@@ -136,13 +136,31 @@ export default function Home() {
             color="teal"
           />
 
+        </div>
+
+        {/* DASHBOARDS — split row */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
+
           <ModuleCard
             href="/admin"
-            icon="⚙️"
+            icon="📋"
             title="User Dashboard"
-            desc="Manage communities, units, users, and system settings."
+            desc="Passdowns, BOLOs, Officer Reports, Watchlist, Rent Roll, Audit Log."
             color="gray"
           />
+
+          <ModuleCard
+            href="/admin/system"
+            icon="⚙️"
+            title="Admin Dashboard"
+            desc="Manage communities, users, notification recipients, and system settings."
+            color="indigo"
+          />
+
+        </div>
+
+        {/* MODULES — secondary */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-5 mb-5">
 
           <ComingSoon icon="📷" title="Camera Systems"  desc="Integrated live feed and recording access." />
 
