@@ -17,7 +17,13 @@ interface Recipient {
   active:      boolean
   created_at:  string
 }
-interface UserRow { user_email: string; actions: number; last_active: string }
+interface UserRow {
+  id:                 string
+  email:              string | null
+  created_at:         string
+  last_sign_in_at:    string | null
+  email_confirmed_at: string | null
+}
 
 export default function AdminSystemPage() {
 
@@ -37,7 +43,8 @@ export default function AdminSystemPage() {
   const [newRole,    setNewRole]    = useState("admin")
 
   // ── USERS ──
-  const [users, setUsers] = useState<UserRow[]>([])
+  const [users,      setUsers]      = useState<UserRow[]>([])
+  const [usersError, setUsersError] = useState("")
 
   useEffect(() => {
     load()
@@ -52,20 +59,25 @@ export default function AdminSystemPage() {
         .select("*").order("created_at", { ascending: false })
       setRecipients(data || [])
     } else if (activeTab === "users") {
-      const { data } = await supabase.from("audit_logs")
-        .select("user_email,created_at").order("created_at", { ascending: false }).limit(2000)
-      const map = new Map<string, { actions: number; last: string }>()
-      ;(data || []).forEach(r => {
-        const k = r.user_email || "unknown"
-        const cur = map.get(k) || { actions: 0, last: "" }
-        cur.actions += 1
-        if (!cur.last || r.created_at > cur.last) cur.last = r.created_at
-        map.set(k, cur)
-      })
-      const rows: UserRow[] = [...map.entries()]
-        .map(([email, v]) => ({ user_email: email, actions: v.actions, last_active: v.last }))
-        .sort((a, b) => b.actions - a.actions)
-      setUsers(rows)
+      setUsersError("")
+      try {
+        const r = await fetch("/api/admin/users", { cache: "no-store" })
+        const json = await r.json()
+        if (!r.ok) {
+          setUsersError(json.error || `HTTP ${r.status}`)
+          setUsers([])
+        } else {
+          const rows = (json.users as UserRow[]).sort((a, b) => {
+            const al = a.last_sign_in_at || ""
+            const bl = b.last_sign_in_at || ""
+            return bl.localeCompare(al)
+          })
+          setUsers(rows)
+        }
+      } catch (e: any) {
+        setUsersError(e?.message || String(e))
+        setUsers([])
+      }
     }
   }
 
@@ -257,33 +269,52 @@ export default function AdminSystemPage() {
       {activeTab === "users" && (
         <div className="bg-white border border-gray-200 rounded-xl p-5">
           <p className="text-xs text-gray-500 mb-3">
-            Users known to the system, ranked by activity. Derived from <code>audit_logs</code> — everyone who's taken a logged action.
-            Full Supabase user management requires a service-role key (server-only) and isn't wired here yet.
+            Live from Supabase Authentication via service-role key.
           </p>
-          {users.length === 0 ? (
-            <div className="text-sm text-gray-500 py-6 text-center">No user activity yet.</div>
-          ) : (
+          {usersError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-md mb-3">
+              {usersError}
+              {usersError.includes("SUPABASE_SERVICE_ROLE_KEY") && (
+                <div className="text-xs mt-1 text-red-600">
+                  Add the env var in Vercel: Settings → Environment Variables → SUPABASE_SERVICE_ROLE_KEY (from Supabase → Project Settings → API → service_role).
+                </div>
+              )}
+            </div>
+          )}
+          {users.length === 0 && !usersError ? (
+            <div className="text-sm text-gray-500 py-6 text-center">No users.</div>
+          ) : users.length > 0 ? (
             <table className="w-full text-sm">
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-3 py-2 text-left">Email</th>
-                  <th className="px-3 py-2 text-left">Actions</th>
-                  <th className="px-3 py-2 text-left">Last Active</th>
+                  <th className="px-3 py-2 text-left">Confirmed</th>
+                  <th className="px-3 py-2 text-left">Created</th>
+                  <th className="px-3 py-2 text-left">Last Sign-In</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map(u => (
-                  <tr key={u.user_email} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-3 py-2 font-mono text-xs">{u.user_email}</td>
-                    <td className="px-3 py-2">{u.actions}</td>
-                    <td className="px-3 py-2 text-gray-600">
-                      {u.last_active ? new Date(u.last_active).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) : "—"}
+                  <tr key={u.id} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-3 py-2 font-mono text-xs">{u.email || "—"}</td>
+                    <td className="px-3 py-2">
+                      {u.email_confirmed_at
+                        ? <span className="text-green-700 text-xs font-semibold">✓</span>
+                        : <span className="text-gray-400 text-xs">pending</span>}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 text-xs">
+                      {new Date(u.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 text-xs">
+                      {u.last_sign_in_at
+                        ? new Date(u.last_sign_in_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                        : <span className="text-gray-400">never</span>}
                     </td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          )}
+          ) : null}
         </div>
       )}
 
