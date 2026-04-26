@@ -665,6 +665,13 @@ export default function IntelPage() {
           {/* OSINT TAB */}
           {rightTab === "osint" && (
             <>
+              <div className="mb-3 bg-yellow-50 border border-yellow-300 text-yellow-900 rounded-lg px-3 py-2 text-sm flex items-start gap-2">
+                <span className="text-base leading-none mt-0.5">⚠️</span>
+                <div>
+                  <span className="font-bold">Verify first!</span> Web source information may not be accurate or up to date. Treat results as investigative leads — confirm against primary records before acting.
+                </div>
+              </div>
+
               <div className="mb-4">
                 <label className="block text-xs font-semibold text-gray-600 mb-1">Search query</label>
                 <div className="flex gap-2">
