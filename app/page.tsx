@@ -75,11 +75,18 @@ export default function Home() {
       {/* HERO HEADER */}
       <div className="border-b border-gray-800 px-4 sm:px-10 py-3 sm:py-4">
         <div className="flex justify-between items-center max-w-6xl mx-auto">
-          <div>
-            <div className="text-xl sm:text-2xl font-bold tracking-wide text-white">
-              🛡️ American Security Group
+          <div className="flex items-center gap-3">
+            <img
+              src="/asg-logo.gif"
+              alt="American Security Group"
+              className="h-12 sm:h-14 w-auto shrink-0"
+            />
+            <div>
+              <div className="text-xl sm:text-2xl font-bold tracking-wide text-white leading-tight">
+                American Security Group
+              </div>
+              <div className="text-gray-400 text-xs mt-0.5">Integrated Property Solutions Platform</div>
             </div>
-            <div className="text-gray-400 text-xs mt-0.5">Integrated Property Solutions Platform</div>
           </div>
           <div className="text-right">
             <div className="text-[10px] text-gray-500 uppercase tracking-widest">System Time</div>
