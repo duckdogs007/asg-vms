@@ -66,18 +66,30 @@ export default function VMSPage() {
   // Intentionally no useEffect on residentId — resident selection records who is being visited,
   // not the visitor's own name
 
+  // Persist current community so TopNav SOS button can include it in the
+  // alert payload (TopNav has no community context of its own).
+  function rememberCommunity(id: string, name: string) {
+    if (typeof window === "undefined") return
+    localStorage.setItem("asg-current-community-id",   id)
+    localStorage.setItem("asg-current-community-name", name)
+  }
+
   async function loadCommunities() {
     const { data, error } = await supabase.from("communities").select("*")
     if (error) { setLoadError("Failed to load communities."); return }
     setCommunities(data || [])
     if (data?.length) {
       setCommunityId(data[0].id)
-      loadUnits(data[0].id)
+      rememberCommunity(data[0].id, data[0].name)
+      loadUnits(data[0].id, data)
     }
   }
 
-  async function loadUnits(commId: string) {
+  async function loadUnits(commId: string, communityList?: Community[]) {
     setCommunityId(commId)
+    const list = communityList ?? communities
+    const c = list.find(x => x.id === commId)
+    if (c) rememberCommunity(c.id, c.name)
     const { data, error } = await supabase
       .from("units").select("*").eq("community_id", commId)
     if (error) { setLoadError("Failed to load units."); return }

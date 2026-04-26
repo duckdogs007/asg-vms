@@ -74,16 +74,22 @@ export default function TopNav() {
         )
       })
     }
+    // Pull last-selected community from /vms (persisted by loadUnits).
+    const communityId   = typeof window !== "undefined" ? localStorage.getItem("asg-current-community-id")   || "" : ""
+    const communityName = typeof window !== "undefined" ? localStorage.getItem("asg-current-community-name") || "" : ""
+    const where = communityName || "Unknown community"
     try {
       const r = await fetch("/api/alerts/send", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type:     "panic_sos",
-          severity: "critical",
-          subject:  `🆘 PANIC / SOS — ${userEmail || "Unknown user"}`,
-          body:     `An officer has triggered the panic / SOS button. Respond immediately.`,
+          type:         "panic_sos",
+          severity:     "critical",
+          community_id: communityId || null,
+          subject:      `🆘 PANIC / SOS — ${where}`,
+          body:         `An officer at ${where} has triggered the panic / SOS button. Respond immediately.`,
           payload: {
+            Community: communityName || "Unknown",
             User:      userEmail || "—",
             Page:      pathname,
             Location:  coords || "unavailable",
