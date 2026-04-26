@@ -70,10 +70,10 @@ export default function Home() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-950 text-white">
+    <div className="min-h-screen">
 
       {/* HERO HEADER */}
-      <div className="border-b border-gray-800 px-4 sm:px-10 py-3 sm:py-4">
+      <div className="bg-white border-b border-gray-200 px-4 sm:px-10 py-3 sm:py-4">
         <div className="flex justify-between items-center max-w-6xl mx-auto">
           <div className="flex items-center gap-3">
             <img
@@ -82,18 +82,18 @@ export default function Home() {
               className="h-12 sm:h-14 w-auto shrink-0"
             />
             <div>
-              <div className="text-xl sm:text-2xl font-bold tracking-wide text-white leading-tight">
+              <div className="text-xl sm:text-2xl font-bold tracking-wide text-gray-900 leading-tight">
                 American Security Group
               </div>
-              <div className="text-gray-400 text-xs mt-0.5">Integrated Property Solutions Platform</div>
+              <div className="text-gray-500 text-xs mt-0.5">Integrated Property Solutions Platform</div>
             </div>
           </div>
           <div className="text-right">
             <div className="text-[10px] text-gray-500 uppercase tracking-widest">System Time</div>
-            <div className="text-xs text-green-400 font-mono">{time}</div>
+            <div className="text-xs text-green-700 font-mono">{time}</div>
             <div className="flex items-center gap-1.5 justify-end mt-0.5">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"></span>
-              <span className="text-[10px] text-green-500">All Systems Operational</span>
+              <span className="text-[10px] text-green-700">All Systems Operational</span>
             </div>
           </div>
         </div>
@@ -111,9 +111,9 @@ export default function Home() {
         </div>
 
         {/* RECENT ENTRY BANNER */}
-        <div className="bg-gray-900 border border-gray-700 rounded-lg px-4 py-2 mb-3 flex items-center gap-3">
+        <div className="bg-white border border-gray-200 rounded-lg px-4 py-2 mb-3 flex items-center gap-3">
           <span className="text-gray-500 text-xs">Most Recent Entry:</span>
-          <span className="text-white font-semibold text-sm">{stats.recentEntry}</span>
+          <span className="text-gray-900 font-semibold text-sm">{stats.recentEntry}</span>
         </div>
 
         {/* NAV MODULES — operational */}
@@ -189,16 +189,16 @@ export default function Home() {
 
 function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   const colors: Record<string, string> = {
-    blue:   "border-blue-700 text-blue-400",
-    indigo: "border-indigo-700 text-indigo-400",
-    violet: "border-violet-700 text-violet-400",
-    sky:    "border-sky-700 text-sky-400",
-    red:    "border-red-700 text-red-400",
+    blue:   "border-blue-300 text-blue-700",
+    indigo: "border-indigo-300 text-indigo-700",
+    violet: "border-violet-300 text-violet-700",
+    sky:    "border-sky-300 text-sky-700",
+    red:    "border-red-300 text-red-700",
   }
   return (
-    <div className={`bg-gray-900 border rounded-lg px-3 py-2 ${colors[accent]}`}>
+    <div className={`bg-white border rounded-lg px-3 py-2 ${colors[accent]}`}>
       <div className="text-xl font-bold leading-tight">{value}</div>
-      <div className="text-[10px] text-gray-400 mt-0.5 uppercase tracking-wider">{label}</div>
+      <div className="text-[10px] text-gray-500 mt-0.5 uppercase tracking-wider">{label}</div>
     </div>
   )
 }
@@ -207,23 +207,23 @@ function ModuleCard({ href, icon, title, desc, color, badge }: {
   href: string; icon: string; title: string; desc: string; color: string; badge?: string
 }) {
   const borders: Record<string, string> = {
-    blue:   "hover:border-blue-600",
-    indigo: "hover:border-indigo-600",
-    teal:   "hover:border-teal-600",
+    blue:   "hover:border-blue-500",
+    indigo: "hover:border-indigo-500",
+    teal:   "hover:border-teal-500",
     gray:   "hover:border-gray-500",
-    red:    "hover:border-red-600",
+    red:    "hover:border-red-500",
   }
   return (
     <Link href={href}>
-      <div className={`relative bg-gray-900 border border-gray-700 rounded-lg p-3 cursor-pointer transition-all hover:bg-gray-800 ${borders[color]} group h-full`}>
+      <div className={`relative bg-white border border-gray-200 rounded-lg p-3 cursor-pointer transition-all hover:shadow-md ${borders[color]} group h-full`}>
         {badge && (
           <span className="absolute top-2 right-2 bg-red-700 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full animate-pulse">
             {badge}
           </span>
         )}
         <div className="text-2xl mb-1.5">{icon}</div>
-        <div className="font-bold text-white text-sm mb-0.5 group-hover:text-blue-300 transition-colors">{title}</div>
-        <div className="text-xs text-gray-400 leading-snug">{desc}</div>
+        <div className="font-bold text-gray-900 text-sm mb-0.5 group-hover:text-blue-700 transition-colors">{title}</div>
+        <div className="text-xs text-gray-500 leading-snug">{desc}</div>
       </div>
     </Link>
   )
@@ -231,11 +231,11 @@ function ModuleCard({ href, icon, title, desc, color, badge }: {
 
 function ComingSoon({ icon, title, desc }: { icon: string; title: string; desc: string }) {
   return (
-    <div className="bg-gray-900 border border-gray-800 rounded-lg p-3 opacity-50 cursor-not-allowed">
-      <div className="text-2xl mb-1.5">{icon}</div>
-      <div className="font-bold text-gray-400 text-sm mb-0.5">{title}</div>
-      <div className="text-xs text-gray-600 leading-snug">{desc}</div>
-      <div className="text-[10px] text-gray-600 mt-1 uppercase tracking-widest">Coming Soon</div>
+    <div className="bg-white border border-gray-200 rounded-lg p-3 opacity-60 cursor-not-allowed">
+      <div className="text-2xl mb-1.5 grayscale">{icon}</div>
+      <div className="font-bold text-gray-700 text-sm mb-0.5">{title}</div>
+      <div className="text-xs text-gray-500 leading-snug">{desc}</div>
+      <div className="text-[10px] text-gray-400 mt-1 uppercase tracking-widest">Coming Soon</div>
     </div>
   )
 }
