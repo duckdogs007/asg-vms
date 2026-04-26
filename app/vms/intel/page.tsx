@@ -300,7 +300,7 @@ export default function IntelPage() {
       {selectedPerson && (
         <div className={`px-4 py-3 rounded-lg text-white font-bold mb-4 ${selectedPerson.status === "barred" ? "bg-red-900" : "bg-gray-900"}`}>
           {selectedPerson.name.toUpperCase()}
-          {selectedPerson.oln && <span className="font-normal ml-2">🪪 {selectedPerson.oln}</span>}
+          {selectedPerson.oln && <span className="font-normal ml-2">🛂 {selectedPerson.oln}</span>}
           {selectedPerson.status === "barred" && <span className="ml-2">🚨 BARRED</span>}
         </div>
       )}

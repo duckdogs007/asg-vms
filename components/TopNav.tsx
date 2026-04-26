@@ -233,7 +233,7 @@ export default function TopNav() {
       {mobileNavOpen && (
         <div className="md:hidden border-t border-gray-100 bg-white">
           <Link href="/"            className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
-          <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🪪 VMS</Link>
+          <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
           <Link href="/alerts"      className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alerts</Link>
           {isAdmin && <Link href="/admin" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ User Dashboard</Link>}
           <Link href="/vms/intel"   className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>

@@ -502,7 +502,7 @@ export default function VMSPage() {
               {/* Idle prompt */}
               {matchStatus === "none" && recentEntries.length === 0 && (
                 <div className="bg-gray-900 border border-gray-700 rounded-xl px-6 py-10 text-center text-gray-500">
-                  <div className="text-4xl mb-3">🪪</div>
+                  <div className="text-4xl mb-3">🛂</div>
                   <div className="text-sm">Enter a visitor name or scan a license to begin</div>
                 </div>
               )}

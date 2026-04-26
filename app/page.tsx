@@ -114,7 +114,7 @@ export default function Home() {
 
           <ModuleCard
             href="/vms"
-            icon="🪪"
+            icon="🛂"
             title="Visitor Management"
             desc="Check in visitors, scan driver licenses, manage unit access."
             color="blue"
