@@ -80,13 +80,6 @@ const OSINT_SOURCES: OsintSource[] = [
     build: () => `https://vspsor.com/search`,
   },
   {
-    id:   "henrico_pd",
-    name: "Henrico Police News",
-    desc: "henrico.us police arrests + press releases",
-    icon: "📰",
-    build: q => `https://www.google.com/search?q=site%3Ahenrico.us+%22${encodeURIComponent(q)}%22`,
-  },
-  {
     id:   "google_arrest",
     name: "Google: name + arrest",
     desc: "Web search — \"NAME\" + arrest + Virginia",
