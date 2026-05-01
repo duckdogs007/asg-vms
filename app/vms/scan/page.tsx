@@ -22,27 +22,54 @@ export default function ScanID(){
     textareaRef.current?.focus()
   }, [])
 
-  /* DRIVER LICENSE PARSER */
-  // Stop at the next AAMVA element code (3 chars: 2 letters + 1 letter/digit) or
-  // end-of-string. Handles both newline-delimited and concatenated barcode payloads.
+  /* DRIVER LICENSE PARSER (AAMVA) */
+  // Uses an explicit known-code alternation in the lookahead so each field stops
+  // at the next real AAMVA element code (not at any 3-cap pattern, which would
+  // mis-match inside ALL-CAPS values like "LONGWOOD RD"). Also handles the
+  // legacy DAA "LAST,FIRST,MIDDLE" combined-name field used by Virginia.
   function parseLicense(data: string) {
-    function get(field: string) {
-      const match = data.match(new RegExp(field + "([\\s\\S]+?)(?=[A-Z]{2}[A-Z0-9]|$)"))
-      return match ? match[1].trim() : ""
+    const codes = [
+      "DAA","DAB","DAC","DAD","DAE","DAF","DAG","DAH","DAI","DAJ","DAK",
+      "DAL","DAM","DAN","DAO","DAP","DAQ","DAR","DAS","DAT","DAU","DAV",
+      "DAW","DAX","DAY","DAZ","DBA","DBB","DBC","DBD","DBE","DBH","DBI",
+      "DBJ","DBL","DBM","DBN","DBO","DBP","DBQ","DCA","DCB","DCD","DCF",
+      "DCG","DCH","DCI","DCJ","DCK","DCL","DCS","DCT","DCU","DDA","DDB",
+      "DDC","DDD","DDE","DDF","DDG","DDH","DDI","DDJ","DDK","DDL",
+    ]
+    const codeAlt = codes.join("|")
+    const fields: Record<string,string> = {}
+    for (const code of codes) {
+      const re = new RegExp(code + "([\\s\\S]+?)(?=" + codeAlt + "|$)")
+      const m = data.match(re)
+      if (m) fields[code] = m[1].trim()
     }
+
+    // Virginia & older formats put the full name in DAA as "LAST,FIRST,MIDDLE"
+    let first  = fields.DAC || fields.DCT || ""
+    let last   = fields.DCS || fields.DAB || ""
+    let middle = fields.DAD || ""
+    if ((!first || !last) && fields.DAA) {
+      const parts = fields.DAA.split(",").map(s => s.trim())
+      if (parts.length >= 2) {
+        last   = last   || parts[0] || ""
+        first  = first  || parts[1] || ""
+        middle = middle || parts[2] || ""
+      }
+    }
+
     return {
-      first_name:  get("DAC"),
-      last_name:   get("DCS"),
-      middle_name: get("DAD"),
-      dob:         get("DBB"),
-      oln:         get("DAQ"),
-      address:     get("DAG"),
-      city:        get("DAI"),
-      state:       get("DAJ"),
-      zip:         get("DAK"),
-      sex:         get("DBC"),
-      height:      get("DAU"),
-      eye_color:   get("DAY"),
+      first_name:  first,
+      last_name:   last,
+      middle_name: middle,
+      dob:         fields.DBB || "",
+      oln:         fields.DAQ || "",
+      address:     fields.DAG || "",
+      city:        fields.DAI || "",
+      state:       fields.DAJ || "",
+      zip:         fields.DAK || "",
+      sex:         fields.DBC || "",
+      height:      fields.DAU || "",
+      eye_color:   fields.DAY || "",
     }
   }
 
