@@ -19,8 +19,12 @@ const [alertPerson,setAlertPerson] = useState<any>(null)
 
 function parseLicense(data:string){
 
+// Stop at the next AAMVA element code (3 chars: 2 letters + 1 letter/digit) or
+// end-of-string. This handles both newline-delimited and single-line concatenated
+// barcode payloads — the previous [^\n]+ regex over-grabbed when there were no
+// newlines between fields.
 function get(field:string){
-const match = data.match(new RegExp(field + "([^\n]+)"))
+const match = data.match(new RegExp(field + "([\\s\\S]+?)(?=[A-Z]{2}[A-Z0-9]|$)"))
 return match ? match[1].trim() : ""
 }
 
