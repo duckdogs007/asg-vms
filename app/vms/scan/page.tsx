@@ -33,22 +33,37 @@ export default function ScanID(){
   }, [])
 
   /* DRIVER LICENSE PARSER (AAMVA) */
+  // Forward-scan approach: walk a known AAMVA field-order list, locating each
+  // code starting AFTER the previous code's position. This prevents matching a
+  // code substring that happens to appear inside an earlier field's value
+  // (e.g. "DAI" inside "ADAIR" — we search for DAI only after DAG's position
+  // so the accidental match inside the name is invisible to us).
   function parseLicense(data: string) {
-    const codes = [
-      "DAA","DAB","DAC","DAD","DAE","DAF","DAG","DAH","DAI","DAJ","DAK",
-      "DAL","DAM","DAN","DAO","DAP","DAQ","DAR","DAS","DAT","DAU","DAV",
-      "DAW","DAX","DAY","DAZ","DBA","DBB","DBC","DBD","DBE","DBH","DBI",
-      "DBJ","DBL","DBM","DBN","DBO","DBP","DBQ","DCA","DCB","DCD","DCF",
-      "DCG","DCH","DCI","DCJ","DCK","DCL","DCS","DCT","DCU","DDA","DDB",
-      "DDC","DDD","DDE","DDF","DDG","DDH","DDI","DDJ","DDK","DDL",
+    const order = [
+      "DAA","DAB","DAC","DAD","DCS","DCT","DCU","DAE","DAF",
+      "DAG","DAH","DAI","DAJ","DAK","DAL","DAM","DAN","DAO","DAP",
+      "DAQ","DAR","DAS","DAT","DAU","DAV","DAW","DAX","DAY","DAZ",
+      "DBA","DBB","DBC","DBD","DBE","DBH","DBI","DBJ","DBL",
+      "DBM","DBN","DBO","DBP","DBQ",
+      "DCA","DCB","DCD","DCE","DCF","DCG","DCH","DCI","DCJ","DCK","DCL",
+      "DDA","DDB","DDC","DDD","DDE","DDF","DDG","DDH","DDI","DDJ","DDK","DDL",
     ]
-    const codeAlt = codes.join("|")
-    const fields: Record<string,string> = {}
-    for (const code of codes) {
-      const re = new RegExp(code + "([\\s\\S]+?)(?=" + codeAlt + "|$)")
-      const m = data.match(re)
-      if (m) fields[code] = m[1].trim()
+    const positions: Array<{code: string; valueStart: number; codeStart: number}> = []
+    let cursor = 0
+    for (const code of order) {
+      const idx = data.indexOf(code, cursor)
+      if (idx < 0) continue
+      positions.push({ code, codeStart: idx, valueStart: idx + code.length })
+      cursor = idx + code.length
     }
+
+    const fields: Record<string,string> = {}
+    for (let i = 0; i < positions.length; i++) {
+      const start = positions[i].valueStart
+      const end   = i + 1 < positions.length ? positions[i + 1].codeStart : data.length
+      fields[positions[i].code] = data.slice(start, end).replace(/[\r\n\t]/g, "").trim()
+    }
+
     let first  = fields.DAC || fields.DCT || ""
     let last   = fields.DCS || fields.DAB || ""
     let middle = fields.DAD || ""
@@ -60,6 +75,7 @@ export default function ScanID(){
         middle = middle || parts[2] || ""
       }
     }
+
     return {
       first_name:  first,
       last_name:   last,
