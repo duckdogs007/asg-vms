@@ -17,7 +17,9 @@ export default function ScanID(){
 
   const textareaRef     = useRef<HTMLTextAreaElement>(null)
   const lastResultRef   = useRef<number>(0)   // timestamp when status flipped to clear/barred
-  const RESET_GRACE_MS  = 250                  // ignore Enter/input this long after result appears
+  const scanTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const RESET_GRACE_MS  = 250                  // ignore input this long after result appears
+  const SCAN_END_MS     = 200                  // pause this long => scan finished, process
 
   // DEBUG — temporary, remove once scan flow is stable
   const [debugLog, setDebugLog] = useState<string[]>([])
@@ -118,41 +120,47 @@ export default function ScanID(){
     setTimeout(() => textareaRef.current?.focus(), 50)
   }
 
+  // Swallow Enter/Tab from the scanner — many scanners insert them BETWEEN
+  // AAMVA elements, not just at the end. We use an inter-character timeout
+  // (SCAN_END_MS) to detect the real end of a scan instead.
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key !== "Enter") return
-    e.preventDefault()
-    const val = textareaRef.current?.value || ""
-    dbg(`Enter pressed  status=${status} domLen=${val.length}`)
-
-    // While processing, ignore further Enters
-    if (status === "checking") return
-
-    // Result is showing — within grace, ignore (likely scanner trailing CR/LF).
-    // Past grace, advance to next visitor.
-    if (status === "clear" || status === "barred") {
-      const since = Date.now() - lastResultRef.current
-      if (since < RESET_GRACE_MS) { dbg(`Enter grace block ${since}ms`); return }
-      reset()
-      return
+    if (e.key === "Enter" || e.key === "Tab") {
+      e.preventDefault()
+      // After grace, manual Enter advances to next visitor (no-op while scan
+      // is running because the timer will fire just after).
+      if ((status === "clear" || status === "barred")
+          && Date.now() - lastResultRef.current >= RESET_GRACE_MS) {
+        dbg(`manual Enter -> reset`)
+        reset()
+      }
     }
-
-    // Idle — scanner just finished sending. Process the textarea content.
-    if (val.trim()) processScan(val)
   }
 
-  // When new input arrives after a result is showing AND we're past the grace
-  // window, immediately reset state so the new scan can populate cleanly.
-  // Textarea value is uncontrolled — we don't touch it here.
   function handleInput() {
-    if (status !== "clear" && status !== "barred") return
-    const since = Date.now() - lastResultRef.current
-    if (since < RESET_GRACE_MS) return
-    dbg(`onInput NEW SCAN starting  since=${since}ms`)
-    // Clear the textarea so the new scan doesn't append to the old one
-    if (textareaRef.current) textareaRef.current.value = ""
-    setPerson(null)
-    setAlertPerson(null)
-    setStatus("idle")
+    // After a result, first new keystroke past the grace clears state so the
+    // next scan starts cleanly.
+    if (status === "clear" || status === "barred") {
+      const since = Date.now() - lastResultRef.current
+      if (since < RESET_GRACE_MS) return
+      dbg(`onInput NEW SCAN starting  since=${since}ms`)
+      if (textareaRef.current) textareaRef.current.value = ""
+      setPerson(null)
+      setAlertPerson(null)
+      setStatus("idle")
+    }
+
+    // (Re)start the scan-end timer. Each new keystroke pushes it back; when
+    // the scanner finally pauses for SCAN_END_MS, we process the buffer.
+    if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
+    scanTimerRef.current = setTimeout(() => {
+      const val = textareaRef.current?.value || ""
+      if (val.trim().length >= 20) {
+        dbg(`scan-end timer fired  domLen=${val.length}`)
+        processScan(val)
+      } else if (val.trim().length > 0) {
+        dbg(`scan-end timer fired but too short (len=${val.length}) — ignoring`)
+      }
+    }, SCAN_END_MS)
   }
 
   function continueEntry() {
