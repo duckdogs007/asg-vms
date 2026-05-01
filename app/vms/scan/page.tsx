@@ -162,7 +162,27 @@ export default function ScanID(){
         autoFocus
         value={barcode}
         placeholder="Awaiting scan…"
-        onChange={(e) => setBarcode(e.target.value)}
+        onChange={(e) => {
+          const v = e.target.value
+          // If a result is currently showing AND new scan data is arriving,
+          // reset state and adopt the new tail. Guard against:
+          //   - trailing scanner terminators (small additions): require >=10 new chars
+          //   - reset within the grace window (catches scanner trailing CR/LF)
+          if ((status === "clear" || status === "barred") && v !== barcode) {
+            const fresh = barcode && v.startsWith(barcode) ? v.slice(barcode.length) : v
+            const sinceResult = Date.now() - lastResultRef.current
+            if (fresh.trim().length < 10 || sinceResult < RESET_GRACE_MS) {
+              // Likely just terminator noise — ignore the change
+              return
+            }
+            setPerson(null)
+            setAlertPerson(null)
+            setStatus("idle")
+            setBarcode(fresh)
+            return
+          }
+          setBarcode(v)
+        }}
         onKeyDown={handleKeyDown}
         className="w-full max-w-xl h-28 p-3 border border-gray-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
       />
