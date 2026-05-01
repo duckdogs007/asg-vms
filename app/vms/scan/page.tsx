@@ -16,7 +16,9 @@ export default function ScanID(){
   const [alertPerson,setAlertPerson] = useState<any>(null)
   const [status,     setStatus]      = useState<Status>("idle")
 
-  const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const textareaRef     = useRef<HTMLTextAreaElement>(null)
+  const lastResultRef   = useRef<number>(0)   // timestamp when status flipped to clear/barred
+  const RESET_GRACE_MS  = 800                  // ignore Enter this long after result appears
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -103,6 +105,7 @@ export default function ScanID(){
     } else {
       setStatus("clear")
     }
+    lastResultRef.current = Date.now()
   }
 
   /* RESET — ready for next visitor */
@@ -118,12 +121,17 @@ export default function ScanID(){
   function handleKeyDown(e: React.KeyboardEvent) {
     if (e.key !== "Enter") return
     e.preventDefault()
-    // After a result is showing, Enter advances to next visitor
+    // Already processing — drop redundant Enter events from the scanner
+    if (status === "checking") return
+    // After a result is showing, Enter advances to next visitor — but only
+    // after a brief grace period, otherwise the scanner's own trailing CR/LF
+    // will instantly reset the result the guard never got to see.
     if (status === "clear" || status === "barred") {
+      if (Date.now() - lastResultRef.current < RESET_GRACE_MS) return
       reset()
       return
     }
-    // Otherwise, treat as scanner end-of-data terminator
+    // Idle — scanner just finished sending. Treat Enter as end-of-scan.
     if (barcode.trim()) processScan(barcode)
   }
 
