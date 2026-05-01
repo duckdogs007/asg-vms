@@ -40,7 +40,8 @@ export default function ScanID(){
   const textareaRef       = useRef<HTMLTextAreaElement>(null)
   const lastResultRef     = useRef<number>(0)    // timestamp when status flipped to clear/barred
   const scanTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const barredFiredRef    = useRef<boolean>(false) // dedupe: only fire alert/log once per BARRED result
+  const barredFiredRef    = useRef<boolean>(false) // dedupe BARRED audit/alert
+  const clearLoggedRef    = useRef<boolean>(false) // dedupe CLEAR visitor_logs insert
   const lastProcessedRef  = useRef<string>("")   // exact text passed to processScan last
   const RESET_GRACE_MS    = 250                  // ignore input this long after result appears
   const SCAN_END_MS       = 200                  // pause this long => scan finished, process
@@ -202,12 +203,57 @@ export default function ScanID(){
       }
     } else {
       setStatus("clear")
+      // Auto-log CLEAR scan to visitor_logs so the entry shows in Reports
+      // without requiring the guard to click Continue → Visitor Entry.
+      if (!clearLoggedRef.current && parsed.first_name && parsed.last_name) {
+        clearLoggedRef.current = true
+        const communityId = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-id")) || null
+        // Find or create the visitor record, then insert visitor_logs
+        ;(async () => {
+          try {
+            let visitorId: string | null = null
+            const { data: existing } = await supabase
+              .from("visitors").select("id")
+              .ilike("first_name", parsed.first_name).ilike("last_name", parsed.last_name)
+              .limit(1).maybeSingle()
+            if (existing) {
+              visitorId = existing.id
+            } else {
+              const { data: created, error: createErr } = await supabase
+                .from("visitors")
+                .insert({
+                  first_name: parsed.first_name,
+                  last_name:  parsed.last_name,
+                  dob:        parseDOBToISO(parsed.dob),
+                  oln:        parsed.oln || null,
+                })
+                .select("id").single()
+              if (createErr) { console.error("[scan auto-log] visitor create failed:", createErr); return }
+              visitorId = created.id
+            }
+            const { error: logErr } = await supabase.from("visitor_logs").insert({
+              visitor_id:    visitorId,
+              first_name:    parsed.first_name,
+              last_name:     parsed.last_name,
+              person_type:   "Visitor",
+              community_id:  communityId,
+              unit_number:   null,
+              resident_name: null,
+              created_at:    new Date().toISOString(),
+            })
+            if (logErr) console.error("[scan auto-log] log insert failed:", logErr)
+          } catch (e) {
+            console.error("[scan auto-log] unexpected:", e)
+          }
+        })()
+      }
     }
     lastResultRef.current = Date.now()
   }
 
   function reset() {
     barredFiredRef.current = false
+    clearLoggedRef.current = false
     lastProcessedRef.current = ""
     if (textareaRef.current) textareaRef.current.value = ""
     setPerson(null)
@@ -243,6 +289,7 @@ export default function ScanID(){
       const newPart = oldScan && v.startsWith(oldScan) ? v.slice(oldScan.length) : v
       if (textareaRef.current) textareaRef.current.value = newPart
       barredFiredRef.current = false
+      clearLoggedRef.current = false
       lastProcessedRef.current = ""
       setPerson(null)
       setAlertPerson(null)
