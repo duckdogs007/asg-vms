@@ -37,12 +37,13 @@ export default function ScanID(){
   const [alertPerson,setAlertPerson] = useState<any>(null)
   const [status,     setStatus]      = useState<Status>("idle")
 
-  const textareaRef     = useRef<HTMLTextAreaElement>(null)
-  const lastResultRef   = useRef<number>(0)   // timestamp when status flipped to clear/barred
-  const scanTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const barredFiredRef  = useRef<boolean>(false)  // dedupe: only fire alert/log once per BARRED result
-  const RESET_GRACE_MS  = 250                  // ignore input this long after result appears
-  const SCAN_END_MS     = 200                  // pause this long => scan finished, process
+  const textareaRef       = useRef<HTMLTextAreaElement>(null)
+  const lastResultRef     = useRef<number>(0)    // timestamp when status flipped to clear/barred
+  const scanTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const barredFiredRef    = useRef<boolean>(false) // dedupe: only fire alert/log once per BARRED result
+  const lastProcessedRef  = useRef<string>("")   // exact text passed to processScan last
+  const RESET_GRACE_MS    = 250                  // ignore input this long after result appears
+  const SCAN_END_MS       = 200                  // pause this long => scan finished, process
 
   useEffect(() => {
     textareaRef.current?.focus()
@@ -147,6 +148,7 @@ export default function ScanID(){
   async function processScan(scan: string) {
     const trimmed = scan.replace(/[\r\n\t]+$/g, "")
     if (!trimmed.trim()) return
+    lastProcessedRef.current = scan   // remember raw value so handleInput can strip the prefix when next scan starts
     setStatus("checking")
     const parsed = parseLicense(trimmed)
     setPerson(parsed)
@@ -206,6 +208,7 @@ export default function ScanID(){
 
   function reset() {
     barredFiredRef.current = false
+    lastProcessedRef.current = ""
     if (textareaRef.current) textareaRef.current.value = ""
     setPerson(null)
     setAlertPerson(null)
@@ -228,13 +231,19 @@ export default function ScanID(){
   }
 
   function handleInput() {
-    // After a result, first new keystroke past the grace clears state so the
-    // next scan starts cleanly.
+    // After a result, the first new keystroke past the grace means the next
+    // scan is starting. Strip the OLD barcode prefix from the textarea so we
+    // keep the new char(s) and accumulate from there. Don't blindly wipe —
+    // that would lose the first character of the new scan.
     if (status === "clear" || status === "barred") {
       const since = Date.now() - lastResultRef.current
       if (since < RESET_GRACE_MS) return
+      const v = textareaRef.current?.value || ""
+      const oldScan = lastProcessedRef.current
+      const newPart = oldScan && v.startsWith(oldScan) ? v.slice(oldScan.length) : v
+      if (textareaRef.current) textareaRef.current.value = newPart
       barredFiredRef.current = false
-      if (textareaRef.current) textareaRef.current.value = ""
+      lastProcessedRef.current = ""
       setPerson(null)
       setAlertPerson(null)
       setStatus("idle")
