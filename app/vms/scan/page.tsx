@@ -427,7 +427,12 @@ export default function ScanID(){
           unit + resident + type without leaving the scan page */}
       {status === "clear" && person && !savedName && (
         <div className="mt-4 max-w-xl bg-white border border-gray-200 rounded-xl p-4">
-          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Log Visitor Entry</div>
+          <div className="flex justify-between items-baseline mb-3 flex-wrap gap-2">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Log Visitor Entry</div>
+            {communityName && (
+              <div className="text-xs text-gray-600">📍 <span className="font-semibold">{communityName}</span></div>
+            )}
+          </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div>
