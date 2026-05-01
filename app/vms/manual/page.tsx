@@ -7,6 +7,22 @@ import CommunitySelector from "@/components/CommunitySelector"
 import SecurityAlert from "@/components/SecurityAlert"
 import { WatchlistEntry, VehicleWatchlistEntry } from "@/lib/types"
 
+// Accepts YYYY-MM-DD (already valid), YYYYMMDD, or MMDDYYYY (Virginia AAMVA)
+// and returns YYYY-MM-DD or "" if it can't be parsed.
+function normaliseDOB(raw: string): string {
+  if (!raw) return ""
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return raw
+  if (/^\d{8}$/.test(raw)) {
+    const yA = raw.slice(0, 4), mA = raw.slice(4, 6), dA = raw.slice(6, 8)
+    if (+yA >= 1900 && +yA <= 2099 && +mA >= 1 && +mA <= 12 && +dA >= 1 && +dA <= 31) return `${yA}-${mA}-${dA}`
+    const mB = raw.slice(0, 2), dB = raw.slice(2, 4), yB = raw.slice(4, 8)
+    if (+yB >= 1900 && +yB <= 2099 && +mB >= 1 && +mB <= 12 && +dB >= 1 && +dB <= 31) return `${yB}-${mB}-${dB}`
+  }
+  return ""
+}
+
+const DEFAULT_COMMUNITY_NAME = "St Luke Apartments"
+
 interface VisitStats {
   total: number
   lastVisit: string
@@ -37,14 +53,25 @@ export default function ManualEntry() {
   const firstRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
-    const saved = localStorage.getItem("asg-community")
-    if (saved) setCommunity(saved)
-    else setCommunity("")
+    // Community: prefer the one already chosen in /vms or /vms/scan
+    // (shared key 'asg-current-community-id'), else fall back to legacy key
+    // 'asg-community', else default to St Luke Apartments by name lookup.
+    const saved = localStorage.getItem("asg-current-community-id")
+                 || localStorage.getItem("asg-community")
+    if (saved) {
+      setCommunity(saved)
+    } else {
+      supabase.from("communities").select("id,name").ilike("name", DEFAULT_COMMUNITY_NAME)
+        .limit(1).maybeSingle()
+        .then(({ data }) => {
+          if (data?.id) setCommunity(data.id)
+        })
+    }
 
     const params = new URLSearchParams(window.location.search)
     if (params.get("first")) setFirstName(params.get("first")!)
     if (params.get("last"))  setLastName(params.get("last")!)
-    if (params.get("dob"))   setDob(params.get("dob")!)
+    if (params.get("dob"))   setDob(normaliseDOB(params.get("dob")!))
     if (params.get("oln"))   setOln(params.get("oln")!)
 
     firstRef.current?.focus()
@@ -177,6 +204,7 @@ export default function ManualEntry() {
         onChange={(value) => {
           setCommunity(value)
           localStorage.setItem("asg-community", value)
+          localStorage.setItem("asg-current-community-id", value)
         }}
       />
 
@@ -202,7 +230,8 @@ export default function ManualEntry() {
 
         <input ref={firstRef}    value={firstName}    onChange={e => setFirstName(e.target.value)}    placeholder="First Name"       className={inputCls} />
         <input                   value={lastName}     onChange={e => setLastName(e.target.value)}     placeholder="Last Name"        className={inputCls} />
-        <input                   value={dob}          onChange={e => setDob(e.target.value)}           placeholder="DOB (YYYY-MM-DD)" className={inputCls} />
+        <label className="text-xs font-semibold text-gray-500 -mb-1.5 mt-1">DOB</label>
+        <input type="date"       value={dob}          onChange={e => setDob(e.target.value)}           className={inputCls} />
         <input                   value={oln}          onChange={e => setOln(e.target.value)}           placeholder="Driver License #" className={inputCls} />
         <input                   value={plate}        onChange={e => setPlate(e.target.value)}         placeholder="Vehicle Plate"    className={inputCls} />
         <input                   value={plateState}   onChange={e => setPlateState(e.target.value)}   placeholder="Plate State"      className={inputCls} />

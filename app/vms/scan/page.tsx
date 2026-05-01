@@ -251,10 +251,15 @@ export default function ScanID(){
 
   function continueEntry() {
     if (!person) return
+    // Strip any commas from first name (some DLs encode "FIRST,MIDDLE" without
+    // the parser splitting them) and pass DOB in the ISO format the manual
+    // page's date input expects.
+    const cleanFirst = (person.first_name || "").split(",")[0].trim()
+    const isoDob = parseDOBToISO(person.dob || "") || ""
     router.push(
-      `/vms/manual?first=${encodeURIComponent(person.first_name)}` +
+      `/vms/manual?first=${encodeURIComponent(cleanFirst)}` +
       `&last=${encodeURIComponent(person.last_name)}` +
-      `&dob=${encodeURIComponent(person.dob)}` +
+      `&dob=${encodeURIComponent(isoDob)}` +
       `&oln=${encodeURIComponent(person.oln)}`
     )
   }
