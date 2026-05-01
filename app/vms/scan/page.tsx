@@ -1,10 +1,10 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
-import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import SecurityAlert from "../../../components/SecurityAlert"
 import { fireAlert } from "@/lib/alerts"
+import { Unit, Resident } from "@/lib/types"
 
 // AAMVA DBB can be YYYYMMDD or MMDDYYYY (Virginia uses MMDDYYYY). Returns
 // MM/DD/YYYY for display, or the raw value if it doesn't match either pattern.
@@ -31,24 +31,112 @@ type Status = "idle" | "checking" | "clear" | "barred"
 
 export default function ScanID(){
 
-  const router = useRouter()
-
   const [person,     setPerson]      = useState<any>(null)
   const [alertPerson,setAlertPerson] = useState<any>(null)
   const [status,     setStatus]      = useState<Status>("idle")
 
+  // Inline visitor-entry form (shown after a CLEAR scan)
+  const [communityId,   setCommunityId]   = useState("")
+  const [communityName, setCommunityName] = useState("")
+  const [units,         setUnits]         = useState<Unit[]>([])
+  const [unitId,        setUnitId]        = useState("")
+  const [residents,     setResidents]     = useState<Resident[]>([])
+  const [residentId,    setResidentId]    = useState("")
+  const [personType,    setPersonType]    = useState("Visitor")
+  const [saving,        setSaving]        = useState(false)
+  const [saveError,     setSaveError]     = useState("")
+  const [savedName,     setSavedName]     = useState("")  // brief confirmation after save
+
   const textareaRef       = useRef<HTMLTextAreaElement>(null)
-  const lastResultRef     = useRef<number>(0)    // timestamp when status flipped to clear/barred
+  const lastResultRef     = useRef<number>(0)
   const scanTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
   const barredFiredRef    = useRef<boolean>(false) // dedupe BARRED audit/alert
-  const clearLoggedRef    = useRef<boolean>(false) // dedupe CLEAR visitor_logs insert
   const lastProcessedRef  = useRef<string>("")   // exact text passed to processScan last
   const RESET_GRACE_MS    = 250                  // ignore input this long after result appears
   const SCAN_END_MS       = 200                  // pause this long => scan finished, process
 
   useEffect(() => {
+    // Resolve community: prefer the one already chosen on /vms; else default to St Luke
+    const cid   = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-id"))   || ""
+    const cname = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-name")) || ""
+    if (cid) {
+      setCommunityId(cid); setCommunityName(cname)
+      loadUnits(cid)
+    } else {
+      supabase.from("communities").select("id,name").ilike("name", "St Luke Apartments")
+        .limit(1).maybeSingle()
+        .then(({ data }) => {
+          if (data?.id) {
+            setCommunityId(data.id); setCommunityName(data.name)
+            localStorage.setItem("asg-current-community-id", data.id)
+            localStorage.setItem("asg-current-community-name", data.name)
+            loadUnits(data.id)
+          }
+        })
+    }
     textareaRef.current?.focus()
   }, [])
+
+  async function loadUnits(commId: string) {
+    const { data } = await supabase.from("units").select("*").eq("community_id", commId)
+    setUnits(data || [])
+  }
+
+  async function loadResidents(rawUnit: string) {
+    const unit = rawUnit.trim()
+    setUnitId(unit)
+    setResidents([])
+    setResidentId("")
+    if (!unit || !communityId) return
+    const { data } = await supabase.from("residents").select("*")
+      .eq("community_id", communityId).eq("unit_number", unit)
+      .not("name", "is", null)
+    setResidents(data || [])
+  }
+
+  async function saveEntry() {
+    if (!person) return
+    setSaving(true); setSaveError("")
+    try {
+      let visitorId: string | null = null
+      const { data: existing } = await supabase
+        .from("visitors").select("id")
+        .ilike("first_name", person.first_name).ilike("last_name", person.last_name)
+        .limit(1).maybeSingle()
+      if (existing) {
+        visitorId = existing.id
+      } else {
+        const { data: created, error: createErr } = await supabase
+          .from("visitors")
+          .insert({
+            first_name: person.first_name,
+            last_name:  person.last_name,
+            dob:        parseDOBToISO(person.dob),
+            oln:        person.oln || null,
+          })
+          .select("id").single()
+        if (createErr) { setSaveError("Failed to create visitor: " + createErr.message); return }
+        visitorId = created!.id
+      }
+      const selectedRes = residents.find(r => r.id === residentId)
+      const { error: logErr } = await supabase.from("visitor_logs").insert({
+        visitor_id:    visitorId,
+        first_name:    person.first_name,
+        last_name:     person.last_name,
+        person_type:   personType,
+        community_id:  communityId || null,
+        unit_number:   unitId || null,
+        resident_name: selectedRes?.name || null,
+        created_at:    new Date().toISOString(),
+      })
+      if (logErr) { setSaveError("Save failed: " + logErr.message); return }
+      // Brief confirmation, then reset for next scan
+      setSavedName(`${person.first_name} ${person.last_name}`.trim())
+      setTimeout(() => { setSavedName(""); reset() }, 1200)
+    } finally {
+      setSaving(false)
+    }
+  }
 
   /* DRIVER LICENSE PARSER (AAMVA) */
   // Global-match + longest-value dedup. AAMVA element order varies across
@@ -203,62 +291,22 @@ export default function ScanID(){
       }
     } else {
       setStatus("clear")
-      // Auto-log CLEAR scan to visitor_logs so the entry shows in Reports
-      // without requiring the guard to click Continue → Visitor Entry.
-      if (!clearLoggedRef.current && parsed.first_name && parsed.last_name) {
-        clearLoggedRef.current = true
-        const communityId = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-id")) || null
-        // Find or create the visitor record, then insert visitor_logs
-        ;(async () => {
-          try {
-            let visitorId: string | null = null
-            const { data: existing } = await supabase
-              .from("visitors").select("id")
-              .ilike("first_name", parsed.first_name).ilike("last_name", parsed.last_name)
-              .limit(1).maybeSingle()
-            if (existing) {
-              visitorId = existing.id
-            } else {
-              const { data: created, error: createErr } = await supabase
-                .from("visitors")
-                .insert({
-                  first_name: parsed.first_name,
-                  last_name:  parsed.last_name,
-                  dob:        parseDOBToISO(parsed.dob),
-                  oln:        parsed.oln || null,
-                })
-                .select("id").single()
-              if (createErr) { console.error("[scan auto-log] visitor create failed:", createErr); return }
-              visitorId = created.id
-            }
-            const { error: logErr } = await supabase.from("visitor_logs").insert({
-              visitor_id:    visitorId,
-              first_name:    parsed.first_name,
-              last_name:     parsed.last_name,
-              person_type:   "Visitor",
-              community_id:  communityId,
-              unit_number:   null,
-              resident_name: null,
-              created_at:    new Date().toISOString(),
-            })
-            if (logErr) console.error("[scan auto-log] log insert failed:", logErr)
-          } catch (e) {
-            console.error("[scan auto-log] unexpected:", e)
-          }
-        })()
-      }
     }
     lastResultRef.current = Date.now()
   }
 
   function reset() {
     barredFiredRef.current = false
-    clearLoggedRef.current = false
     lastProcessedRef.current = ""
     if (textareaRef.current) textareaRef.current.value = ""
     setPerson(null)
     setAlertPerson(null)
     setStatus("idle")
+    setUnitId("")
+    setResidents([])
+    setResidentId("")
+    setPersonType("Visitor")
+    setSaveError("")
     setTimeout(() => textareaRef.current?.focus(), 50)
   }
 
@@ -289,11 +337,15 @@ export default function ScanID(){
       const newPart = oldScan && v.startsWith(oldScan) ? v.slice(oldScan.length) : v
       if (textareaRef.current) textareaRef.current.value = newPart
       barredFiredRef.current = false
-      clearLoggedRef.current = false
       lastProcessedRef.current = ""
       setPerson(null)
       setAlertPerson(null)
       setStatus("idle")
+      setUnitId("")
+      setResidents([])
+      setResidentId("")
+      setPersonType("Visitor")
+      setSaveError("")
     }
 
     // (Re)start the scan-end timer. Each new keystroke pushes it back; when
@@ -303,21 +355,6 @@ export default function ScanID(){
       const val = textareaRef.current?.value || ""
       if (val.trim().length >= 20) processScan(val)
     }, SCAN_END_MS)
-  }
-
-  function continueEntry() {
-    if (!person) return
-    // Strip any commas from first name (some DLs encode "FIRST,MIDDLE" without
-    // the parser splitting them) and pass DOB in the ISO format the manual
-    // page's date input expects.
-    const cleanFirst = (person.first_name || "").split(",")[0].trim()
-    const isoDob = parseDOBToISO(person.dob || "") || ""
-    router.push(
-      `/vms/manual?first=${encodeURIComponent(cleanFirst)}` +
-      `&last=${encodeURIComponent(person.last_name)}` +
-      `&dob=${encodeURIComponent(isoDob)}` +
-      `&oln=${encodeURIComponent(person.oln)}`
-    )
   }
 
   const displayName = person ? `${person.first_name} ${person.last_name}`.trim() : ""
@@ -348,11 +385,19 @@ export default function ScanID(){
         </div>
       )}
 
-      {status === "clear" && (
+      {status === "clear" && !savedName && (
         <div className="mt-4 px-5 py-4 rounded-xl bg-green-900 border-2 border-green-500 text-white">
           <div className="text-2xl font-bold">🟢 CLEAR — OK to proceed</div>
           {displayName && <div className="text-lg mt-1 font-semibold">{displayName}</div>}
-          <div className="text-green-300 text-xs mt-2">Scan next visitor or press Enter to clear.</div>
+          {communityName && <div className="text-green-300 text-xs mt-1">📍 {communityName}</div>}
+        </div>
+      )}
+
+      {savedName && (
+        <div className="mt-4 px-5 py-4 rounded-xl bg-green-700 border-2 border-green-400 text-white text-center">
+          <div className="text-xl font-bold">✅ Visitor Logged</div>
+          <div className="text-base mt-1">{savedName}</div>
+          <div className="text-green-200 text-xs mt-1">Ready for next scan…</div>
         </div>
       )}
 
@@ -370,7 +415,92 @@ export default function ScanID(){
         </div>
       )}
 
-      {person && (status === "clear" || status === "barred") && (
+      {/* Inline visitor-entry form — appears under CLEAR result so guard can capture
+          unit + resident + type without leaving the scan page */}
+      {status === "clear" && person && !savedName && (
+        <div className="mt-4 max-w-xl bg-white border border-gray-200 rounded-xl p-4">
+          <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Log Visitor Entry</div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Unit</label>
+              <select
+                value={unitId}
+                onChange={e => loadResidents(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option value="">Select Unit</option>
+                {units.map(u => (
+                  <option key={u.id} value={u.unit_number.trim()}>{u.unit_number.trim()}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Resident Visiting</label>
+              <select
+                value={residentId}
+                onChange={e => setResidentId(e.target.value)}
+                disabled={residents.length === 0}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-50"
+              >
+                <option value="">{residents.length === 0 ? "(select unit first)" : "Select Resident"}</option>
+                {residents.map(r => (
+                  <option key={r.id} value={r.id}>{r.name}</option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Type</label>
+              <select
+                value={personType}
+                onChange={e => setPersonType(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                <option>Visitor</option>
+                <option>Delivery</option>
+                <option>Contractor</option>
+              </select>
+            </div>
+          </div>
+
+          {saveError && (
+            <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{saveError}</div>
+          )}
+
+          <button
+            onClick={saveEntry}
+            disabled={saving}
+            className="w-full py-3 bg-green-700 hover:bg-green-800 text-white text-sm font-bold rounded-md border-none cursor-pointer disabled:opacity-50"
+          >
+            {saving ? "Saving…" : "✅ Save Entry"}
+          </button>
+
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">License Data</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-800">
+              <div><span className="text-gray-500">Name:</span> {displayName || "—"}</div>
+              <div><span className="text-gray-500">DOB:</span> {formatDOB(person.dob) || "—"}</div>
+              <div><span className="text-gray-500">License:</span> {person.oln || "—"}</div>
+              <div><span className="text-gray-500">Sex:</span> {person.sex || "—"}</div>
+              {(person.address || person.city || person.state || person.zip) && (
+                <div className="sm:col-span-2">
+                  <span className="text-gray-500">Address:</span>{" "}
+                  {[
+                    person.address,
+                    person.city,
+                    [person.state, person.zip].filter(Boolean).join(" "),
+                  ].filter(Boolean).join(", ")}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* BARRED — show License Data on its own (no inline-save form) */}
+      {status === "barred" && person && (
         <div className="mt-4 max-w-xl bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">License Data</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-800">
@@ -389,14 +519,6 @@ export default function ScanID(){
               </div>
             )}
           </div>
-          {status === "clear" && (
-            <button
-              onClick={continueEntry}
-              className="mt-3 px-4 py-2 bg-green-700 text-white text-sm font-semibold rounded-md hover:bg-green-800 border-none cursor-pointer"
-            >
-              Continue → Visitor Entry
-            </button>
-          )}
         </div>
       )}
     </div>
