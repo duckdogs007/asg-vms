@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import SecurityAlert from "../../../components/SecurityAlert"
 import { fireAlert } from "@/lib/alerts"
-import { Unit, Resident } from "@/lib/types"
+import { Community, Unit, Resident } from "@/lib/types"
 
 // AAMVA DBB can be YYYYMMDD or MMDDYYYY (Virginia uses MMDDYYYY). Returns
 // MM/DD/YYYY for display, or the raw value if it doesn't match either pattern.
@@ -36,8 +36,8 @@ export default function ScanID(){
   const [status,     setStatus]      = useState<Status>("idle")
 
   // Inline visitor-entry form (shown after a CLEAR scan)
+  const [communities,   setCommunities]   = useState<Community[]>([])
   const [communityId,   setCommunityId]   = useState("")
-  const [communityName, setCommunityName] = useState("")
   const [units,         setUnits]         = useState<Unit[]>([])
   const [unitId,        setUnitId]        = useState("")
   const [residents,     setResidents]     = useState<Resident[]>([])
@@ -56,28 +56,35 @@ export default function ScanID(){
   const SCAN_END_MS       = 200                  // pause this long => scan finished, process
 
   useEffect(() => {
-    // Resolve community: prefer the one already chosen on /vms; else default to St Luke
-    const cid   = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-id"))   || ""
-    const cname = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-name")) || ""
-    if (cid) {
-      setCommunityId(cid); setCommunityName(cname)
-      loadUnits(cid)
-    } else {
-      supabase.from("communities").select("id,name").ilike("name", "St Luke Apartments")
-        .limit(1).maybeSingle()
-        .then(({ data }) => {
-          if (data?.id) {
-            setCommunityId(data.id); setCommunityName(data.name)
-            localStorage.setItem("asg-current-community-id", data.id)
-            localStorage.setItem("asg-current-community-name", data.name)
-            loadUnits(data.id)
-          }
-        })
-    }
+    // Load all communities for the dropdown, then pick the active one:
+    // saved in localStorage if present, otherwise default to St Luke Apartments.
+    supabase.from("communities").select("*").order("name").then(({ data }) => {
+      const list = (data || []) as Community[]
+      setCommunities(list)
+      if (list.length === 0) return
+      const savedId = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-id")) || ""
+      const savedMatch = list.find(c => c.id === savedId)
+      const stLuke     = list.find(c => /st\.?\s*luke/i.test(c.name))
+      const chosen     = savedMatch || stLuke || list[0]
+      changeCommunity(chosen.id, chosen.name)
+    })
     textareaRef.current?.focus()
   }, [])
 
+  function changeCommunity(id: string, name: string) {
+    setCommunityId(id)
+    if (typeof window !== "undefined") {
+      localStorage.setItem("asg-current-community-id",   id)
+      localStorage.setItem("asg-current-community-name", name)
+    }
+    setUnitId("")
+    setResidents([])
+    setResidentId("")
+    loadUnits(id)
+  }
+
   async function loadUnits(commId: string) {
+    if (!commId) { setUnits([]); return }
     const { data } = await supabase.from("units").select("*").eq("community_id", commId)
     setUnits(data || [])
   }
@@ -357,7 +364,8 @@ export default function ScanID(){
     }, SCAN_END_MS)
   }
 
-  const displayName = person ? `${person.first_name} ${person.last_name}`.trim() : ""
+  const displayName   = person ? `${person.first_name} ${person.last_name}`.trim() : ""
+  const communityName = communities.find(c => c.id === communityId)?.name || ""
 
   return (
     <div className="p-4 sm:p-6 max-w-3xl mx-auto">
@@ -422,6 +430,22 @@ export default function ScanID(){
           <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Log Visitor Entry</div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Community</label>
+              <select
+                value={communityId}
+                onChange={e => {
+                  const next = communities.find(c => c.id === e.target.value)
+                  if (next) changeCommunity(next.id, next.name)
+                }}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              >
+                {communities.map(c => (
+                  <option key={c.id} value={c.id}>{c.name}</option>
+                ))}
+              </select>
+            </div>
+
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Unit</label>
               <select
