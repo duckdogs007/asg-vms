@@ -91,8 +91,21 @@ export default function ReportsPage() {
   const [loading,   setLoading]   = useState(false)
   const [error,     setError]     = useState("")
   const [logLimit,  setLogLimit]  = useState(50)
+  const [isAdmin,   setIsAdmin]   = useState(false)
+  const [userEmail, setUserEmail] = useState("")
+  const [deleting,  setDeleting]  = useState<string | null>(null)
 
   const [stats, setStats] = useState<Stats>(EMPTY_STATS)
+
+  const ADMIN_EMAILS = ["jhall@teamasg.com"]
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      const email = user?.email || ""
+      setUserEmail(email)
+      setIsAdmin(ADMIN_EMAILS.includes(email))
+    })
+  }, [])
 
   useEffect(() => {
     supabase.from("communities").select("id,name").then(({ data }) => {
@@ -194,6 +207,30 @@ export default function ReportsPage() {
       missingUnit: logs.filter(v => !v.unit_number).length,
       byDay, byHour
     })
+  }
+
+  async function deleteEntry(v: VisitorLog) {
+    if (!isAdmin) return
+    const label = `${v.first_name} ${v.last_name} — ${formatTime(v.created_at)}`
+    if (!confirm(`Delete this entry?\n\n${label}\n\nThis cannot be undone.`)) return
+    setDeleting(v.id)
+    const { error } = await supabase.from("visitor_logs").delete().eq("id", v.id)
+    if (error) { setDeleting(null); alert("Delete failed: " + error.message); return }
+    // Audit log
+    supabase.from("audit_logs").insert({
+      user_email:    userEmail,
+      action:        "deleted",
+      resource_type: "Visitor Log",
+      resource_id:   v.id,
+      detail:        `Deleted entry: ${label}`,
+      created_at:    new Date().toISOString(),
+    }).then(({ error: ae }) => { if (ae) console.error("[audit]", ae) })
+    setVisits(prev => {
+      const u = prev.filter(p => p.id !== v.id)
+      computeStats(u)
+      return u
+    })
+    setDeleting(null)
   }
 
   function exportCSV() {
@@ -456,9 +493,21 @@ export default function ReportsPage() {
                       {(v as any).resident_name && ` · Visiting: ${(v as any).resident_name}`}
                     </div>
                   </div>
-                  <div className="text-right flex-shrink-0 ml-4">
-                    <div className="text-sm text-gray-300">{formatTime(v.created_at)}</div>
-                    <div className="text-xs text-gray-500">{timeAgo(v.created_at)}</div>
+                  <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                    <div className="text-right">
+                      <div className="text-sm text-gray-300">{formatTime(v.created_at)}</div>
+                      <div className="text-xs text-gray-500">{timeAgo(v.created_at)}</div>
+                    </div>
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteEntry(v) }}
+                        disabled={deleting === v.id}
+                        title="Delete entry (admin)"
+                        className="px-2 py-1 bg-red-700 hover:bg-red-800 text-white text-xs font-semibold rounded border-none cursor-pointer disabled:opacity-50"
+                      >
+                        {deleting === v.id ? "…" : "🗑"}
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
