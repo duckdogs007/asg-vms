@@ -174,13 +174,18 @@ export default function ScanID(){
           const v = e.target.value
           const delta = v.length - barcode.length
           if ((status === "clear" || status === "barred") && v !== barcode) {
-            const fresh = barcode && v.startsWith(barcode) ? v.slice(barcode.length) : v
             const sinceResult = Date.now() - lastResultRef.current
-            if (fresh.trim().length < 10 || sinceResult < RESET_GRACE_MS) {
-              dbg(`onChange IGNORED  delta=${delta} freshLen=${fresh.length} since=${sinceResult}ms status=${status}`)
+            if (sinceResult < RESET_GRACE_MS) {
+              // Inside grace window — assume this is the scanner's trailing
+              // terminator (CR/LF/Tab) for the previous scan. Ignore.
+              dbg(`onChange grace IGNORED  delta=${delta} since=${sinceResult}ms`)
               return
             }
-            dbg(`onChange NEW SCAN  freshLen=${fresh.length}`)
+            // Past grace — first input of the next scan. Reset state and adopt
+            // the new tail. Subsequent chars accumulate normally because we
+            // flip status to idle.
+            const fresh = barcode && v.startsWith(barcode) ? v.slice(barcode.length) : v
+            dbg(`onChange NEW SCAN  freshLen=${fresh.length} since=${sinceResult}ms`)
             setPerson(null)
             setAlertPerson(null)
             setStatus("idle")
