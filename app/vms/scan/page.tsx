@@ -4,6 +4,28 @@ import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import SecurityAlert from "../../../components/SecurityAlert"
+import { fireAlert } from "@/lib/alerts"
+
+// AAMVA DBB can be YYYYMMDD or MMDDYYYY (Virginia uses MMDDYYYY). Returns
+// MM/DD/YYYY for display, or the raw value if it doesn't match either pattern.
+function formatDOB(raw: string): string {
+  if (!raw || !/^\d{8}$/.test(raw)) return raw || ""
+  const yA = raw.slice(0, 4), mA = raw.slice(4, 6), dA = raw.slice(6, 8)
+  if (+yA >= 1900 && +yA <= 2099 && +mA >= 1 && +mA <= 12 && +dA >= 1 && +dA <= 31) return `${mA}/${dA}/${yA}`
+  const mB = raw.slice(0, 2), dB = raw.slice(2, 4), yB = raw.slice(4, 8)
+  if (+yB >= 1900 && +yB <= 2099 && +mB >= 1 && +mB <= 12 && +dB >= 1 && +dB <= 31) return `${mB}/${dB}/${yB}`
+  return raw
+}
+
+// Same parsing logic but returns YYYY-MM-DD for the DB date column
+function parseDOBToISO(raw: string): string | null {
+  if (!raw || !/^\d{8}$/.test(raw)) return null
+  const yA = raw.slice(0, 4), mA = raw.slice(4, 6), dA = raw.slice(6, 8)
+  if (+yA >= 1900 && +yA <= 2099 && +mA >= 1 && +mA <= 12 && +dA >= 1 && +dA <= 31) return `${yA}-${mA}-${dA}`
+  const mB = raw.slice(0, 2), dB = raw.slice(2, 4), yB = raw.slice(4, 8)
+  if (+yB >= 1900 && +yB <= 2099 && +mB >= 1 && +mB <= 12 && +dB >= 1 && +dB <= 31) return `${yB}-${mB}-${dB}`
+  return null
+}
 
 type Status = "idle" | "checking" | "clear" | "barred"
 
@@ -18,44 +40,58 @@ export default function ScanID(){
   const textareaRef     = useRef<HTMLTextAreaElement>(null)
   const lastResultRef   = useRef<number>(0)   // timestamp when status flipped to clear/barred
   const scanTimerRef    = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const barredFiredRef  = useRef<boolean>(false)  // dedupe: only fire alert/log once per BARRED result
   const RESET_GRACE_MS  = 250                  // ignore input this long after result appears
   const SCAN_END_MS     = 200                  // pause this long => scan finished, process
-
-  // DEBUG — temporary, remove once scan flow is stable
-  const [debugLog, setDebugLog] = useState<string[]>([])
-  function dbg(msg: string) {
-    setDebugLog(prev => [`${new Date().toLocaleTimeString("en-US",{hour12:false})}.${String(Date.now()%1000).padStart(3,"0")}  ${msg}`, ...prev].slice(0, 60))
-    console.log("[scan]", msg)
-  }
 
   useEffect(() => {
     textareaRef.current?.focus()
   }, [])
 
   /* DRIVER LICENSE PARSER (AAMVA) */
-  // Forward-scan approach: walk a known AAMVA field-order list, locating each
-  // code starting AFTER the previous code's position. This prevents matching a
-  // code substring that happens to appear inside an earlier field's value
-  // (e.g. "DAI" inside "ADAIR" — we search for DAI only after DAG's position
-  // so the accidental match inside the name is invisible to us).
+  // Global-match + longest-value dedup. AAMVA element order varies across
+  // states, so we can't assume DAA→DAB→...→DDL. Instead:
+  //   1. Find ALL occurrences of every known code (including duplicates and
+  //      accidental matches like "DAI" inside the name "ADAIR")
+  //   2. For each position, compute the "value length" it would have if kept
+  //   3. For each code that appears more than once, keep the occurrence with
+  //      the longest extracted value (this filters out the "DAI" embedded in
+  //      a name field, where the value-to-next-code is 0–1 chars)
+  //   4. Sort kept positions and extract values between them
   function parseLicense(data: string) {
-    const order = [
-      "DAA","DAB","DAC","DAD","DCS","DCT","DCU","DAE","DAF",
-      "DAG","DAH","DAI","DAJ","DAK","DAL","DAM","DAN","DAO","DAP",
-      "DAQ","DAR","DAS","DAT","DAU","DAV","DAW","DAX","DAY","DAZ",
-      "DBA","DBB","DBC","DBD","DBE","DBH","DBI","DBJ","DBL",
-      "DBM","DBN","DBO","DBP","DBQ",
-      "DCA","DCB","DCD","DCE","DCF","DCG","DCH","DCI","DCJ","DCK","DCL",
+    const codes = [
+      "DAA","DAB","DAC","DAD","DAE","DAF","DAG","DAH","DAI","DAJ","DAK",
+      "DAL","DAM","DAN","DAO","DAP","DAQ","DAR","DAS","DAT","DAU","DAV",
+      "DAW","DAX","DAY","DAZ","DBA","DBB","DBC","DBD","DBE","DBH","DBI",
+      "DBJ","DBL","DBM","DBN","DBO","DBP","DBQ","DCA","DCB","DCD","DCE",
+      "DCF","DCG","DCH","DCI","DCJ","DCK","DCL","DCS","DCT","DCU",
       "DDA","DDB","DDC","DDD","DDE","DDF","DDG","DDH","DDI","DDJ","DDK","DDL",
     ]
-    const positions: Array<{code: string; valueStart: number; codeStart: number}> = []
-    let cursor = 0
-    for (const code of order) {
-      const idx = data.indexOf(code, cursor)
-      if (idx < 0) continue
-      positions.push({ code, codeStart: idx, valueStart: idx + code.length })
-      cursor = idx + code.length
+    type Pos = { code: string; codeStart: number; valueStart: number; valLen: number }
+    const all: Pos[] = []
+    for (const code of codes) {
+      let idx = data.indexOf(code)
+      while (idx >= 0) {
+        all.push({ code, codeStart: idx, valueStart: idx + code.length, valLen: 0 })
+        idx = data.indexOf(code, idx + 1)
+      }
     }
+    all.sort((a, b) => a.codeStart - b.codeStart)
+    // Hypothetical value length = distance to next position of a DIFFERENT code
+    for (let i = 0; i < all.length; i++) {
+      let next = data.length
+      for (let j = i + 1; j < all.length; j++) {
+        if (all[j].code !== all[i].code) { next = all[j].codeStart; break }
+      }
+      all[i].valLen = next - all[i].valueStart
+    }
+    // Keep one occurrence per code — the one with the longest hypothetical value
+    const byCode = new Map<string, Pos>()
+    for (const p of all) {
+      const existing = byCode.get(p.code)
+      if (!existing || p.valLen > existing.valLen) byCode.set(p.code, p)
+    }
+    const positions = [...byCode.values()].sort((a, b) => a.codeStart - b.codeStart)
 
     const fields: Record<string,string> = {}
     for (let i = 0; i < positions.length; i++) {
@@ -111,7 +147,6 @@ export default function ScanID(){
   async function processScan(scan: string) {
     const trimmed = scan.replace(/[\r\n\t]+$/g, "")
     if (!trimmed.trim()) return
-    dbg(`processScan(len=${trimmed.length})`)
     setStatus("checking")
     const parsed = parseLicense(trimmed)
     setPerson(parsed)
@@ -119,16 +154,58 @@ export default function ScanID(){
     if (hit) {
       setAlertPerson(hit)
       setStatus("barred")
-      dbg(`status=BARRED hit=${hit.first_name} ${hit.last_name}`)
+      // Dedupe: write audit + fire alert once per BARRED scan result
+      if (!barredFiredRef.current) {
+        barredFiredRef.current = true
+        const communityId   = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-id")) || null
+        const communityName = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-name")) || "Unknown"
+        const { data: { user } } = await supabase.auth.getUser()
+        // Audit row in denied_entries
+        supabase.from("denied_entries").insert({
+          watchlist_id:   hit.id || null,
+          first_name:     parsed.first_name,
+          last_name:      parsed.last_name,
+          dob:            parseDOBToISO(parsed.dob),
+          oln:            parsed.oln || null,
+          community_id:   communityId,
+          community_name: communityName,
+          unit_number:    null,
+          resident_name:  null,
+          guard_email:    user?.email || null,
+          reason:         hit.reason || null,
+          alert_sent:     true,
+        }).then(({ error }) => {
+          if (error) console.error("[denied_entries] insert failed:", error)
+        })
+        // Teams alert
+        fireAlert({
+          type:         "watchlist_hit",
+          severity:     "critical",
+          community_id: communityId,
+          subject:      `🚨 BARRED PERSON CONFIRMED — ${communityName}`,
+          body:         `A confirmed watchlist match has occurred at ${communityName} via license scan. The check-in was blocked.`,
+          payload: {
+            Community: communityName,
+            Source:    "License scan",
+            Visitor:   `${parsed.first_name} ${parsed.last_name}`.trim(),
+            DOB:       formatDOB(parsed.dob),
+            OLN:       parsed.oln || "",
+            Reason:    hit.reason || "",
+            Comments:  hit.comments || "",
+            BannedBy:  hit.banned_by || "",
+            BanDate:   hit.ban_date || "",
+            Time:      new Date().toLocaleString("en-US"),
+          },
+        })
+      }
     } else {
       setStatus("clear")
-      dbg(`status=CLEAR person=${parsed.first_name} ${parsed.last_name}`)
     }
     lastResultRef.current = Date.now()
   }
 
   function reset() {
-    dbg(`reset()  status=${status}`)
+    barredFiredRef.current = false
     if (textareaRef.current) textareaRef.current.value = ""
     setPerson(null)
     setAlertPerson(null)
@@ -142,11 +219,9 @@ export default function ScanID(){
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" || e.key === "Tab") {
       e.preventDefault()
-      // After grace, manual Enter advances to next visitor (no-op while scan
-      // is running because the timer will fire just after).
+      // After grace, manual Enter advances to next visitor.
       if ((status === "clear" || status === "barred")
           && Date.now() - lastResultRef.current >= RESET_GRACE_MS) {
-        dbg(`manual Enter -> reset`)
         reset()
       }
     }
@@ -158,7 +233,7 @@ export default function ScanID(){
     if (status === "clear" || status === "barred") {
       const since = Date.now() - lastResultRef.current
       if (since < RESET_GRACE_MS) return
-      dbg(`onInput NEW SCAN starting  since=${since}ms`)
+      barredFiredRef.current = false
       if (textareaRef.current) textareaRef.current.value = ""
       setPerson(null)
       setAlertPerson(null)
@@ -170,12 +245,7 @@ export default function ScanID(){
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
     scanTimerRef.current = setTimeout(() => {
       const val = textareaRef.current?.value || ""
-      if (val.trim().length >= 20) {
-        dbg(`scan-end timer fired  domLen=${val.length}`)
-        processScan(val)
-      } else if (val.trim().length > 0) {
-        dbg(`scan-end timer fired but too short (len=${val.length}) — ignoring`)
-      }
+      if (val.trim().length >= 20) processScan(val)
     }, SCAN_END_MS)
   }
 
@@ -229,29 +299,34 @@ export default function ScanID(){
         <div className="mt-4 px-5 py-4 rounded-xl bg-red-900 border-2 border-red-500 text-white">
           <div className="text-2xl font-bold">🚨 BARRED PERSON</div>
           {displayName && <div className="text-lg mt-1 font-semibold">{displayName}</div>}
-          <div className="text-red-200 text-xs mt-2">Contact supervisor before proceeding.</div>
+          <div className="text-red-200 text-xs mt-2">Contact supervisor before proceeding. Alert sent and attempt logged.</div>
+          <button
+            onClick={reset}
+            className="mt-3 px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold rounded border-none cursor-pointer"
+          >
+            ✓ Acknowledge & Clear — Next Visitor
+          </button>
         </div>
       )}
-
-      {/* DEBUG PANEL — remove once stable */}
-      <div className="mt-4 max-w-xl bg-yellow-50 border border-yellow-300 rounded p-2 text-xs font-mono max-h-64 overflow-y-auto">
-        <div className="font-bold mb-1 sticky top-0 bg-yellow-50">
-          DEBUG  status={status}  sinceResult={lastResultRef.current ? Date.now() - lastResultRef.current + "ms" : "—"}
-        </div>
-        {debugLog.map((l, i) => (
-          <div key={i} className="text-gray-700 leading-tight">{l}</div>
-        ))}
-      </div>
 
       {person && (status === "clear" || status === "barred") && (
         <div className="mt-4 max-w-xl bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">License Data</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-800">
             <div><span className="text-gray-500">Name:</span> {displayName || "—"}</div>
-            <div><span className="text-gray-500">DOB:</span> {person.dob || "—"}</div>
+            <div><span className="text-gray-500">DOB:</span> {formatDOB(person.dob) || "—"}</div>
             <div><span className="text-gray-500">License:</span> {person.oln || "—"}</div>
             <div><span className="text-gray-500">Sex:</span> {person.sex || "—"}</div>
-            {person.address && <div className="sm:col-span-2"><span className="text-gray-500">Address:</span> {person.address}, {person.city}, {person.state} {person.zip}</div>}
+            {(person.address || person.city || person.state || person.zip) && (
+              <div className="sm:col-span-2">
+                <span className="text-gray-500">Address:</span>{" "}
+                {[
+                  person.address,
+                  person.city,
+                  [person.state, person.zip].filter(Boolean).join(" "),
+                ].filter(Boolean).join(", ")}
+              </div>
+            )}
           </div>
           {status === "clear" && (
             <button
