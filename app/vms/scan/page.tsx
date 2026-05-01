@@ -20,6 +20,13 @@ export default function ScanID(){
   const lastResultRef   = useRef<number>(0)   // timestamp when status flipped to clear/barred
   const RESET_GRACE_MS  = 800                  // ignore Enter this long after result appears
 
+  // DEBUG — temporary, remove once scan flow is stable
+  const [debugLog, setDebugLog] = useState<string[]>([])
+  function dbg(msg: string) {
+    setDebugLog(prev => [`${new Date().toLocaleTimeString("en-US",{hour12:false})}.${String(Date.now()%1000).padStart(3,"0")}  ${msg}`, ...prev].slice(0, 20))
+    console.log("[scan]", msg)
+  }
+
   useEffect(() => {
     textareaRef.current?.focus()
   }, [])
@@ -95,6 +102,7 @@ export default function ScanID(){
   /* PROCESS SCAN */
   async function processScan(scan: string) {
     if (!scan.trim()) return
+    dbg(`processScan(len=${scan.length})`)
     setStatus("checking")
     const parsed = parseLicense(scan)
     setPerson(parsed)
@@ -102,14 +110,17 @@ export default function ScanID(){
     if (hit) {
       setAlertPerson(hit)
       setStatus("barred")
+      dbg(`status=BARRED hit=${hit.first_name} ${hit.last_name}`)
     } else {
       setStatus("clear")
+      dbg(`status=CLEAR person=${parsed.first_name} ${parsed.last_name}`)
     }
     lastResultRef.current = Date.now()
   }
 
   /* RESET — ready for next visitor */
   function reset() {
+    dbg(`reset()  prevBarLen=${barcode.length} status=${status}`)
     setBarcode("")
     setPerson(null)
     setAlertPerson(null)
@@ -119,19 +130,16 @@ export default function ScanID(){
 
   /* AUTO-DETECT ENTER FROM SCANNER + ENTER TO RESET */
   function handleKeyDown(e: React.KeyboardEvent) {
+    dbg(`keyDown key="${e.key}" status=${status} barLen=${barcode.length}`)
     if (e.key !== "Enter") return
     e.preventDefault()
-    // Already processing — drop redundant Enter events from the scanner
     if (status === "checking") return
-    // After a result is showing, Enter advances to next visitor — but only
-    // after a brief grace period, otherwise the scanner's own trailing CR/LF
-    // will instantly reset the result the guard never got to see.
     if (status === "clear" || status === "barred") {
-      if (Date.now() - lastResultRef.current < RESET_GRACE_MS) return
+      const since = Date.now() - lastResultRef.current
+      if (since < RESET_GRACE_MS) { dbg(`Enter ignored — grace ${since}ms < ${RESET_GRACE_MS}`); return }
       reset()
       return
     }
-    // Idle — scanner just finished sending. Treat Enter as end-of-scan.
     if (barcode.trim()) processScan(barcode)
   }
 
@@ -164,23 +172,22 @@ export default function ScanID(){
         placeholder="Awaiting scan…"
         onChange={(e) => {
           const v = e.target.value
-          // If a result is currently showing AND new scan data is arriving,
-          // reset state and adopt the new tail. Guard against:
-          //   - trailing scanner terminators (small additions): require >=10 new chars
-          //   - reset within the grace window (catches scanner trailing CR/LF)
+          const delta = v.length - barcode.length
           if ((status === "clear" || status === "barred") && v !== barcode) {
             const fresh = barcode && v.startsWith(barcode) ? v.slice(barcode.length) : v
             const sinceResult = Date.now() - lastResultRef.current
             if (fresh.trim().length < 10 || sinceResult < RESET_GRACE_MS) {
-              // Likely just terminator noise — ignore the change
+              dbg(`onChange IGNORED  delta=${delta} freshLen=${fresh.length} since=${sinceResult}ms status=${status}`)
               return
             }
+            dbg(`onChange NEW SCAN  freshLen=${fresh.length}`)
             setPerson(null)
             setAlertPerson(null)
             setStatus("idle")
             setBarcode(fresh)
             return
           }
+          if (delta < -5) dbg(`onChange shrunk  delta=${delta} newLen=${v.length} status=${status}`)
           setBarcode(v)
         }}
         onKeyDown={handleKeyDown}
@@ -215,6 +222,14 @@ export default function ScanID(){
           </div>
         </div>
       )}
+
+      {/* DEBUG PANEL — temporary */}
+      <div className="mt-4 max-w-xl bg-yellow-50 border border-yellow-300 rounded p-2 text-xs font-mono">
+        <div className="font-bold mb-1">DEBUG  status={status}  barLen={barcode.length}  sinceResult={lastResultRef.current ? Date.now() - lastResultRef.current + "ms" : "—"}</div>
+        {debugLog.map((l, i) => (
+          <div key={i} className="text-gray-700 leading-tight">{l}</div>
+        ))}
+      </div>
 
       {/* PARSED LICENSE DATA */}
       {person && status !== "idle" && status !== "checking" && (
