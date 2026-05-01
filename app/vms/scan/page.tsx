@@ -430,22 +430,6 @@ export default function ScanID(){
           <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3">Log Visitor Entry</div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-            <div className="sm:col-span-2">
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Community</label>
-              <select
-                value={communityId}
-                onChange={e => {
-                  const next = communities.find(c => c.id === e.target.value)
-                  if (next) changeCommunity(next.id, next.name)
-                }}
-                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
-              >
-                {communities.map(c => (
-                  <option key={c.id} value={c.id}>{c.name}</option>
-                ))}
-              </select>
-            </div>
-
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Unit</label>
               <select
