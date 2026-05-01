@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useRef, useState } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import SecurityAlert from "../../../components/SecurityAlert"
 import { fireAlert } from "@/lib/alerts"
@@ -386,6 +387,14 @@ export default function ScanID(){
         onKeyDown={handleKeyDown}
         className="w-full max-w-xl h-28 p-3 border border-gray-300 rounded-md text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
       />
+
+      <div className="mt-3 max-w-xl">
+        <Link href="/vms">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-medium rounded-md cursor-pointer transition-colors">
+            ← Back to VMS Check-In
+          </div>
+        </Link>
+      </div>
 
       {status === "checking" && (
         <div className="mt-4 px-4 py-3 rounded-lg bg-gray-100 border border-gray-300 text-gray-700 text-sm">
