@@ -157,7 +157,7 @@ export default function ProfilePage({ params }: any) {
       <div style={styles.section}>
         <h3>🚫 Ban Details</h3>
 
-        <div>Community: {person.community || "N/A"}</div>
+        <div>Location: {person.community || "N/A"}</div>
         <div>Ban Date: {person.ban_date}</div>
         <div>Banned By: {person.banned_by}</div>
 

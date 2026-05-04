@@ -303,7 +303,7 @@ export default function ReportsPage() {
       )}
 
       {!community && !loading && (
-        <div className="text-gray-400 text-sm py-16 text-center">Select a community to view analytics.</div>
+        <div className="text-gray-400 text-sm py-16 text-center">Select a location to view analytics.</div>
       )}
       {community && !loading && visits.length === 0 && (
         <div className="text-gray-400 text-sm py-16 text-center">No entries found for this date range.</div>

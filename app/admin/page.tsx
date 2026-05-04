@@ -300,7 +300,7 @@ export default function UserDashboard() {
   }
 
   async function confirmImport() {
-    if (!importCommunityId) { setImportError("Select a community first."); return }
+    if (!importCommunityId) { setImportError("Select a location first."); return }
     setImportLoading(true); setImportError("")
     const { error: delErr } = await supabase.from("residents").delete().eq("community_id", importCommunityId)
     if (delErr) { setImportError("Delete failed: " + delErr.message); setImportLoading(false); return }
@@ -662,7 +662,10 @@ export default function UserDashboard() {
   return (
     <div className="p-5 max-w-6xl">
 
-      <h2 className="text-2xl font-bold mb-6">User Dashboard</h2>
+      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
+        <h2 className="text-2xl font-bold">User Dashboard</h2>
+        <a href="/admin/post-orders" className="text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md font-medium">📋 Edit Post Orders →</a>
+      </div>
 
       {/* MAIN TABS */}
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
@@ -684,7 +687,7 @@ export default function UserDashboard() {
               <select value={communityId}
                 onChange={(e) => { setCommunityId(e.target.value); loadWatchlist(e.target.value) }}
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600">
-                <option value="">All Communities</option>
+                <option value="">All Locations</option>
                 {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <span className="text-sm text-gray-500">{filteredWatchlist.length} persons</span>
@@ -723,7 +726,7 @@ export default function UserDashboard() {
                   <input value={wlOln} onChange={e => setWlOln(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>SSN</label>
                   <input value={wlSsn} onChange={e => setWlSsn(e.target.value)} placeholder="XXX-XX-XXXX or last 4" maxLength={11} className={inputCls} /></div>
-                <div><label className={labelCls}>Community</label>
+                <div><label className={labelCls}>Location</label>
                   <select value={wlCommunity} onChange={e => setWlCommunity(e.target.value)} className={inputCls}>
                     <option value="">— Select —</option>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -789,9 +792,9 @@ export default function UserDashboard() {
               <h3 className="font-bold text-gray-800 mb-3">Import Rent Roll (.xlsx from Yardi)</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                 <div>
-                  <label className={labelCls}>Community</label>
+                  <label className={labelCls}>Location</label>
                   <select value={importCommunityId} onChange={e => setImportCommunityId(e.target.value)} className={inputCls}>
-                    <option value="">— Select community —</option>
+                    <option value="">— Select location —</option>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
@@ -808,7 +811,7 @@ export default function UserDashboard() {
                   <div className="flex items-center justify-between mb-3">
                     <div className="text-sm text-gray-700">
                       <strong>{importPreview.length}</strong> residents across <strong>{new Set(importPreview.map(r => r.unit_number)).size}</strong> units ready.
-                      {importCommunityId && <span className="text-orange-600 ml-2">⚠ Replaces existing residents for this community.</span>}
+                      {importCommunityId && <span className="text-orange-600 ml-2">⚠ Replaces existing residents for this location.</span>}
                     </div>
                     <button onClick={confirmImport} disabled={importLoading || !importCommunityId}
                       className="px-5 py-2 bg-green-700 text-white text-sm font-semibold rounded-lg hover:bg-green-800 border-none cursor-pointer disabled:opacity-50">
@@ -850,7 +853,7 @@ export default function UserDashboard() {
               <select value={rentRollCommunityId}
                 onChange={(e) => { setRentRollCommunityId(e.target.value); loadRentRoll(e.target.value) }}
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600">
-                <option value="">All Communities</option>
+                <option value="">All Locations</option>
                 {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <span className="text-sm text-gray-500">{filteredRentRoll.length} residents</span>
@@ -869,7 +872,7 @@ export default function UserDashboard() {
           {rentRollLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading...</div>}
           {!rentRollLoading && filteredRentRoll.length === 0 && (
             <div className="text-gray-500 text-sm py-8 text-center">
-              {rentRollCommunityId ? "No residents found." : "Select a community to view residents."}
+              {rentRollCommunityId ? "No residents found." : "Select a location to view residents."}
             </div>
           )}
           {!rentRollLoading && filteredRentRoll.length > 0 && (
@@ -926,7 +929,7 @@ export default function UserDashboard() {
                   </select></div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={dailyOfficer} onChange={e => setDailyOfficer(e.target.value)} className={inputCls} /></div>
-                <div><label className={labelCls}>Community</label>
+                <div><label className={labelCls}>Location</label>
                   <select value={dailyCommunity} onChange={e => setDailyCommunity(e.target.value)} className={inputCls}>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select></div>
@@ -963,7 +966,7 @@ export default function UserDashboard() {
                   <input type="time" value={incTime} onChange={e => setIncTime(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={incOfficer} onChange={e => setIncOfficer(e.target.value)} className={inputCls} /></div>
-                <div><label className={labelCls}>Community</label>
+                <div><label className={labelCls}>Location</label>
                   <select value={incCommunity} onChange={e => setIncCommunity(e.target.value)} className={inputCls}>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select></div>
@@ -1031,7 +1034,7 @@ export default function UserDashboard() {
                   <input value={ctOln} onChange={e => setCtOln(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>SSN (last 4)</label>
                   <input value={ctSsn} onChange={e => setCtSsn(e.target.value)} placeholder="XXXX" maxLength={9} className={inputCls} /></div>
-                <div><label className={labelCls}>Community</label>
+                <div><label className={labelCls}>Location</label>
                   <select value={ctCommunity} onChange={e => setCtCommunity(e.target.value)} className={inputCls}>
                     <option value="">— Select —</option>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1089,7 +1092,7 @@ export default function UserDashboard() {
                   <input type="time" value={vfiTime} onChange={e => setVfiTime(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={vfiOfficer} onChange={e => setVfiOfficer(e.target.value)} className={inputCls} /></div>
-                <div><label className={labelCls}>Community</label>
+                <div><label className={labelCls}>Location</label>
                   <select value={vfiCommunity} onChange={e => setVfiCommunity(e.target.value)} className={inputCls}>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select></div>
@@ -1441,7 +1444,7 @@ export default function UserDashboard() {
                     </select></div>
                   <div><label className={labelCls}>Officer Name</label>
                     <input value={pdOfficer} onChange={e => setPdOfficer(e.target.value)} className={inputCls} /></div>
-                  <div><label className={labelCls}>Community</label>
+                  <div><label className={labelCls}>Location</label>
                     <select value={pdCommunity} onChange={e => setPdCommunity(e.target.value)} className={inputCls}>
                       <option value="">— Select —</option>
                       {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
@@ -1540,7 +1543,7 @@ export default function UserDashboard() {
                     className={textareaCls} /></div>
                 <div><label className={labelCls}>Vehicle Description</label>
                   <input value={boloVehicle} onChange={e => setBoloVehicle(e.target.value)} placeholder="Year, Make, Model, Color, Plate" className={inputCls} /></div>
-                <div><label className={labelCls}>Community</label>
+                <div><label className={labelCls}>Location</label>
                   <select value={boloCommunity} onChange={e => setBoloCommunity(e.target.value)} className={inputCls}>
                     <option value="">All Properties</option>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}

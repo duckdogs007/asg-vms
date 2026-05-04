@@ -243,7 +243,7 @@ export default function AlertsPage() {
                 <th className="px-4 py-2 text-left">When</th>
                 <th className="px-4 py-2 text-left">Visitor</th>
                 <th className="px-4 py-2 text-left">DOB</th>
-                <th className="px-4 py-2 text-left">Community</th>
+                <th className="px-4 py-2 text-left">Location</th>
                 <th className="px-4 py-2 text-left">Unit</th>
                 <th className="px-4 py-2 text-left">Reason</th>
                 <th className="px-4 py-2 text-left">Guard</th>

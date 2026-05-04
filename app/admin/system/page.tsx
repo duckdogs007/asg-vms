@@ -93,7 +93,7 @@ export default function AdminSystemPage() {
     const { error } = await supabase.from("communities").insert({ name })
     if (error) { flash("Add failed: " + error.message); return }
     setNewCommunity("")
-    flash("Community added")
+    flash("Location added")
     load()
   }
 
@@ -108,10 +108,10 @@ export default function AdminSystemPage() {
   }
 
   async function deleteCommunity(id: string) {
-    if (!confirm("Delete this community? Units and residents linked to it must be moved or deleted first.")) return
+    if (!confirm("Delete this location? Units and residents linked to it must be moved or deleted first.")) return
     const { error } = await supabase.from("communities").delete().eq("id", id)
     if (error) { flash("Delete failed: " + error.message); return }
-    flash("Community deleted")
+    flash("Location deleted")
     load()
   }
 
@@ -163,7 +163,7 @@ export default function AdminSystemPage() {
       )}
 
       <div className="flex gap-1 border-b border-gray-300 mb-4 overflow-x-auto">
-        <button onClick={() => setActiveTab("communities")} className={tabBtnCls("communities")}>🏘️ Communities</button>
+        <button onClick={() => setActiveTab("communities")} className={tabBtnCls("communities")}>🏘️ Locations</button>
         <button onClick={() => setActiveTab("recipients")}  className={tabBtnCls("recipients")}>🔔 Notification Recipients</button>
         <button onClick={() => setActiveTab("users")}       className={tabBtnCls("users")}>👥 Users</button>
         <button onClick={() => setActiveTab("settings")}    className={tabBtnCls("settings")}>🛠 Settings</button>
@@ -176,14 +176,14 @@ export default function AdminSystemPage() {
             <input
               value={newCommunity}
               onChange={e => setNewCommunity(e.target.value)}
-              placeholder="New community name"
+              placeholder="New location name"
               className={`${inputCls} flex-1`}
               onKeyDown={e => e.key === "Enter" && addCommunity()}
             />
             <button onClick={addCommunity} className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer">+ Add</button>
           </div>
           {communities.length === 0 ? (
-            <div className="text-sm text-gray-500 py-6 text-center">No communities yet.</div>
+            <div className="text-sm text-gray-500 py-6 text-center">No locations yet.</div>
           ) : (
             <ul className="divide-y divide-gray-100">
               {communities.map(c => (
@@ -229,7 +229,7 @@ export default function AdminSystemPage() {
             </select>
             <button onClick={addRecipient} className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer">+ Add Recipient</button>
           </div>
-          <p className="text-xs text-gray-500 mb-3">Recipients are an audit list — Tier 1 alerts broadcast to a Teams channel via webhook. Use this for future per-community routing.</p>
+          <p className="text-xs text-gray-500 mb-3">Recipients are an audit list — Tier 1 alerts broadcast to a Teams channel via webhook. Use this for future per-location routing.</p>
           {recipients.length === 0 ? (
             <div className="text-sm text-gray-500 py-6 text-center">No recipients.</div>
           ) : (

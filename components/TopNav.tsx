@@ -127,8 +127,9 @@ export default function TopNav() {
           <Link href="/vms"         className={navLinkCls}>VMS</Link>
           <Link href="/alerts"      className={navLinkCls}>Alerts</Link>
           {isAdmin && <Link href="/admin" className={navLinkCls}>User Dashboard</Link>}
-          <Link href="/vms/intel"   className={navLinkCls}>Intel Terminal</Link>
-          <Link href="/vms/reports" className={navLinkCls}>Reports</Link>
+          <Link href="/vms/intel"       className={navLinkCls}>Intel Terminal</Link>
+          <Link href="/vms/reports"     className={navLinkCls}>Reports</Link>
+          <Link href="/vms/post-orders" className={navLinkCls}>Post Orders</Link>
         </div>
 
         {/* LEFT — mobile hamburger */}
@@ -242,8 +243,9 @@ export default function TopNav() {
           <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
           <Link href="/alerts"      className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alerts</Link>
           {isAdmin && <Link href="/admin" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ User Dashboard</Link>}
-          <Link href="/vms/intel"   className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
-          <Link href="/vms/reports" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
+          <Link href="/vms/intel"       className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
+          <Link href="/vms/reports"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
+          <Link href="/vms/post-orders" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 Post Orders</Link>
           <div className="px-4 py-3 text-xs text-gray-400">{currentTime}</div>
         </div>
       )}

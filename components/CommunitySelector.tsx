@@ -10,7 +10,7 @@ interface Props {
   label?: string
 }
 
-export default function CommunitySelector({ value, onChange, label = "Community" }: Props) {
+export default function CommunitySelector({ value, onChange, label = "Location" }: Props) {
 
   const [communities, setCommunities] = useState<Community[]>([])
   const [loading, setLoading] = useState(true)
@@ -50,7 +50,7 @@ export default function CommunitySelector({ value, onChange, label = "Community"
         className="w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-50"
       >
         <option value="">
-          {loading ? "Loading..." : "Select Community"}
+          {loading ? "Loading..." : "Select Location"}
         </option>
 
         {communities.map((c) => (

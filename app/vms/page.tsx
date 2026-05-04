@@ -310,7 +310,7 @@ export default function VMSPage() {
           <div className="bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-3">
             <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-1">Location</div>
             <div>
-              <label className={labelCls}>Community</label>
+              <label className={labelCls}>Location</label>
               <select value={communityId} onChange={(e) => loadUnits(e.target.value)} className={inputCls}>
                 {communities.map(c => (
                   <option key={c.id} value={c.id}>{c.name}</option>
