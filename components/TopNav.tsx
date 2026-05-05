@@ -126,7 +126,8 @@ export default function TopNav() {
           <Link href="/"            className={navLinkCls}>Home</Link>
           <Link href="/vms"         className={navLinkCls}>VMS</Link>
           <Link href="/alerts"      className={navLinkCls}>Alerts</Link>
-          {isAdmin && <Link href="/admin" className={navLinkCls}>User Dashboard</Link>}
+          {isAdmin && <Link href="/admin"        className={navLinkCls}>User Dashboard</Link>}
+          {isAdmin && <Link href="/admin/system" className={navLinkCls}>Admin Dashboard</Link>}
           <Link href="/vms/intel"       className={navLinkCls}>Intel Terminal</Link>
           <Link href="/vms/reports"     className={navLinkCls}>Reports</Link>
           <Link href="/vms/post-orders" className={navLinkCls}>Post Orders</Link>
@@ -242,7 +243,8 @@ export default function TopNav() {
           <Link href="/"            className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
           <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
           <Link href="/alerts"      className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alerts</Link>
-          {isAdmin && <Link href="/admin" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ User Dashboard</Link>}
+          {isAdmin && <Link href="/admin"        className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>}
+          {isAdmin && <Link href="/admin/system" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ Admin Dashboard</Link>}
           <Link href="/vms/intel"       className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
           <Link href="/vms/reports"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
           <Link href="/vms/post-orders" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 Post Orders</Link>

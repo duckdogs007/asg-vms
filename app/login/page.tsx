@@ -35,11 +35,12 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-slate-100">
-      <div className="bg-white p-10 rounded-xl shadow-lg w-[360px] text-center">
+    <div className="min-h-screen flex items-center justify-center bg-slate-100 px-4">
+      <div className="bg-white p-10 rounded-xl shadow-lg w-full max-w-[420px] text-center">
 
-        <div className="text-4xl font-bold text-blue-800 mb-2">ASG</div>
-        <h2 className="text-lg font-semibold text-gray-900 mb-1">Visitor Management System</h2>
+        <div className="text-2xl font-bold text-blue-800 leading-tight">American Security Group</div>
+        <div className="text-[11px] text-gray-500 uppercase tracking-widest mt-1 mb-3">Integrated Property Solutions</div>
+        <h2 className="text-base font-semibold text-gray-900 mb-1">Visitor Management System</h2>
         <p className="text-sm text-gray-500 mb-6">Sign in to continue</p>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-3">
