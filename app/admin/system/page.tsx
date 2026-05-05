@@ -5,6 +5,7 @@ export const dynamic = "force-dynamic"
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import pkg from "../../../package.json"
 
 type Tab = "communities" | "recipients" | "users" | "settings"
 
@@ -48,6 +49,16 @@ export default function AdminSystemPage() {
   const [users,      setUsers]      = useState<UserRow[]>([])
   const [usersError, setUsersError] = useState("")
 
+  // ── SETTINGS ──
+  const [tableCounts,     setTableCounts]     = useState<Record<string, number> | null>(null)
+  const [bucketStatus,    setBucketStatus]    = useState<Record<string, { ok: boolean; sample: number; error?: string }> | null>(null)
+  const [webhookTesting,  setWebhookTesting]  = useState(false)
+  const [webhookResult,   setWebhookResult]   = useState<"" | "ok" | "fail">("")
+  const [webhookError,    setWebhookError]    = useState("")
+  const [adminList,       setAdminList]       = useState<{ email: string; last_sign_in_at: string | null }[]>([])
+  const [auditStats,      setAuditStats]      = useState<{ count: number; oldest: string | null; newest: string | null } | null>(null)
+  const [settingsLoading, setSettingsLoading] = useState(false)
+
   useEffect(() => {
     load()
   }, [activeTab])
@@ -80,7 +91,93 @@ export default function AdminSystemPage() {
         setUsersError(e?.message || String(e))
         setUsers([])
       }
+    } else if (activeTab === "settings") {
+      void loadSettings()
     }
+  }
+
+  // ── SETTINGS loaders ──
+  async function loadSettings() {
+    setSettingsLoading(true)
+    setTableCounts(null); setBucketStatus(null); setAdminList([]); setAuditStats(null)
+    await Promise.all([loadTableCounts(), loadBucketStatus(), loadAdminList(), loadAuditStats()])
+    setSettingsLoading(false)
+  }
+
+  async function loadTableCounts() {
+    const tables = [
+      "communities", "units", "residents",
+      "watchlist", "visitors", "visitor_logs",
+      "bolos", "alerts", "denied_entries",
+      "post_orders", "admin_users", "audit_logs",
+    ]
+    const counts: Record<string, number> = {}
+    await Promise.all(tables.map(async (t) => {
+      const { count } = await supabase.from(t).select("*", { count: "exact", head: true })
+      counts[t] = count || 0
+    }))
+    setTableCounts(counts)
+  }
+
+  async function loadBucketStatus() {
+    const status: Record<string, { ok: boolean; sample: number; error?: string }> = {}
+    for (const bucket of ["photos", "contact-photos"]) {
+      const { data, error } = await supabase.storage.from(bucket).list("", { limit: 1 })
+      if (error) status[bucket] = { ok: false, sample: 0, error: error.message }
+      else       status[bucket] = { ok: true,  sample: data?.length || 0 }
+    }
+    setBucketStatus(status)
+  }
+
+  async function loadAdminList() {
+    try {
+      const r = await fetch("/api/admin/users", { cache: "no-store" })
+      if (!r.ok) return
+      const { users } = await r.json()
+      const admins = (users || [])
+        .filter((u: any) => u.is_admin)
+        .map((u: any) => ({ email: u.email || "—", last_sign_in_at: u.last_sign_in_at }))
+        .sort((a: any, b: any) => (b.last_sign_in_at || "").localeCompare(a.last_sign_in_at || ""))
+      setAdminList(admins)
+    } catch {
+      setAdminList([])
+    }
+  }
+
+  async function loadAuditStats() {
+    const { count } = await supabase.from("audit_logs").select("*", { count: "exact", head: true })
+    const [{ data: oldest }, { data: newest }] = await Promise.all([
+      supabase.from("audit_logs").select("created_at").order("created_at", { ascending: true  }).limit(1).maybeSingle(),
+      supabase.from("audit_logs").select("created_at").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    ])
+    setAuditStats({
+      count:  count || 0,
+      oldest: (oldest as any)?.created_at || null,
+      newest: (newest as any)?.created_at || null,
+    })
+  }
+
+  async function testWebhook() {
+    setWebhookTesting(true); setWebhookResult(""); setWebhookError("")
+    try {
+      const r = await fetch("/api/admin/test-webhook", { method: "POST" })
+      const json = await r.json().catch(() => ({}))
+      if (r.ok) {
+        setWebhookResult("ok")
+      } else {
+        setWebhookResult("fail")
+        setWebhookError(json.error || `HTTP ${r.status}`)
+      }
+    } catch (e: any) {
+      setWebhookResult("fail")
+      setWebhookError(e?.message || String(e))
+    }
+    setWebhookTesting(false)
+  }
+
+  function fmtDate(iso: string | null): string {
+    if (!iso) return "never"
+    return new Date(iso).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
   }
 
   function flash(msg: string) {
@@ -329,21 +426,75 @@ export default function AdminSystemPage() {
 
       {/* SETTINGS */}
       {activeTab === "settings" && (
-        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-4 text-sm">
-          <Section title="Alerts Transport">
+        <div className="bg-white border border-gray-200 rounded-xl p-5 space-y-5 text-sm">
+
+          {/* SYSTEM HEALTH */}
+          <Section title="💚 System Health">
+            <Row k="Build version" v={`v${pkg.version}${process.env.NEXT_PUBLIC_BUILD_DATE ? ` · ${process.env.NEXT_PUBLIC_BUILD_DATE}` : ""}`} />
+            <Row k="Supabase status" v={settingsLoading ? "Checking…" : (tableCounts ? "🟢 Online" : "🔴 Unreachable")} />
+            <Row k="Total DB records" v={tableCounts ? Object.values(tableCounts).reduce((a, b) => a + b, 0).toLocaleString() : "—"} />
+            {tableCounts && (
+              <div className="px-3 py-2.5 bg-white">
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1 text-xs">
+                  {Object.entries(tableCounts).sort((a, b) => b[1] - a[1]).map(([t, n]) => (
+                    <div key={t} className="flex justify-between">
+                      <span className="text-gray-500">{t}</span>
+                      <span className="text-gray-900 font-mono">{n.toLocaleString()}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Section>
+
+          {/* STORAGE BUCKETS */}
+          <Section title="🪣 Storage Buckets">
+            {!bucketStatus && <Row k="Status" v="Checking…" />}
+            {bucketStatus && Object.entries(bucketStatus).map(([name, s]) => (
+              <Row key={name} k={name} v={s.ok ? `🟢 OK (${s.sample === 0 ? "empty" : `${s.sample}+ files`})` : `🔴 ${s.error || "unreachable"}`} />
+            ))}
+          </Section>
+
+          {/* ALERTS TRANSPORT + TEST WEBHOOK */}
+          <Section title="🔔 Alerts Transport">
             <Row k="Channel" v="Microsoft Teams (Workflows webhook)" />
-            <Row k="Env var"  v="TEAMS_WEBHOOK_URL (set in Vercel)" />
+            <Row k="Webhook URL" v="TEAMS_WEBHOOK_URL (server-only env var)" />
             <Row k="Audit log" v="public.alerts (auth read + insert)" />
+            <div className="flex justify-between items-center gap-3 px-3 py-2 text-sm bg-white">
+              <span className="text-gray-500 font-medium">Test connection</span>
+              <div className="flex items-center gap-2 flex-wrap justify-end">
+                {webhookResult === "ok"   && <span className="text-green-700 text-xs font-semibold">✓ Sent — check the Teams channel</span>}
+                {webhookResult === "fail" && <span className="text-red-700   text-xs font-semibold max-w-xs truncate" title={webhookError}>✕ {webhookError || "Failed"}</span>}
+                <button
+                  onClick={testWebhook}
+                  disabled={webhookTesting}
+                  className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-md border-none cursor-pointer disabled:opacity-50"
+                >
+                  {webhookTesting ? "Sending…" : "🧪 Test Webhook"}
+                </button>
+              </div>
+            </div>
           </Section>
-          <Section title="Admin Access">
-            <Row k="Admin emails" v="Configured in middleware (proxy.ts)" />
-            <Row k="Admin routes" v="/admin and /admin/system" />
+
+          {/* ADMIN ACCESS */}
+          <Section title="🔐 Admin Access">
+            <Row k="Source of truth" v="public.admin_users table" />
+            <Row k="Admin routes" v="/admin, /admin/system, /admin/post-orders" />
+            {adminList.length === 0 && <Row k="Active admins" v={settingsLoading ? "Loading…" : "—"} />}
+            {adminList.map(a => (
+              <Row key={a.email} k={a.email} v={a.last_sign_in_at ? `Last sign-in ${fmtDate(a.last_sign_in_at)}` : "Never signed in"} />
+            ))}
           </Section>
-          <Section title="Storage Buckets">
-            <Row k="photos"          v="visitor profile photos (public)" />
-            <Row k="contact-photos"  v="field contact + BOLO + Vehicle FI photos (public)" />
+
+          {/* AUDIT & RETENTION */}
+          <Section title="📜 Audit & Retention">
+            <Row k="Audit log entries" v={auditStats ? auditStats.count.toLocaleString() : "—"} />
+            <Row k="Oldest entry"      v={fmtDate(auditStats?.oldest || null)} />
+            <Row k="Newest entry"      v={fmtDate(auditStats?.newest || null)} />
+            <Row k="Retention policy"  v="No auto-purge (forensic integrity). Manual cleanup via Supabase Studio." />
+            <Row k="Database backups"  v="Supabase managed (daily snapshots / point-in-time restore)" />
           </Section>
-          <p className="text-xs text-gray-500">Read-only summary. Live config knobs come in a future pass.</p>
+
         </div>
       )}
     </div>
