@@ -1734,7 +1734,7 @@ export default function UserDashboard() {
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full mr-2 ${b.active ? "bg-red-600 text-white" : "bg-gray-400 text-white"}`}>
                         {b.active ? "🔴 ACTIVE" : "✓ Resolved"}
                       </span>
-                      {b.community_id && <span className="text-xs text-gray-500">{getCommunityName(b.community_id)}</span>}
+                      {b.community_id && <span className="text-xs text-gray-800 font-semibold">📍 {getCommunityName(b.community_id)}</span>}
                     </div>
                     <div className="text-xs text-gray-400 text-right shrink-0 ml-2">
                       <div>{new Date(b.created_at).toLocaleDateString()}</div>
