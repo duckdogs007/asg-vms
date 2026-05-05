@@ -61,6 +61,7 @@ interface Stats {
   visitors: number
   deliveries: number
   contractors: number
+  employees: number
   residents: number
   peakHour: string
   peakHourCount: number
@@ -76,7 +77,7 @@ interface Stats {
 }
 
 const EMPTY_STATS: Stats = {
-  total: 0, visitors: 0, deliveries: 0, contractors: 0, residents: 0,
+  total: 0, visitors: 0, deliveries: 0, contractors: 0, employees: 0, residents: 0,
   peakHour: "—", peakHourCount: 0, peakDay: "—", avgPerHour: "—",
   topUnit: "—", topUnits: [], repeatVisitors: [], repeat: 0, missingUnit: 0,
   byDay: {}, byHour: {}
@@ -199,8 +200,9 @@ export default function ReportsPage() {
     setStats({
       total: logs.length,
       visitors:    type("visitor"),
-      deliveries:  type("delivery"),
+      deliveries:  logs.filter(v => v.person_type?.toLowerCase().startsWith("delivery")).length,
       contractors: type("contractor"),
+      employees:   type("employee"),
       residents:   type("resident"),
       peakHour, peakHourCount, peakDay, avgPerHour, topUnit, topUnits,
       repeatVisitors, repeat: repeatVisitors.length,
@@ -313,11 +315,12 @@ export default function ReportsPage() {
         <>
           {/* ── TRAFFIC BREAKDOWN ── */}
           <Section label="Traffic Breakdown">
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
               <StatCard title="Total Entries"  value={stats.total}       accent="blue" />
               <StatCard title="Visitors"       value={stats.visitors}    accent="indigo" />
               <StatCard title="Deliveries"     value={stats.deliveries}  accent="sky" />
               <StatCard title="Contractors"    value={stats.contractors} accent="violet" />
+              <StatCard title="Employees"      value={stats.employees}   accent="emerald" />
               <StatCard title="Residents"      value={stats.residents}   accent="green" />
             </div>
           </Section>

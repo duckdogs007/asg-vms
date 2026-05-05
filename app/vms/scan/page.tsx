@@ -483,6 +483,7 @@ export default function ScanID(){
                 <option>Visitor</option>
                 <option>Delivery</option>
                 <option>Contractor</option>
+                <option>Employee</option>
               </select>
             </div>
           </div>

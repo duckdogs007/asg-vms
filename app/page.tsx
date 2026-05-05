@@ -10,6 +10,7 @@ interface Stats {
   visitors: number
   contractors: number
   deliveries: number
+  employees: number
   watchlistCount: number
   recentEntry: string
   openAlerts: number
@@ -19,7 +20,7 @@ export default function Home() {
 
   const [stats, setStats] = useState<Stats>({
     todayTotal: 0, visitors: 0, contractors: 0,
-    deliveries: 0, watchlistCount: 0, recentEntry: "",
+    deliveries: 0, employees: 0, watchlistCount: 0, recentEntry: "",
     openAlerts: 0,
   })
   const [time, setTime] = useState("")
@@ -63,7 +64,8 @@ export default function Home() {
       todayTotal:     entries.length,
       visitors:       entries.filter(e => e.person_type?.toLowerCase() === "visitor").length,
       contractors:    entries.filter(e => e.person_type?.toLowerCase() === "contractor").length,
-      deliveries:     entries.filter(e => e.person_type?.toLowerCase() === "delivery").length,
+      deliveries:     entries.filter(e => e.person_type?.toLowerCase().startsWith("delivery")).length,
+      employees:      entries.filter(e => e.person_type?.toLowerCase() === "employee").length,
       watchlistCount: watchlistCount || 0,
       recentEntry:    recent,
       openAlerts:     openAlerts || 0,
@@ -103,11 +105,12 @@ export default function Home() {
       <div className="max-w-6xl mx-auto px-4 sm:px-10 py-3 sm:py-4">
 
         {/* STAT CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 mb-3">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
           <StatCard label="Today's Entries"  value={stats.todayTotal}     accent="blue" />
           <StatCard label="Visitors"         value={stats.visitors}       accent="indigo" />
           <StatCard label="Contractors"      value={stats.contractors}    accent="violet" />
           <StatCard label="Deliveries"       value={stats.deliveries}     accent="sky" />
+          <StatCard label="Employees"        value={stats.employees}      accent="emerald" />
           <StatCard label="Watchlist Active" value={stats.watchlistCount} accent="red" />
         </div>
 
@@ -203,11 +206,12 @@ export default function Home() {
 
 function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
   const colors: Record<string, string> = {
-    blue:   "border-blue-300 text-blue-700",
-    indigo: "border-indigo-300 text-indigo-700",
-    violet: "border-violet-300 text-violet-700",
-    sky:    "border-sky-300 text-sky-700",
-    red:    "border-red-300 text-red-700",
+    blue:    "border-blue-300 text-blue-700",
+    indigo:  "border-indigo-300 text-indigo-700",
+    violet:  "border-violet-300 text-violet-700",
+    sky:     "border-sky-300 text-sky-700",
+    emerald: "border-emerald-300 text-emerald-700",
+    red:     "border-red-300 text-red-700",
   }
   return (
     <div className={`bg-white border rounded-lg px-3 py-2 ${colors[accent]}`}>

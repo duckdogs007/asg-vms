@@ -370,6 +370,7 @@ export default function VMSPage() {
                   <option>Visitor</option>
                   <option>Delivery</option>
                   <option>Contractor</option>
+                  <option>Employee</option>
                 </select>
               </div>
 

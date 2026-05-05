@@ -242,6 +242,7 @@ export default function ManualEntry() {
           <option value="Visitor">Visitor</option>
           <option value="Contractor">Contractor</option>
           <option value="Delivery Driver">Delivery Driver</option>
+          <option value="Employee">Employee</option>
         </select>
 
         {error && (
