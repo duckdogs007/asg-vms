@@ -247,6 +247,7 @@ export default function UserDashboard() {
       banned_by: officerName || null,
       ban_date: new Date().toISOString().split("T")[0],
       status: "Active",
+      firearm_flag: wlFirearm,
     })
     setWlSaving(false)
     if (error) { setWlError(error.message); return }
