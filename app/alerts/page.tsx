@@ -72,9 +72,12 @@ export default function AlertsPage() {
 
   async function loadAll() {
     setLoading(true)
+    // Alerts: no time filter — open (unacked) alerts must stay visible
+    // regardless of age. limit(200) keeps the query bounded.
+    // Denied Entries: keep the 7-day window (panel is labeled "Past 7 Days").
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const [{ data: a }, { data: d }] = await Promise.all([
-      supabase.from("alerts").select("*").gte("sent_at", since)
+      supabase.from("alerts").select("*")
         .order("sent_at", { ascending: false }).limit(200),
       supabase.from("denied_entries").select("*").gte("attempted_at", since)
         .order("attempted_at", { ascending: false }).limit(50),
