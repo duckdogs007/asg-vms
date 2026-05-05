@@ -188,6 +188,12 @@ export default function Home() {
           © {new Date().getFullYear()} American Security Group. All rights reserved.
           <span className="mx-1.5 text-gray-300">·</span>
           ASG VMS v{pkg.version}
+          {process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA && (
+            <>
+              <span className="mx-1.5 text-gray-300">·</span>
+              <span className="font-mono">{process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA.slice(0, 7)}</span>
+            </>
+          )}
         </div>
 
       </div>
