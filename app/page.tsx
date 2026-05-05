@@ -191,7 +191,7 @@ export default function Home() {
           {process.env.NEXT_PUBLIC_BUILD_DATE && (
             <>
               <span className="mx-1.5 text-gray-300">·</span>
-              {`${process.env.NEXT_PUBLIC_BUILD_DATE.slice(5, 7)}.${process.env.NEXT_PUBLIC_BUILD_DATE.slice(8, 10)}.${process.env.NEXT_PUBLIC_BUILD_DATE.slice(0, 4)}`}
+              {process.env.NEXT_PUBLIC_BUILD_DATE}
             </>
           )}
         </div>
