@@ -32,6 +32,10 @@ export async function GET() {
     return NextResponse.json({ error: error.message }, { status: 500 })
   }
 
+  // Tag each user as admin if they are in public.admin_users
+  const { data: admins } = await admin.from("admin_users").select("user_id")
+  const adminSet = new Set((admins || []).map(a => a.user_id))
+
   const users = (data.users || []).map(u => ({
     id:                  u.id,
     email:               u.email,
@@ -40,6 +44,7 @@ export async function GET() {
     email_confirmed_at:  u.email_confirmed_at,
     banned_until:        (u as any).banned_until || null,
     user_metadata:       u.user_metadata || {},
+    is_admin:            adminSet.has(u.id),
   }))
 
   return NextResponse.json({ users })

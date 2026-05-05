@@ -23,6 +23,7 @@ interface UserRow {
   created_at:         string
   last_sign_in_at:    string | null
   email_confirmed_at: string | null
+  is_admin?:          boolean
 }
 
 export default function AdminSystemPage() {
@@ -288,6 +289,7 @@ export default function AdminSystemPage() {
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-3 py-2 text-left">Email</th>
+                  <th className="px-3 py-2 text-left">Role</th>
                   <th className="px-3 py-2 text-left">Confirmed</th>
                   <th className="px-3 py-2 text-left">Created</th>
                   <th className="px-3 py-2 text-left">Last Sign-In</th>
@@ -297,6 +299,11 @@ export default function AdminSystemPage() {
                 {users.map(u => (
                   <tr key={u.id} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-3 py-2 font-mono text-xs">{u.email || "—"}</td>
+                    <td className="px-3 py-2">
+                      {u.is_admin
+                        ? <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded">Admin</span>
+                        : <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded">User</span>}
+                    </td>
                     <td className="px-3 py-2">
                       {u.email_confirmed_at
                         ? <span className="text-green-700 text-xs font-semibold">✓</span>
