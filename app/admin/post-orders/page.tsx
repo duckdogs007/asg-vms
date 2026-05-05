@@ -115,7 +115,7 @@ export default function PostOrdersEditorPage() {
 
       <div className="flex items-center justify-between mb-2 flex-wrap gap-2">
         <h2 className="text-2xl font-bold">📋 Edit Post Orders</h2>
-        <Link href="/admin" className="text-sm text-blue-700 hover:text-blue-900">← Back to User Dashboard</Link>
+        <Link href="/admin/system" className="text-sm text-blue-700 hover:text-blue-900">← Back to Admin Dashboard</Link>
       </div>
       <p className="text-sm text-gray-500 mb-5">Edit the post orders displayed at <code>/vms/post-orders</code>. Changes are visible to all officers immediately upon save.</p>
 
@@ -127,7 +127,7 @@ export default function PostOrdersEditorPage() {
         <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg p-6 text-sm">
           <div className="font-bold mb-1">🔒 Admin access required</div>
           <div>Post orders editing is restricted to admin users. Contact an administrator if you need access.</div>
-          <Link href="/admin" className="inline-block mt-3 text-blue-700 hover:text-blue-900 text-sm">← Back to User Dashboard</Link>
+          <Link href="/admin/system" className="inline-block mt-3 text-blue-700 hover:text-blue-900 text-sm">← Back to Admin Dashboard</Link>
         </div>
       )}
 

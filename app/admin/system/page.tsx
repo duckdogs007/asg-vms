@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 
 type Tab = "communities" | "recipients" | "users" | "settings"
@@ -168,6 +169,7 @@ export default function AdminSystemPage() {
         <button onClick={() => setActiveTab("recipients")}  className={tabBtnCls("recipients")}>🔔 Notification Recipients</button>
         <button onClick={() => setActiveTab("users")}       className={tabBtnCls("users")}>👥 Users</button>
         <button onClick={() => setActiveTab("settings")}    className={tabBtnCls("settings")}>🛠 Settings</button>
+        <Link href="/admin/post-orders" className="px-4 py-2 text-sm font-semibold rounded-t-md transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">📋 Post Orders</Link>
       </div>
 
       {/* COMMUNITIES */}

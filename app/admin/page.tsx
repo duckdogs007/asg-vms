@@ -662,10 +662,7 @@ export default function UserDashboard() {
   return (
     <div className="p-5 max-w-6xl">
 
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-        <h2 className="text-2xl font-bold">User Dashboard</h2>
-        <a href="/admin/post-orders" className="text-sm px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-md font-medium">📋 Edit Post Orders →</a>
-      </div>
+      <h2 className="text-2xl font-bold mb-6">User Dashboard</h2>
 
       {/* MAIN TABS */}
       <div className="flex border-b border-gray-200 mb-6 overflow-x-auto">
