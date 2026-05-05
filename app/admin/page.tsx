@@ -233,7 +233,14 @@ export default function UserDashboard() {
     setWlFirst(""); setWlLast(""); setWlDob(""); setWlOln(""); setWlSsn(""); setWlReason(""); setWlNotes(""); setWlFirearm(false)
     setShowAddWatchlist(false)
     await logActivity("created", "Watchlist", "", `Added ${wlFirst} ${wlLast} to watchlist`)
-    loadWatchlist()
+    // Sync the list filter to where the entry was actually placed so the
+    // user sees their just-added person (otherwise the row may be hidden by
+    // a mismatched community filter).
+    const insertedCommunityId = wlCommunity || ""
+    if (insertedCommunityId !== communityId) {
+      setCommunityId(insertedCommunityId)
+    }
+    loadWatchlist(insertedCommunityId)
   }
 
   async function handleWatchlistCSV(file: File) {
@@ -693,7 +700,14 @@ export default function UserDashboard() {
               <input value={watchlistSearch} onChange={(e) => setWatchlistSearch(e.target.value)}
                 placeholder="Search name, OLN, or reason..."
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-600" />
-              <button onClick={() => { setShowAddWatchlist(!showAddWatchlist); setWlMessage(""); setWlError("") }}
+              <button onClick={() => {
+                  const opening = !showAddWatchlist
+                  setShowAddWatchlist(opening)
+                  setWlMessage(""); setWlError("")
+                  // Pre-fill the form's Location with the current filter so
+                  // the new entry lands where the user is currently viewing.
+                  if (opening && communityId) setWlCommunity(communityId)
+                }}
                 className="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
                 {showAddWatchlist ? "✕ Cancel" : "+ Add Person"}
               </button>
