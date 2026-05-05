@@ -38,16 +38,10 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Admin-only section — gate by admin_users table (DB is source of truth)
-  if (pathname.startsWith("/admin")) {
-    const { data: adminRow } = await supabase
-      .from("admin_users")
-      .select("user_id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-    if (!adminRow) {
-      return NextResponse.redirect(new URL("/vms", request.url));
-    }
+  // Admin-only section — allow listed emails
+  const adminEmails = ["jhall@teamasg.com"];
+  if (pathname.startsWith("/admin") && !adminEmails.includes(user.email ?? "")) {
+    return NextResponse.redirect(new URL("/vms", request.url));
   }
 
   return response;

@@ -23,7 +23,6 @@ interface UserRow {
   created_at:         string
   last_sign_in_at:    string | null
   email_confirmed_at: string | null
-  is_admin:           boolean
 }
 
 export default function AdminSystemPage() {
@@ -44,15 +43,8 @@ export default function AdminSystemPage() {
   const [newRole,    setNewRole]    = useState("admin")
 
   // ── USERS ──
-  const [users,         setUsers]         = useState<UserRow[]>([])
-  const [usersError,    setUsersError]    = useState("")
-  const [currentUserId, setCurrentUserId] = useState("")
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) setCurrentUserId(user.id)
-    })
-  }, [])
+  const [users,      setUsers]      = useState<UserRow[]>([])
+  const [usersError, setUsersError] = useState("")
 
   useEffect(() => {
     load()
@@ -151,25 +143,6 @@ export default function AdminSystemPage() {
     const { error } = await supabase.from("notification_recipients").delete().eq("id", id)
     if (error) { flash("Delete failed: " + error.message); return }
     flash("Removed")
-    load()
-  }
-
-  // ── USERS handlers ──
-  async function promoteUser(u: UserRow) {
-    if (!u.email) { flash("User has no email"); return }
-    if (!confirm(`Promote ${u.email} to admin?`)) return
-    const { error } = await supabase.from("admin_users").insert({ user_id: u.id, email: u.email })
-    if (error) { flash("Promote failed: " + error.message); return }
-    flash(`${u.email} promoted to admin`)
-    load()
-  }
-
-  async function demoteUser(u: UserRow) {
-    if (u.id === currentUserId) { flash("Cannot demote yourself"); return }
-    if (!confirm(`Remove admin from ${u.email}?`)) return
-    const { error } = await supabase.from("admin_users").delete().eq("user_id", u.id)
-    if (error) { flash("Demote failed: " + error.message); return }
-    flash(`${u.email} demoted to user`)
     load()
   }
 
@@ -315,59 +288,30 @@ export default function AdminSystemPage() {
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-3 py-2 text-left">Email</th>
-                  <th className="px-3 py-2 text-left">Role</th>
                   <th className="px-3 py-2 text-left">Confirmed</th>
                   <th className="px-3 py-2 text-left">Created</th>
                   <th className="px-3 py-2 text-left">Last Sign-In</th>
-                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {users.map(u => {
-                  const isSelf = u.id === currentUserId
-                  return (
-                    <tr key={u.id} className="border-t border-gray-100 hover:bg-gray-50">
-                      <td className="px-3 py-2 font-mono text-xs">{u.email || "—"}</td>
-                      <td className="px-3 py-2">
-                        {u.is_admin
-                          ? <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded">Admin</span>
-                          : <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded">User</span>}
-                      </td>
-                      <td className="px-3 py-2">
-                        {u.email_confirmed_at
-                          ? <span className="text-green-700 text-xs font-semibold">✓</span>
-                          : <span className="text-gray-400 text-xs">pending</span>}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600 text-xs">
-                        {new Date(u.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                      </td>
-                      <td className="px-3 py-2 text-gray-600 text-xs">
-                        {u.last_sign_in_at
-                          ? new Date(u.last_sign_in_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-                          : <span className="text-gray-400">never</span>}
-                      </td>
-                      <td className="px-3 py-2 text-right">
-                        {u.is_admin ? (
-                          <button
-                            onClick={() => demoteUser(u)}
-                            disabled={isSelf}
-                            title={isSelf ? "Cannot demote yourself" : "Remove admin"}
-                            className="px-2 py-0.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded border-none cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
-                          >
-                            Demote
-                          </button>
-                        ) : (
-                          <button
-                            onClick={() => promoteUser(u)}
-                            className="px-2 py-0.5 bg-blue-100 hover:bg-blue-200 text-blue-800 text-xs font-semibold rounded border-none cursor-pointer"
-                          >
-                            Promote to Admin
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  )
-                })}
+                {users.map(u => (
+                  <tr key={u.id} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-3 py-2 font-mono text-xs">{u.email || "—"}</td>
+                    <td className="px-3 py-2">
+                      {u.email_confirmed_at
+                        ? <span className="text-green-700 text-xs font-semibold">✓</span>
+                        : <span className="text-gray-400 text-xs">pending</span>}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 text-xs">
+                      {new Date(u.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 text-xs">
+                      {u.last_sign_in_at
+                        ? new Date(u.last_sign_in_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                        : <span className="text-gray-400">never</span>}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           ) : null}
@@ -383,9 +327,8 @@ export default function AdminSystemPage() {
             <Row k="Audit log" v="public.alerts (auth read + insert)" />
           </Section>
           <Section title="Admin Access">
-            <Row k="Source of truth" v="public.admin_users table" />
-            <Row k="Manage admins"   v="Users tab → Promote / Demote" />
-            <Row k="Admin routes"    v="/admin, /admin/system, /admin/post-orders" />
+            <Row k="Admin emails" v="Configured in middleware (proxy.ts)" />
+            <Row k="Admin routes" v="/admin and /admin/system" />
           </Section>
           <Section title="Storage Buckets">
             <Row k="photos"          v="visitor profile photos (public)" />
