@@ -214,8 +214,9 @@ export default function UserDashboard() {
   }
 
   async function saveWatchlistEntry() {
-    if (!wlLast) { setWlError("Last name is required."); return }
-    if (!wlReason) { setWlError("Reason is required."); return }
+    if (!wlLast)      { setWlError("Last name is required."); return }
+    if (!wlCommunity) { setWlError("Location is required.");  return }
+    if (!wlReason)    { setWlError("Reason is required.");    return }
     setWlSaving(true); setWlError(""); setWlMessage("")
     const { error } = await supabase.from("watchlist").insert({
       first_name: wlFirst || null, last_name: wlLast,
@@ -704,9 +705,10 @@ export default function UserDashboard() {
                   const opening = !showAddWatchlist
                   setShowAddWatchlist(opening)
                   setWlMessage(""); setWlError("")
-                  // Pre-fill the form's Location with the current filter so
-                  // the new entry lands where the user is currently viewing.
-                  if (opening && communityId) setWlCommunity(communityId)
+                  // Reset the form's Location each time the form opens, so the
+                  // user is forced to actively pick where the entry should go
+                  // (auto-filling it caused entries to land at the wrong site).
+                  if (opening) setWlCommunity("")
                 }}
                 className="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
                 {showAddWatchlist ? "✕ Cancel" : "+ Add Person"}
@@ -737,7 +739,7 @@ export default function UserDashboard() {
                   <input value={wlOln} onChange={e => setWlOln(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>SSN</label>
                   <input value={wlSsn} onChange={e => setWlSsn(e.target.value)} placeholder="XXX-XX-XXXX or last 4" maxLength={11} className={inputCls} /></div>
-                <div><label className={labelCls}>Location</label>
+                <div><label className={labelCls}>Location <span className="text-red-500">*</span></label>
                   <select value={wlCommunity} onChange={e => setWlCommunity(e.target.value)} className={inputCls}>
                     <option value="">— Select —</option>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
