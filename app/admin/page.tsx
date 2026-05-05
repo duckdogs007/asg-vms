@@ -8,6 +8,7 @@ import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
 import { fireAlert } from "@/lib/alerts"
 import { maskSSN } from "@/lib/format"
+import { checkIsAdmin } from "@/lib/admin"
 
 const HIGH_PRIORITY_INCIDENT_TYPES = [
   "weapons", "weapon", "firearm",
@@ -51,6 +52,20 @@ export default function UserDashboard() {
   const [wlSaving,   setWlSaving]   = useState(false)
   const [wlMessage,  setWlMessage]  = useState("")
   const [wlError,    setWlError]    = useState("")
+
+  // Watchlist edit (admin-only). Default false so no buttons render before
+  // the admin check resolves; failure leaves it false (safe fallback).
+  const [isAdmin,        setIsAdmin]        = useState(false)
+  const [editingWlId,    setEditingWlId]    = useState<string | null>(null)
+  const [editFirst,      setEditFirst]      = useState("")
+  const [editLast,       setEditLast]       = useState("")
+  const [editDob,        setEditDob]        = useState("")
+  const [editOln,        setEditOln]        = useState("")
+  const [editSsn,        setEditSsn]        = useState("")
+  const [editReason,     setEditReason]     = useState("")
+  const [editNotes,      setEditNotes]      = useState("")
+  const [editFirearm,    setEditFirearm]    = useState(false)
+  const [editCommunity,  setEditCommunity]  = useState("")
 
   // Rent roll
   const [rentRoll,            setRentRoll]            = useState<any[]>([])
@@ -174,6 +189,11 @@ export default function UserDashboard() {
   useEffect(() => { loadInit() }, [])
 
   useEffect(() => {
+    // Async admin check — fail-safe to false if anything goes wrong
+    checkIsAdmin().then(ok => setIsAdmin(ok)).catch(() => setIsAdmin(false))
+  }, [])
+
+  useEffect(() => {
     if (activeTab === "watchlist") loadWatchlist()
     if (activeTab === "rentroll")  loadRentRoll()
     if (activeTab === "reports")   loadPastReports()
@@ -242,6 +262,61 @@ export default function UserDashboard() {
       setCommunityId(insertedCommunityId)
     }
     loadWatchlist(insertedCommunityId)
+  }
+
+  function startWatchlistEdit(p: WatchlistEntry) {
+    setEditingWlId(p.id)
+    setEditFirst((p.first_name || "").trim())
+    setEditLast((p.last_name || "").trim())
+    setEditDob(p.dob || "")
+    setEditOln(p.oln || "")
+    setEditSsn(p.ssn || "")
+    setEditReason(p.reason || "")
+    setEditNotes(p.comments || p.notes || "")
+    setEditFirearm(!!p.firearm_flag)
+    setEditCommunity((p as any).community_id || "")
+    setWlError(""); setWlMessage("")
+  }
+
+  function cancelWatchlistEdit() {
+    setEditingWlId(null)
+    setEditFirst(""); setEditLast(""); setEditDob(""); setEditOln(""); setEditSsn("")
+    setEditReason(""); setEditNotes(""); setEditFirearm(false); setEditCommunity("")
+    setWlError("")
+  }
+
+  async function saveWatchlistEdit(p: WatchlistEntry) {
+    if (!editLast)      { setWlError("Last name is required."); return }
+    if (!editCommunity) { setWlError("Location is required.");  return }
+    if (!editReason)    { setWlError("Reason is required.");    return }
+    setWlError(""); setWlMessage("")
+    const { error } = await supabase.from("watchlist").update({
+      first_name:    editFirst || null,
+      last_name:     editLast,
+      dob:           editDob || null,
+      oln:           editOln || null,
+      ssn:           editSsn || null,
+      reason:        editReason,
+      comments:      editNotes || null,
+      community_id:  editCommunity,
+      firearm_flag:  editFirearm,
+    }).eq("id", p.id)
+    if (error) { setWlError("Update failed: " + error.message); return }
+    await logActivity("updated", "Watchlist", p.id, `Updated ${editFirst} ${editLast}`)
+    setWlMessage(`✅ Updated ${editFirst} ${editLast}`)
+    cancelWatchlistEdit()
+    // Sync filter to the (possibly new) location so the user sees the row
+    if (editCommunity !== communityId) setCommunityId(editCommunity)
+    loadWatchlist(editCommunity)
+  }
+
+  async function deleteWatchlistEntry(p: WatchlistEntry) {
+    if (!confirm(`Permanently delete ${p.first_name || ""} ${p.last_name} from the watchlist? This cannot be undone.`)) return
+    const { error } = await supabase.from("watchlist").delete().eq("id", p.id)
+    if (error) { setWlError("Delete failed: " + error.message); return }
+    await logActivity("deleted", "Watchlist", p.id, `Removed ${p.first_name || ""} ${p.last_name}`)
+    setWlMessage(`✅ Removed ${p.first_name || ""} ${p.last_name}`)
+    loadWatchlist()
   }
 
   async function handleWatchlistCSV(file: File) {
@@ -764,26 +839,70 @@ export default function UserDashboard() {
           {!watchlistLoading && filteredWatchlist.length === 0 && <div className="text-gray-500 text-sm py-8 text-center">No entries found.</div>}
           {!watchlistLoading && filteredWatchlist.map((p, i) => (
             <div key={p.id || i} className="border border-gray-200 rounded-xl px-5 py-4 mb-3 bg-white hover:border-red-300 transition-colors">
-              <div className="flex justify-between items-start">
+              {editingWlId === p.id ? (
+                /* INLINE EDIT FORM */
                 <div>
-                  <div className="font-bold text-gray-900">
-                    {p.last_name}, {p.first_name}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div><label className={labelCls}>First Name</label>
+                      <input value={editFirst} onChange={e => setEditFirst(e.target.value)} className={inputCls} /></div>
+                    <div><label className={labelCls}>Last Name <span className="text-red-500">*</span></label>
+                      <input value={editLast} onChange={e => setEditLast(e.target.value)} className={inputCls} /></div>
+                    <div><label className={labelCls}>DOB</label>
+                      <input type="date" value={editDob} onChange={e => setEditDob(e.target.value)} className={inputCls} /></div>
+                    <div><label className={labelCls}>OLN (Driver License #)</label>
+                      <input value={editOln} onChange={e => setEditOln(e.target.value)} className={inputCls} /></div>
+                    <div><label className={labelCls}>SSN</label>
+                      <input value={editSsn} onChange={e => setEditSsn(e.target.value)} placeholder="XXX-XX-XXXX or last 4" maxLength={11} className={inputCls} /></div>
+                    <div><label className={labelCls}>Location <span className="text-red-500">*</span></label>
+                      <select value={editCommunity} onChange={e => setEditCommunity(e.target.value)} className={inputCls}>
+                        <option value="">— Select —</option>
+                        {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select></div>
+                    <div><label className={labelCls}>Reason / Ban Type <span className="text-red-500">*</span></label>
+                      <input value={editReason} onChange={e => setEditReason(e.target.value)} className={inputCls} /></div>
+                    <div className="sm:col-span-2"><label className={labelCls}>Notes</label>
+                      <input value={editNotes} onChange={e => setEditNotes(e.target.value)} className={inputCls} /></div>
+                    <div className="sm:col-span-2 flex items-center gap-2">
+                      <input type="checkbox" id={`editFirearm-${p.id}`} checked={editFirearm} onChange={e => setEditFirearm(e.target.checked)} className="w-4 h-4 accent-red-700" />
+                      <label htmlFor={`editFirearm-${p.id}`} className="text-sm font-medium text-gray-700">🔫 Firearm flag — known to carry</label>
+                    </div>
                   </div>
-                  <div className="text-sm text-red-600 font-medium mt-0.5">🚨 {p.reason || "No reason listed"}</div>
-                  <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
-                    {p.dob  && <span>DOB: {p.dob}</span>}
-                    {p.oln  && <span>OLN: {p.oln}</span>}
-                    {p.ssn  && <span>SSN: {maskSSN(p.ssn)}</span>}
-                    {p.sex  && <span>Sex: {p.sex}</span>}
-                    {p.race && <span>Race: {p.race}</span>}
+                  <div className="flex gap-2">
+                    <button onClick={() => saveWatchlistEdit(p)} className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer">💾 Save</button>
+                    <button onClick={cancelWatchlistEdit} className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold rounded-md border-none cursor-pointer">Cancel</button>
                   </div>
-                  {(p.notes || p.comments) && <div className="text-xs text-gray-400 mt-1">Notes: {p.notes || p.comments}</div>}
                 </div>
-                <div className="text-right text-xs text-gray-400 shrink-0 ml-4">
-                  {(p.ban_date || p.banned_date) && <div>Banned: {p.ban_date || p.banned_date}</div>}
-                  {p.banned_by && <div>By: {p.banned_by}</div>}
+              ) : (
+                /* DISPLAY ROW */
+                <div className="flex justify-between items-start">
+                  <div>
+                    <div className="font-bold text-gray-900">
+                      {p.last_name}, {p.first_name}
+                    </div>
+                    <div className="text-sm text-red-600 font-medium mt-0.5">🚨 {p.reason || "No reason listed"}</div>
+                    <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
+                      {p.dob  && <span>DOB: {p.dob}</span>}
+                      {p.oln  && <span>OLN: {p.oln}</span>}
+                      {p.ssn  && <span>SSN: {maskSSN(p.ssn)}</span>}
+                      {p.sex  && <span>Sex: {p.sex}</span>}
+                      {p.race && <span>Race: {p.race}</span>}
+                    </div>
+                    {(p.notes || p.comments) && <div className="text-xs text-gray-400 mt-1">Notes: {p.notes || p.comments}</div>}
+                  </div>
+                  <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
+                    <div className="text-right text-xs text-gray-400">
+                      {(p.ban_date || p.banned_date) && <div>Banned: {p.ban_date || p.banned_date}</div>}
+                      {p.banned_by && <div>By: {p.banned_by}</div>}
+                    </div>
+                    {isAdmin && (
+                      <div className="flex gap-1.5 mt-1">
+                        <button onClick={() => startWatchlistEdit(p)} title="Edit" className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded border-none cursor-pointer">✎ Edit</button>
+                        <button onClick={() => deleteWatchlistEntry(p)} title="Delete" className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded border-none cursor-pointer">🗑</button>
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
             </div>
           ))}
         </div>
