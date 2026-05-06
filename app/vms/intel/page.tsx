@@ -34,7 +34,9 @@ function validatePhotoFile(file: File): string | null {
 
 interface PersonProfile {
   name: string
-  status: "barred" | "clear"
+  // "review" = multiple watchlist matches; user must confirm which is the
+  // actual person before the page treats them as barred.
+  status: "barred" | "clear" | "review"
   visits: number
   last_seen: string | null
   oln: string | null
@@ -137,10 +139,13 @@ export default function IntelPage() {
   const [error,          setError]          = useState("")
   const [rightTab,       setRightTab]       = useState<RightTab>("ban")
 
-  const [photoUrl,    setPhotoUrl]    = useState("")
-  const [uploading,   setUploading]   = useState(false)
-  const [uploadError, setUploadError] = useState("")
-  const [historyLimit,setHistoryLimit]= useState(25)
+  const [photoUrl,       setPhotoUrl]       = useState("")
+  const [uploading,      setUploading]      = useState(false)
+  const [uploadError,    setUploadError]    = useState("")
+  const [historyLimit,   setHistoryLimit]   = useState(25)
+  // Tracks which Ban History card the user has confirmed as the actual
+  // match when the search returns 2+ candidates. null = unconfirmed.
+  const [confirmedBanId, setConfirmedBanId] = useState<string | null>(null)
 
   // OSINT tab state
   const [osintQuery,    setOsintQuery]    = useState("")
@@ -228,15 +233,23 @@ export default function IntelPage() {
 
       const watchMatches = (watch || []).filter((w: WatchlistEntry) => nameMatch(w, first, last))
 
+      // 0 matches → clear. Exactly 1 → barred (treat as definitive).
+      // 2+ matches → "review": don't auto-flag a specific person, let the
+      // user pick which Ban History card is the actual match.
+      const banStatus: "barred" | "clear" | "review" =
+        watchMatches.length === 0 ? "clear"   :
+        watchMatches.length === 1 ? "barred"  : "review"
+
       setSelectedPerson({
-        name: query,
-        status: watchMatches.length > 0 ? "barred" : "clear",
-        visits: visitData.length,
+        name:      query,
+        status:    banStatus,
+        visits:    visitData.length,
         last_seen: visitData[0]?.created_at || null,
-        oln: watchMatches[0]?.oln || null
+        oln:       watchMatches.length === 1 ? (watchMatches[0].oln || null) : null,
       })
       setOsintQuery(query)
       setBanHistory(watchMatches)
+      setConfirmedBanId(null)
 
       // Load contact history
       const { data: contactData } = await supabase
@@ -301,6 +314,11 @@ export default function IntelPage() {
     setCtDate(new Date().toISOString().split("T")[0]); setCtTime("")
     setShowContactForm(false)
     handleSearch()
+  }
+
+  function confirmBanMatch(b: WatchlistEntry) {
+    setConfirmedBanId(b.id)
+    setSelectedPerson(prev => prev ? { ...prev, status: "barred", oln: b.oln || null } : null)
   }
 
   async function tryLoadPhoto(slug: string) {
@@ -428,10 +446,17 @@ export default function IntelPage() {
 
       {/* STATUS HEADER */}
       {selectedPerson && (
-        <div className={`px-4 py-3 rounded-lg text-white font-bold mb-4 ${selectedPerson.status === "barred" ? "bg-red-900" : "bg-gray-900"}`}>
+        <div className={`px-4 py-3 rounded-lg text-white font-bold mb-4 ${
+          selectedPerson.status === "barred" ? "bg-red-900" :
+          selectedPerson.status === "review" ? "bg-amber-700" :
+          "bg-gray-900"
+        }`}>
           {selectedPerson.name.toUpperCase()}
           {selectedPerson.oln && <span className="font-normal ml-2">🛂 {selectedPerson.oln}</span>}
           {selectedPerson.status === "barred" && <span className="ml-2">🚨 BARRED</span>}
+          {selectedPerson.status === "review" && (
+            <span className="ml-2 font-normal">⚠️ {banHistory.length} POSSIBLE MATCHES — VERIFY BELOW</span>
+          )}
         </div>
       )}
 
@@ -467,7 +492,11 @@ export default function IntelPage() {
               <h3 className="font-semibold text-gray-900 capitalize">{selectedPerson.name}</h3>
               <div className="text-sm">
                 Status:{" "}
-                <span className={`font-bold ${selectedPerson.status === "barred" ? "text-red-600" : "text-green-600"}`}>
+                <span className={`font-bold ${
+                  selectedPerson.status === "barred" ? "text-red-600" :
+                  selectedPerson.status === "review" ? "text-amber-600" :
+                  "text-green-600"
+                }`}>
                   {selectedPerson.status}
                 </span>
               </div>
@@ -506,22 +535,45 @@ export default function IntelPage() {
           {/* BAN HISTORY TAB */}
           {rightTab === "ban" && (
             <>
-              {banHistory.length > 0 ? banHistory.map((b) => (
-                <div key={b.id} className="bg-red-50 border border-red-200 px-4 py-3 rounded-lg mb-3">
-                  <div className="font-bold text-red-700 mb-2">🚨 {b.reason || "WATCHLIST ENTRY"}</div>
-                  <div className="flex flex-col gap-1 text-sm text-gray-700">
-                    <span><span className="text-gray-500">Name:</span> {b.first_name} {b.last_name}</span>
-                    {b.dob  && <span><span className="text-gray-500">DOB:</span> {b.dob}</span>}
-                    {b.oln  && <span><span className="text-gray-500">OLN:</span> {b.oln}</span>}
-                    {b.ssn  && <span><span className="text-gray-500">SSN:</span> {maskSSN(b.ssn)}</span>}
-                    {b.sex  && <span><span className="text-gray-500">Sex:</span> {b.sex}</span>}
-                    {b.race && <span><span className="text-gray-500">Race:</span> {b.race}</span>}
-                    {(b.notes || b.comments) && <span><span className="text-gray-500">Notes:</span> {b.notes || b.comments}</span>}
-                    <span><span className="text-gray-500">Date Banned:</span> {b.ban_date || b.banned_date || b.date_banned || "Unknown"}</span>
-                    <span className="text-gray-500"><span className="text-gray-500">Banned By:</span> {b.flagged_by || b.banned_by || "Unknown"}</span>
+              {banHistory.length > 0 ? banHistory.map((b) => {
+                const multi = banHistory.length > 1
+                const confirmed = confirmedBanId === b.id
+                return (
+                  <div
+                    key={b.id}
+                    className={`px-4 py-3 rounded-lg mb-3 ${
+                      confirmed
+                        ? "bg-red-100 border-2 border-red-500"
+                        : "bg-red-50 border border-red-200"
+                    }`}
+                  >
+                    <div className="font-bold text-red-700 mb-2">🚨 {b.reason || "WATCHLIST ENTRY"}</div>
+                    <div className="flex flex-col gap-1 text-sm text-gray-700">
+                      <span><span className="text-gray-500">Name:</span> {b.first_name} {b.last_name}</span>
+                      {b.dob  && <span><span className="text-gray-500">DOB:</span> {b.dob}</span>}
+                      {b.oln  && <span><span className="text-gray-500">OLN:</span> {b.oln}</span>}
+                      {b.ssn  && <span><span className="text-gray-500">SSN:</span> {maskSSN(b.ssn)}</span>}
+                      {b.sex  && <span><span className="text-gray-500">Sex:</span> {b.sex}</span>}
+                      {b.race && <span><span className="text-gray-500">Race:</span> {b.race}</span>}
+                      {(b.notes || b.comments) && <span><span className="text-gray-500">Notes:</span> {b.notes || b.comments}</span>}
+                      <span><span className="text-gray-500">Date Banned:</span> {b.ban_date || b.banned_date || b.date_banned || "Unknown"}</span>
+                      <span><span className="text-gray-500">Banned By:</span> {b.flagged_by || b.banned_by || "Unknown"}</span>
+                    </div>
+                    {multi && (
+                      <button
+                        onClick={() => confirmBanMatch(b)}
+                        className={`mt-3 px-3 py-1.5 text-xs font-semibold rounded border-none cursor-pointer ${
+                          confirmed
+                            ? "bg-red-700 text-white"
+                            : "bg-white text-red-700 border border-red-300 hover:bg-red-50"
+                        }`}
+                      >
+                        {confirmed ? "✓ This is the match" : "Confirm this is the person"}
+                      </button>
+                    )}
                   </div>
-                </div>
-              )) : (
+                )
+              }) : (
                 <p className="text-sm text-gray-500">No ban history.</p>
               )}
             </>
