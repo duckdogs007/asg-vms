@@ -226,17 +226,17 @@ export default function IntelPage() {
 
       if (watchErr) { setError("Failed to load watchlist data."); return }
 
-      const watchMatch = (watch || []).find((w: WatchlistEntry) => nameMatch(w, first, last)) || null
+      const watchMatches = (watch || []).filter((w: WatchlistEntry) => nameMatch(w, first, last))
 
       setSelectedPerson({
         name: query,
-        status: watchMatch ? "barred" : "clear",
+        status: watchMatches.length > 0 ? "barred" : "clear",
         visits: visitData.length,
         last_seen: visitData[0]?.created_at || null,
-        oln: watchMatch?.oln || null
+        oln: watchMatches[0]?.oln || null
       })
       setOsintQuery(query)
-      setBanHistory(watchMatch ? [watchMatch] : [])
+      setBanHistory(watchMatches)
 
       // Load contact history
       const { data: contactData } = await supabase
