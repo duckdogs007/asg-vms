@@ -27,12 +27,16 @@ export default function Home() {
 
   useEffect(() => {
     loadStats()
-    const t = setInterval(() => {
+    // No seconds; tick once per minute. Fire immediately so the System Time
+    // field isn't blank for up to 60s after navigation.
+    function tick() {
       setTime(new Date().toLocaleString("en-US", {
         weekday: "long", month: "long", day: "numeric",
-        year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit"
+        year: "numeric", hour: "numeric", minute: "2-digit",
       }))
-    }, 1000)
+    }
+    tick()
+    const t = setInterval(tick, 60_000)
     return () => clearInterval(t)
   }, [])
 
