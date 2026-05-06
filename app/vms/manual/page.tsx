@@ -134,7 +134,10 @@ export default function ManualEntry() {
   }
 
   useEffect(() => {
-    async function runChecks() {
+    // Debounce so each keystroke doesn't fire its own watchlist + returning
+    // visitor + vehicle queries. ~250ms feels responsive but eliminates the
+    // burst of redundant queries during normal typing.
+    const t = setTimeout(async () => {
       if (firstName.length >= 2 && lastName.length >= 2) {
         checkReturningVisitor(firstName, lastName)
 
@@ -144,11 +147,24 @@ export default function ManualEntry() {
 
       if (plate.length >= 3) {
         const vehicle = await checkVehicleWatchlist(plate, plateState)
-        if (vehicle) { setAlertPerson(vehicle as any); return }
+        if (vehicle) {
+          // SecurityAlert renders WatchlistEntry shape (name + dob fields). For
+          // a vehicle match, fold plate/state into the name fields so it shows
+          // sanely instead of "undefined undefined".
+          setAlertPerson({
+            id:          vehicle.id,
+            first_name:  vehicle.plate,
+            last_name:   vehicle.state ? `(${vehicle.state})` : "",
+            reason:      vehicle.reason || "Vehicle on watchlist",
+            notes:       vehicle.notes ?? null,
+            match_level: vehicle.match_level || "Vehicle Plate Match",
+            confidence:  vehicle.confidence ?? 95,
+          } as WatchlistEntry)
+          return
+        }
       }
-    }
-
-    runChecks()
+    }, 250)
+    return () => clearTimeout(t)
   }, [firstName, lastName, dob, oln, plate, plateState])
 
   async function saveVisitor() {
@@ -201,10 +217,14 @@ export default function ManualEntry() {
 
       <CommunitySelector
         value={community}
-        onChange={(value) => {
+        onChange={async (value) => {
           setCommunity(value)
           localStorage.setItem("asg-community", value)
           localStorage.setItem("asg-current-community-id", value)
+          // Also persist the community NAME so other pages (TopNav SOS, etc.)
+          // that read 'asg-current-community-name' stay in sync with /vms/scan.
+          const { data } = await supabase.from("communities").select("name").eq("id", value).maybeSingle()
+          if ((data as any)?.name) localStorage.setItem("asg-current-community-name", (data as any).name)
         }}
       />
 

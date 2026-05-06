@@ -27,12 +27,16 @@ export default function TopNav() {
     setNightMode(saved)
     document.body.classList.toggle("dark", saved)
 
-    const interval = setInterval(() => {
+    // Tick once per minute (no seconds shown). Fire immediately so the
+    // clock isn't blank until the first minute boundary.
+    function tick() {
       setCurrentTime(new Date().toLocaleString(undefined, {
         weekday: "short", month: "short", day: "numeric",
-        year: "numeric", hour: "numeric", minute: "2-digit", second: "2-digit"
+        year: "numeric", hour: "numeric", minute: "2-digit",
       }))
-    }, 1000)
+    }
+    tick()
+    const interval = setInterval(tick, 60_000)
     return () => clearInterval(interval)
   }, [])
 
