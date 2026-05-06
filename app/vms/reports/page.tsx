@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
-import CommunitySelector from "@/components/CommunitySelector"
 import { VisitorLog } from "@/lib/types"
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -116,6 +115,7 @@ export default function ReportsPage() {
 
   const [community,      setCommunity]      = useState("")
   const [communityName,  setCommunityName]  = useState("")
+  const [communities,    setCommunities]    = useState<{ id: string; name: string }[]>([])
   const [visits,         setVisits]         = useState<VisitorLog[]>([])
   const [dateFrom,       setDateFrom]       = useState(daysAgoStr(30))
   const [dateTo,         setDateTo]         = useState(todayStr())
@@ -141,8 +141,9 @@ export default function ReportsPage() {
   }, [])
 
   useEffect(() => {
-    supabase.from("communities").select("id,name").then(({ data }) => {
+    supabase.from("communities").select("id,name").order("name").then(({ data }) => {
       if (!data) return
+      setCommunities(data)
       const stLuke = data.find(c => c.name.toLowerCase().includes("st. luke") || c.name.toLowerCase().includes("st luke"))
       if (stLuke) setCommunity(stLuke.id)
       else if (data.length) setCommunity(data[0].id)
@@ -356,8 +357,13 @@ export default function ReportsPage() {
       {/* FILTERS */}
       <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
         <div className="flex flex-wrap gap-3 items-end">
-          <div className="w-56">
-            <CommunitySelector value={community} onChange={setCommunity} />
+          <div className="flex flex-col gap-1 w-56">
+            <label className="text-xs font-semibold text-gray-500">Location</label>
+            <select value={community} onChange={e => setCommunity(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+              {communities.length === 0 && <option value="">Loading…</option>}
+              {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
           </div>
           <div className="flex flex-col gap-1">
             <label className="text-xs font-semibold text-gray-500">From</label>
