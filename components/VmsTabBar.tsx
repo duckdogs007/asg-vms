@@ -10,8 +10,14 @@ const TABS = [
   { href: "/vms/search", label: "Search",       icon: "🔎" },
 ]
 
+// Tab bar appears only on the check-in workflow pages. /vms/intel,
+// /vms/reports, /vms/post-orders are top-level concerns reached via
+// TopNav and are intentionally excluded.
+const SHOW_PATHS = new Set(["/vms", "/vms/scan", "/vms/manual", "/vms/search"])
+
 export default function VmsTabBar() {
   const pathname = usePathname()
+  if (!SHOW_PATHS.has(pathname)) return null
   return (
     <div className="flex gap-1 border-b border-gray-300 px-4 sm:px-5 pt-3 overflow-x-auto bg-white">
       {TABS.map(t => {

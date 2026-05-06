@@ -1,19 +1,12 @@
-"use client"
-
-import { usePathname } from "next/navigation"
+import type { Metadata } from "next"
 import VmsTabBar from "@/components/VmsTabBar"
 
-// Tab bar appears only on the check-in workflow pages. /vms/intel,
-// /vms/reports, /vms/post-orders are top-level concerns reached via
-// TopNav and are intentionally excluded.
-const TAB_PATHS = new Set(["/vms", "/vms/scan", "/vms/manual", "/vms/search"])
+export const metadata: Metadata = { title: "Visitor Check-In" }
 
 export default function VmsLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname()
-  const showTabs = TAB_PATHS.has(pathname)
   return (
     <>
-      {showTabs && <VmsTabBar />}
+      <VmsTabBar />
       {children}
     </>
   )

@@ -487,7 +487,7 @@ export default function IntelPage() {
                     <span>Name: {b.first_name} {b.last_name}</span>
                     {b.dob  && <span>DOB: {b.dob}</span>}
                     {b.oln  && <span>OLN: {b.oln}</span>}
-                    {(b as any).ssn && <span>SSN: {maskSSN((b as any).ssn)}</span>}
+                    {b.ssn && <span>SSN: {maskSSN(b.ssn)}</span>}
                     {b.sex  && <span>Sex: {b.sex}</span>}
                     {b.race && <span>Race: {b.race}</span>}
                     {(b.notes || b.comments) && <span>Notes: {b.notes || b.comments}</span>}
@@ -511,7 +511,7 @@ export default function IntelPage() {
                   </div>
                   <div className="text-sm text-gray-400 mt-0.5">
                     {getCommunityName(v.community_id || "")} · Unit: {v.unit_number || "N/A"}
-                    {(v as any).resident_name && ` · Visiting: ${(v as any).resident_name}`}
+                    {v.resident_name && ` · Visiting: ${v.resident_name}`}
                   </div>
                   <div className="text-xs text-gray-500 mt-0.5">
                     {new Date(v.created_at).toLocaleString()}

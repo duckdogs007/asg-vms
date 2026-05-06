@@ -275,7 +275,7 @@ export default function UserDashboard() {
     setEditReason(p.reason || "")
     setEditNotes(p.comments || p.notes || "")
     setEditFirearm(!!p.firearm_flag)
-    setEditCommunity((p as any).community_id || "")
+    setEditCommunity(p.community_id || "")
     setWlError(""); setWlMessage("")
   }
 

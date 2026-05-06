@@ -150,10 +150,12 @@ export default function AdminSystemPage() {
       supabase.from("audit_logs").select("created_at").order("created_at", { ascending: true  }).limit(1).maybeSingle(),
       supabase.from("audit_logs").select("created_at").order("created_at", { ascending: false }).limit(1).maybeSingle(),
     ])
+    const o = oldest as { created_at: string } | null
+    const n = newest as { created_at: string } | null
     setAuditStats({
       count:  count || 0,
-      oldest: (oldest as any)?.created_at || null,
-      newest: (newest as any)?.created_at || null,
+      oldest: o?.created_at || null,
+      newest: n?.created_at || null,
     })
   }
 

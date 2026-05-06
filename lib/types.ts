@@ -62,6 +62,7 @@ export interface WatchlistEntry {
   firearm_flag?: boolean | null
   property?: string | null
   status?: string | null
+  community_id?: string | null
   match_level?: string
   confidence?: number
 }

@@ -1,5 +1,14 @@
 import "./globals.css"
+import type { Metadata } from "next"
 import TopNav from "@/components/TopNav"
+
+export const metadata: Metadata = {
+  title: {
+    template: "%s — ASG VMS",
+    default:  "ASG VMS — Visitor Management",
+  },
+  description: "American Security Group — Integrated Property Solutions Platform",
+}
 
 export const dynamic = "force-dynamic"
 

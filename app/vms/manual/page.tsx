@@ -224,7 +224,8 @@ export default function ManualEntry() {
           // Also persist the community NAME so other pages (TopNav SOS, etc.)
           // that read 'asg-current-community-name' stay in sync with /vms/scan.
           const { data } = await supabase.from("communities").select("name").eq("id", value).maybeSingle()
-          if ((data as any)?.name) localStorage.setItem("asg-current-community-name", (data as any).name)
+          const row = data as { name: string } | null
+          if (row?.name) localStorage.setItem("asg-current-community-name", row.name)
         }}
       />
 

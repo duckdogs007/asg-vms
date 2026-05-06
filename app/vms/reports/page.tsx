@@ -153,7 +153,10 @@ export default function ReportsPage() {
   useEffect(() => {
     if (!community) { setCommunityName(""); return }
     supabase.from("communities").select("name").eq("id", community).maybeSingle()
-      .then(({ data }) => setCommunityName((data as any)?.name || ""))
+      .then(({ data }) => {
+        const row = data as { name: string } | null
+        setCommunityName(row?.name || "")
+      })
   }, [community])
 
   useEffect(() => { if (community) loadData() }, [community, dateFrom, dateTo])
@@ -408,7 +411,19 @@ export default function ReportsPage() {
         <div className="text-gray-400 text-sm py-16 text-center">Select a location to view analytics.</div>
       )}
       {community && !loading && visits.length === 0 && (
-        <div className="text-gray-400 text-sm py-16 text-center">No entries found for this date range.</div>
+        <div className="text-gray-400 text-sm py-16 text-center flex flex-col items-center gap-3">
+          <div>No entries found for this date range.</div>
+          <div className="flex gap-2 flex-wrap justify-center">
+            <button onClick={() => applyPreset(DATE_PRESETS[2])}
+              className="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded-md hover:bg-gray-100 text-gray-700 cursor-pointer">
+              Try Last 30 days
+            </button>
+            <button onClick={() => applyPreset(DATE_PRESETS[4])}
+              className="text-xs px-3 py-1.5 bg-white border border-gray-300 rounded-md hover:bg-gray-100 text-gray-700 cursor-pointer">
+              Try Year to date
+            </button>
+          </div>
+        </div>
       )}
 
       {hasData && (
