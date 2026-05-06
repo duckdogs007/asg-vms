@@ -10,6 +10,28 @@ function fmtDate(ts: string) {
   return new Date(s).toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
 }
 
+// Filter helper. Single-word queries (parseName returns first === last)
+// match first OR last name. Multi-word queries require both, like
+// "John Doe" → first_name contains "john" AND last_name contains "doe".
+function nameMatch(
+  rec: { first_name?: string | null; last_name?: string | null },
+  first: string,
+  last: string
+): boolean {
+  const fn = (rec.first_name || "").toLowerCase()
+  const ln = (rec.last_name  || "").toLowerCase()
+  if (first === last) return fn.includes(first) || ln.includes(last)
+  return fn.includes(first) && ln.includes(last)
+}
+
+// Photo upload validation — guard against arbitrarily large or non-image files.
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024 // 5 MB
+function validatePhotoFile(file: File): string | null {
+  if (!file.type.startsWith("image/")) return "Please choose an image file (jpg, png, etc)."
+  if (file.size > MAX_PHOTO_BYTES) return `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max 5 MB.`
+  return null
+}
+
 interface PersonProfile {
   name: string
   status: "barred" | "clear"
@@ -115,9 +137,10 @@ export default function IntelPage() {
   const [error,          setError]          = useState("")
   const [rightTab,       setRightTab]       = useState<RightTab>("ban")
 
-  const [photoUrl,   setPhotoUrl]   = useState("")
-  const [uploading,  setUploading]  = useState(false)
-  const [uploadError,setUploadError]= useState("")
+  const [photoUrl,    setPhotoUrl]    = useState("")
+  const [uploading,   setUploading]   = useState(false)
+  const [uploadError, setUploadError] = useState("")
+  const [historyLimit,setHistoryLimit]= useState(25)
 
   // OSINT tab state
   const [osintQuery,    setOsintQuery]    = useState("")
@@ -192,11 +215,9 @@ export default function IntelPage() {
 
       if (visitErr) { setError("Failed to load visit history."); return }
 
-      const visitData = (visits || []).filter((v: VisitorLog) =>
-        v.first_name?.toLowerCase().includes(first) &&
-        v.last_name?.toLowerCase().includes(last)
-      )
+      const visitData = (visits || []).filter((v: VisitorLog) => nameMatch(v, first, last))
       setHistory(visitData)
+      setHistoryLimit(25)
 
       const { data: watch, error: watchErr } = await supabase
         .from("watchlist")
@@ -205,10 +226,7 @@ export default function IntelPage() {
 
       if (watchErr) { setError("Failed to load watchlist data."); return }
 
-      const watchMatch = (watch || []).find((w: WatchlistEntry) =>
-        w.first_name?.toLowerCase().includes(first) &&
-        w.last_name?.toLowerCase().includes(last)
-      ) || null
+      const watchMatch = (watch || []).find((w: WatchlistEntry) => nameMatch(w, first, last)) || null
 
       setSelectedPerson({
         name: query,
@@ -227,10 +245,7 @@ export default function IntelPage() {
         .ilike("last_name", `%${last}%`)
         .order("contacted_at", { ascending: false })
 
-      const filtered = (contactData || []).filter((c: ContactRecord) =>
-        c.first_name?.toLowerCase().includes(first) &&
-        c.last_name?.toLowerCase().includes(last)
-      )
+      const filtered = (contactData || []).filter((c: ContactRecord) => nameMatch(c, first, last))
       setContacts(filtered)
 
       tryLoadPhoto(`${first}_${last}`)
@@ -293,18 +308,26 @@ export default function IntelPage() {
       const { data, error } = await supabase.storage
         .from("photos")
         .list("", { search: slug })
-      if (!error && data && data.some(f => f.name.startsWith(slug))) {
-        const { data: { publicUrl } } = supabase.storage
-          .from("photos")
-          .getPublicUrl(`${slug}.jpg`)
-        setPhotoUrl(publicUrl)
-      }
+      if (error || !data) return
+      // Find any file whose name starts with the slug (handles png/jpeg/etc
+      // and timestamp-suffixed filenames). Pick the lexicographically newest
+      // (which corresponds to the most-recent timestamp suffix when present).
+      const match = data
+        .filter(f => f.name.startsWith(slug))
+        .sort((a, b) => b.name.localeCompare(a.name))[0]
+      if (!match) return
+      const { data: { publicUrl } } = supabase.storage
+        .from("photos")
+        .getPublicUrl(match.name)
+      setPhotoUrl(publicUrl)
     } catch {}
   }
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file || !selectedPerson) return
+    const validationErr = validatePhotoFile(file)
+    if (validationErr) { setUploadError(validationErr); return }
 
     setUploading(true)
     setUploadError("")
@@ -313,7 +336,10 @@ export default function IntelPage() {
       const { first, last } = parseName(selectedPerson.name)
       const slug = `${first}_${last}`
       const ext  = file.name.split(".").pop() || "jpg"
-      const path = `${slug}.${ext}`
+      // Timestamp suffix prevents collisions when two unrelated people share
+      // a first+last name. tryLoadPhoto sorts matches descending so the most
+      // recent upload wins.
+      const path = `${slug}_${Date.now()}.${ext}`
 
       const { data, error } = await supabase.storage
         .from("photos")
@@ -480,19 +506,19 @@ export default function IntelPage() {
           {/* BAN HISTORY TAB */}
           {rightTab === "ban" && (
             <>
-              {banHistory.length > 0 ? banHistory.map((b, i) => (
-                <div key={i} className="bg-gray-900 text-white px-4 py-3 rounded-lg mb-3">
-                  <div className="font-bold text-red-400 mb-2">🚨 {b.reason || "WATCHLIST ENTRY"}</div>
-                  <div className="flex flex-col gap-1 text-sm text-gray-300">
-                    <span>Name: {b.first_name} {b.last_name}</span>
-                    {b.dob  && <span>DOB: {b.dob}</span>}
-                    {b.oln  && <span>OLN: {b.oln}</span>}
-                    {b.ssn && <span>SSN: {maskSSN(b.ssn)}</span>}
-                    {b.sex  && <span>Sex: {b.sex}</span>}
-                    {b.race && <span>Race: {b.race}</span>}
-                    {(b.notes || b.comments) && <span>Notes: {b.notes || b.comments}</span>}
-                    <span>Date Banned: {b.ban_date || b.banned_date || b.date_banned || "Unknown"}</span>
-                    <span className="opacity-60">Banned By: {b.flagged_by || b.banned_by || "Unknown"}</span>
+              {banHistory.length > 0 ? banHistory.map((b) => (
+                <div key={b.id} className="bg-red-50 border border-red-200 px-4 py-3 rounded-lg mb-3">
+                  <div className="font-bold text-red-700 mb-2">🚨 {b.reason || "WATCHLIST ENTRY"}</div>
+                  <div className="flex flex-col gap-1 text-sm text-gray-700">
+                    <span><span className="text-gray-500">Name:</span> {b.first_name} {b.last_name}</span>
+                    {b.dob  && <span><span className="text-gray-500">DOB:</span> {b.dob}</span>}
+                    {b.oln  && <span><span className="text-gray-500">OLN:</span> {b.oln}</span>}
+                    {b.ssn  && <span><span className="text-gray-500">SSN:</span> {maskSSN(b.ssn)}</span>}
+                    {b.sex  && <span><span className="text-gray-500">Sex:</span> {b.sex}</span>}
+                    {b.race && <span><span className="text-gray-500">Race:</span> {b.race}</span>}
+                    {(b.notes || b.comments) && <span><span className="text-gray-500">Notes:</span> {b.notes || b.comments}</span>}
+                    <span><span className="text-gray-500">Date Banned:</span> {b.ban_date || b.banned_date || b.date_banned || "Unknown"}</span>
+                    <span className="text-gray-500"><span className="text-gray-500">Banned By:</span> {b.flagged_by || b.banned_by || "Unknown"}</span>
                   </div>
                 </div>
               )) : (
@@ -504,20 +530,37 @@ export default function IntelPage() {
           {/* VISITOR HISTORY TAB */}
           {rightTab === "visits" && (
             <>
-              {history.length > 0 ? history.map((v) => (
-                <div key={v.id} className="bg-gray-900 text-white px-4 py-3 rounded-lg mb-2">
-                  <div className="font-medium">{v.first_name} {v.last_name}
-                    <span className="text-gray-400 font-normal ml-2 text-sm">({v.person_type})</span>
+              {history.length > 0 ? (
+                <>
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                    {history.length > historyLimit
+                      ? `${historyLimit} of ${history.length} visits`
+                      : `${history.length} visit${history.length === 1 ? "" : "s"}`}
                   </div>
-                  <div className="text-sm text-gray-400 mt-0.5">
-                    {getCommunityName(v.community_id || "")} · Unit: {v.unit_number || "N/A"}
-                    {v.resident_name && ` · Visiting: ${v.resident_name}`}
-                  </div>
-                  <div className="text-xs text-gray-500 mt-0.5">
-                    {new Date(v.created_at).toLocaleString()}
-                  </div>
-                </div>
-              )) : (
+                  {history.slice(0, historyLimit).map((v) => (
+                    <div key={v.id} className="bg-white border border-gray-200 px-4 py-3 rounded-lg mb-2 hover:border-gray-300 transition-colors">
+                      <div className="font-semibold text-gray-900">{v.first_name} {v.last_name}
+                        <span className="text-gray-500 font-normal ml-2 text-sm">({v.person_type})</span>
+                      </div>
+                      <div className="text-sm text-gray-600 mt-0.5">
+                        {getCommunityName(v.community_id || "")} · Unit: {v.unit_number || "N/A"}
+                        {v.resident_name && ` · Visiting: ${v.resident_name}`}
+                      </div>
+                      <div className="text-xs text-gray-400 mt-0.5">
+                        {new Date(v.created_at).toLocaleString()}
+                      </div>
+                    </div>
+                  ))}
+                  {history.length > historyLimit && (
+                    <button
+                      onClick={() => setHistoryLimit(l => l + 25)}
+                      className="mt-2 w-full py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white"
+                    >
+                      Show more ({history.length - historyLimit} remaining)
+                    </button>
+                  )}
+                </>
+              ) : (
                 <p className="text-sm text-gray-500">
                   {selectedPerson ? "No visit history found." : ""}
                 </p>
@@ -597,6 +640,11 @@ export default function IntelPage() {
                               <input type="file" accept="image/*"
                                 onChange={e => {
                                   const file = e.target.files?.[0] || null
+                                  if (file) {
+                                    const v = validatePhotoFile(file)
+                                    if (v) { setCtError(v); return }
+                                  }
+                                  setCtError("")
                                   setCtPhotoFile(file)
                                   setCtPhotoPreview(file ? URL.createObjectURL(file) : "")
                                 }}
