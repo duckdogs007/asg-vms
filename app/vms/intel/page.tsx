@@ -24,6 +24,26 @@ function nameMatch(
   return fn.includes(first) && ln.includes(last)
 }
 
+// Bidirectional substring match: handles "Greg" ↔ "Gregory" mismatches
+// between watchlist record and visitor log without missing the match.
+function bidirContains(a: string, b: string): boolean {
+  const x = a.toLowerCase().trim()
+  const y = b.toLowerCase().trim()
+  if (!x || !y) return false
+  return x.includes(y) || y.includes(x)
+}
+
+// Used after the user confirms one specific Ban History candidate — narrows
+// visit + contact history to records whose first AND last names match that
+// candidate.
+function matchesPersonRecord(
+  rec: { first_name?: string | null; last_name?: string | null },
+  person: { first_name?: string | null; last_name?: string | null }
+): boolean {
+  return bidirContains(rec.first_name || "", person.first_name || "")
+      && bidirContains(rec.last_name  || "", person.last_name  || "")
+}
+
 // Photo upload validation — guard against arbitrarily large or non-image files.
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024 // 5 MB
 function validatePhotoFile(file: File): string | null {
@@ -318,7 +338,16 @@ export default function IntelPage() {
 
   function confirmBanMatch(b: WatchlistEntry) {
     setConfirmedBanId(b.id)
-    setSelectedPerson(prev => prev ? { ...prev, status: "barred", oln: b.oln || null } : null)
+    // Recompute visits + last_seen based on the confirmed person so the
+    // left-panel stats reflect THIS Greg, not the union of all "Perkins".
+    const personVisits = history.filter(v => matchesPersonRecord(v, b))
+    setSelectedPerson(prev => prev ? {
+      ...prev,
+      status:    "barred",
+      oln:       b.oln || null,
+      visits:    personVisits.length,
+      last_seen: personVisits[0]?.created_at || null,
+    } : null)
   }
 
   async function tryLoadPhoto(slug: string) {
@@ -414,6 +443,16 @@ export default function IntelPage() {
         ? "border-blue-700 text-blue-700"
         : "border-transparent text-gray-500 hover:text-gray-800"
     }`
+
+  // Narrow visits + contacts to the confirmed Ban History candidate when the
+  // user picks one. With no confirmation (single match or unconfirmed multi),
+  // show the full unfiltered set.
+  const confirmedMatch = confirmedBanId
+    ? banHistory.find(b => b.id === confirmedBanId) || null
+    : null
+  const displayedHistory  = confirmedMatch ? history.filter(v  => matchesPersonRecord(v, confirmedMatch))  : history
+  const displayedContacts = confirmedMatch ? contacts.filter(c => matchesPersonRecord(c, confirmedMatch)) : contacts
+  const isAmbiguous       = banHistory.length > 1 && !confirmedMatch
 
   return (
     <div className="p-5">
@@ -582,14 +621,19 @@ export default function IntelPage() {
           {/* VISITOR HISTORY TAB */}
           {rightTab === "visits" && (
             <>
-              {history.length > 0 ? (
+              {isAmbiguous && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2 mb-3 text-xs">
+                  Showing visits for <strong>all {banHistory.length} candidates</strong>. Confirm a match in the Ban History tab to narrow this list.
+                </div>
+              )}
+              {displayedHistory.length > 0 ? (
                 <>
                   <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
-                    {history.length > historyLimit
-                      ? `${historyLimit} of ${history.length} visits`
-                      : `${history.length} visit${history.length === 1 ? "" : "s"}`}
+                    {displayedHistory.length > historyLimit
+                      ? `${historyLimit} of ${displayedHistory.length} visits`
+                      : `${displayedHistory.length} visit${displayedHistory.length === 1 ? "" : "s"}`}
                   </div>
-                  {history.slice(0, historyLimit).map((v) => (
+                  {displayedHistory.slice(0, historyLimit).map((v) => (
                     <div key={v.id} className="bg-white border border-gray-200 px-4 py-3 rounded-lg mb-2 hover:border-gray-300 transition-colors">
                       <div className="font-semibold text-gray-900">{v.first_name} {v.last_name}
                         <span className="text-gray-500 font-normal ml-2 text-sm">({v.person_type})</span>
@@ -603,12 +647,12 @@ export default function IntelPage() {
                       </div>
                     </div>
                   ))}
-                  {history.length > historyLimit && (
+                  {displayedHistory.length > historyLimit && (
                     <button
                       onClick={() => setHistoryLimit(l => l + 25)}
                       className="mt-2 w-full py-2 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white"
                     >
-                      Show more ({history.length - historyLimit} remaining)
+                      Show more ({displayedHistory.length - historyLimit} remaining)
                     </button>
                   )}
                 </>
@@ -722,7 +766,12 @@ export default function IntelPage() {
                 </div>
               )}
 
-              {contacts.length > 0 ? contacts.map((c) => (
+              {isAmbiguous && displayedContacts.length > 0 && (
+                <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-lg px-3 py-2 mb-3 text-xs">
+                  Showing contacts for <strong>all {banHistory.length} candidates</strong>. Confirm a match in the Ban History tab to narrow this list.
+                </div>
+              )}
+              {displayedContacts.length > 0 ? displayedContacts.map((c) => (
                 <div key={c.id} className="border border-gray-200 rounded-lg px-4 py-3 mb-3 bg-white">
                   <div className="flex gap-3">
                     {c.photo_url && (
