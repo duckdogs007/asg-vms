@@ -5,13 +5,13 @@ import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { fireAlert } from "@/lib/alerts"
+import { ADMIN_EMAILS } from "@/lib/admin"
 
 export default function TopNav() {
 
   const router   = useRouter()
   const pathname = usePathname()
 
-  const adminEmails = ["jhall@teamasg.com"]
   const [currentTime,    setCurrentTime]    = useState("")
   const [menuOpen,       setMenuOpen]       = useState(false)
   const [mobileNavOpen,  setMobileNavOpen]  = useState(false)
@@ -40,7 +40,7 @@ export default function TopNav() {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setUserEmail(user.email || "")
-        setIsAdmin(adminEmails.includes(user.email || ""))
+        setIsAdmin(ADMIN_EMAILS.includes(user.email || ""))
       }
     })
 
@@ -48,7 +48,7 @@ export default function TopNav() {
       const user = session?.user
       if (user) {
         setUserEmail(user.email || "")
-        setIsAdmin(adminEmails.includes(user.email || ""))
+        setIsAdmin(ADMIN_EMAILS.includes(user.email || ""))
       } else {
         setUserEmail(""); setIsAdmin(false)
       }

@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-
-const ADMIN_EMAILS = ["jhall@teamasg.com"]
+import { ADMIN_EMAILS } from "@/lib/admin"
 
 export async function GET() {
   const supabase = await createSupabaseServerClient()

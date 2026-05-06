@@ -41,3 +41,7 @@ yarn-error.log*
 next-env.d.ts
 
 .vercel
+
+# scratch / PII — never commit
+tmp_rentroll/
+components/sos-error.txt

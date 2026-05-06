@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { ADMIN_EMAILS } from "@/lib/admin";
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -38,9 +39,8 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Admin-only section — allow listed emails
-  const adminEmails = ["jhall@teamasg.com"];
-  if (pathname.startsWith("/admin") && !adminEmails.includes(user.email ?? "")) {
+  // Admin-only section — allow listed emails (centralized in lib/admin.ts)
+  if (pathname.startsWith("/admin") && !ADMIN_EMAILS.includes(user.email ?? "")) {
     return NextResponse.redirect(new URL("/vms", request.url));
   }
 

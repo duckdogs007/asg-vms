@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-
-const ADMIN_EMAILS = ["jhall@teamasg.com"]
+import { ADMIN_EMAILS } from "@/lib/admin"
 
 export async function POST() {
   const supabase = await createSupabaseServerClient()

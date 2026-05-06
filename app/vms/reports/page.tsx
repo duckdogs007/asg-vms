@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog } from "@/lib/types"
+import { ADMIN_EMAILS } from "@/lib/admin"
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
@@ -129,8 +130,6 @@ export default function ReportsPage() {
   const [priorTotal,     setPriorTotal]     = useState<number | null>(null)
 
   const [stats, setStats] = useState<Stats>(EMPTY_STATS)
-
-  const ADMIN_EMAILS = ["jhall@teamasg.com"]
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
