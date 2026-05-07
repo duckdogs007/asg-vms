@@ -1,284 +1,354 @@
-"use client";
+"use client"
 
-// force save
-// final final fix
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { supabase } from "@/lib/supabase/supabaseClient"
+import { WatchlistEntry } from "@/lib/types"
 
-import { useState, useEffect } from "react";
-import { supabase } from "@/lib/supabase/supabaseClient";
+interface PersonRow extends WatchlistEntry {
+  photo_url?: string | null
+  community?: string | null  // legacy free-text location field
+}
+
+interface NoteRow {
+  id: string
+  note: string | null
+  officer_name: string | null
+  severity: string | null
+  created_at: string
+}
+
+interface FlagRow {
+  id: string
+  flagged: boolean | null
+  reason: string | null
+  created_at: string
+}
+
+interface IncidentRow {
+  id: string
+  report: string | null
+  description: string | null
+  officer_name: string | null
+  date: string | null
+  location: string | null
+  incident_type: string | null
+  created_at: string
+}
+
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024 // 5 MB
+
+function validatePhotoFile(file: File): string | null {
+  if (!file.type.startsWith("image/")) return "Please choose an image file (jpg, png, etc)."
+  if (file.size > MAX_PHOTO_BYTES) return `File too large (${(file.size / 1024 / 1024).toFixed(1)} MB). Max 5 MB.`
+  return null
+}
+
+function fmt(ts: string | null) {
+  if (!ts) return "—"
+  const s = ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z"
+  return new Date(s).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+}
+
+const SEVERITY_BADGE: Record<string, string> = {
+  LOW:    "bg-gray-100   text-gray-700",
+  MEDIUM: "bg-yellow-100 text-yellow-800",
+  HIGH:   "bg-red-100    text-red-800",
+}
 
 export default function ProfilePage({ params }: any) {
 
-  const { id } = params as { id: string };
+  const { id } = params as { id: string }
 
-  const [person, setPerson] = useState<any>(null);
-  const [notes, setNotes] = useState("");
-  const [officer, setOfficer] = useState("");
-  const [severity, setSeverity] = useState("LOW");
-  const [incident, setIncident] = useState("");
-  const [uploading, setUploading] = useState(false);
+  const [person,    setPerson]    = useState<PersonRow | null>(null)
+  const [notes,     setNotes]     = useState<NoteRow[]>([])
+  const [flags,     setFlags]     = useState<FlagRow[]>([])
+  const [incidents, setIncidents] = useState<IncidentRow[]>([])
+  const [loading,   setLoading]   = useState(true)
+  const [error,     setError]     = useState("")
 
-  useEffect(() => {
-    loadProfile();
-  }, []);
+  // Photo upload
+  const [uploading,   setUploading]   = useState(false)
+  const [uploadError, setUploadError] = useState("")
 
-  async function loadProfile() {
-    const { data } = await supabase
-      .from("watchlist")
-      .select("*")
-      .eq("id", id)
-      .single();
+  // Flag
+  const [flagging,   setFlagging]   = useState(false)
+  const [flagError,  setFlagError]  = useState("")
 
-    setPerson(data);
+  // Add note
+  const [noteOfficer,  setNoteOfficer]  = useState("")
+  const [noteSeverity, setNoteSeverity] = useState("LOW")
+  const [noteText,     setNoteText]     = useState("")
+  const [savingNote,   setSavingNote]   = useState(false)
+  const [noteError,    setNoteError]    = useState("")
+
+  // Add incident (this page uses the legacy `report` column for free-text;
+  // the rich admin form at /admin → Officer Reports uses the extended schema)
+  const [incidentText,  setIncidentText]  = useState("")
+  const [savingIncident,setSavingIncident]= useState(false)
+  const [incidentError, setIncidentError] = useState("")
+
+  useEffect(() => { loadAll() }, [id])
+
+  async function loadAll() {
+    setLoading(true); setError("")
+    const [{ data: p, error: pErr }, { data: n }, { data: f }, { data: i }] = await Promise.all([
+      supabase.from("watchlist").select("*").eq("id", id).maybeSingle(),
+      supabase.from("person_notes").select("*").eq("person_id", id).order("created_at", { ascending: false }),
+      supabase.from("person_flags").select("*").eq("person_id", id).order("created_at", { ascending: false }),
+      supabase.from("incident_reports").select("*").eq("person_id", id).order("created_at", { ascending: false }),
+    ])
+    setLoading(false)
+    if (pErr) { setError("Failed to load profile."); return }
+    setPerson(p as PersonRow | null)
+    setNotes((n as NoteRow[]) || [])
+    setFlags((f as FlagRow[]) || [])
+    setIncidents((i as IncidentRow[]) || [])
   }
 
-  // 🚩 FLAG PERSON
   async function flagPerson() {
-    const { error } = await supabase.from("person_flags").insert({
+    setFlagging(true); setFlagError("")
+    const { error: err } = await supabase.from("person_flags").insert({
       person_id: id,
-      flagged: true,
-      reason: "Manual flag",
-      created_at: new Date().toISOString()
-    });
-
-    if (error) alert(error.message);
-    else alert("Person flagged");
+      flagged:   true,
+      reason:    "Manual flag",
+      created_at: new Date().toISOString(),
+    })
+    setFlagging(false)
+    if (err) { setFlagError(err.message); return }
+    await loadAll()
   }
 
-  // 📸 PHOTO UPLOAD
-  async function handlePhotoUpload(e: any) {
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+    const v = validatePhotoFile(file)
+    if (v) { setUploadError(v); return }
+    setUploadError("")
+    setUploading(true)
     try {
-      setUploading(true);
-
-      const file = e.target.files[0];
-      if (!file) return;
-
-      const fileExt = file.name.split(".").pop();
-      // Files are stored under a per-person subfolder so multiple uploads
-      // for the same person are timestamped without colliding with each other.
-      // The "photos" bucket is the same one /vms/intel uses (the previously
-      // referenced "person-photos" bucket never existed).
-      const filePath = `${id}/${Date.now()}.${fileExt}`;
-
-      const { error } = await supabase.storage
-        .from("photos")
-        .upload(filePath, file, { upsert: true });
-
-      if (error) throw error;
-
-      const { data } = supabase.storage
-        .from("photos")
-        .getPublicUrl(filePath);
-
-      const photoUrl = data.publicUrl;
-
-      await supabase
-        .from("watchlist")
-        .update({ photo_url: photoUrl })
-        .eq("id", id);
-
-      setPerson({ ...person, photo_url: photoUrl });
-
-    } catch (err: any) {
-      alert(err.message);
+      const ext  = file.name.split(".").pop() || "jpg"
+      const path = `${id}/${Date.now()}.${ext}`
+      const { error: upErr } = await supabase.storage.from("photos").upload(path, file, { upsert: true })
+      if (upErr) { setUploadError("Upload failed: " + upErr.message); return }
+      const { data: { publicUrl } } = supabase.storage.from("photos").getPublicUrl(path)
+      const { error: dbErr } = await supabase.from("watchlist").update({ photo_url: publicUrl }).eq("id", id)
+      if (dbErr) { setUploadError("Saved file, but failed to update record: " + dbErr.message); return }
+      setPerson(p => p ? { ...p, photo_url: publicUrl } : p)
     } finally {
-      setUploading(false);
+      setUploading(false)
     }
   }
 
-  // 📝 NOTES
   async function addNote() {
-    if (!notes) return;
-
-    await supabase.from("person_notes").insert({
-      person_id: id,
-      note: notes,
-      officer_name: officer,
-      severity,
-      created_at: new Date().toISOString()
-    });
-
-    setNotes("");
+    if (!noteText.trim()) return
+    setSavingNote(true); setNoteError("")
+    const { error: err } = await supabase.from("person_notes").insert({
+      person_id:    id,
+      note:         noteText.trim(),
+      officer_name: noteOfficer.trim() || null,
+      severity:     noteSeverity,
+      created_at:   new Date().toISOString(),
+    })
+    setSavingNote(false)
+    if (err) { setNoteError(err.message); return }
+    setNoteText("")
+    await loadAll()
   }
 
-  // 📄 INCIDENT
   async function addIncident() {
-    if (!incident) return;
-
-    await supabase.from("incident_reports").insert({
-      person_id: id,
-      report: incident,
-      created_at: new Date().toISOString()
-    });
-
-    setIncident("");
+    if (!incidentText.trim()) return
+    setSavingIncident(true); setIncidentError("")
+    const { error: err } = await supabase.from("incident_reports").insert({
+      person_id:  id,
+      report:     incidentText.trim(),
+      created_at: new Date().toISOString(),
+    })
+    setSavingIncident(false)
+    if (err) { setIncidentError(err.message); return }
+    setIncidentText("")
+    await loadAll()
   }
 
-  if (!person) return <div>Loading...</div>;
+  if (loading) return <div className="p-5 text-gray-500 text-sm">Loading…</div>
+  if (error)   return <div className="p-5 text-red-600 text-sm">{error}</div>
+  if (!person) return <div className="p-5 text-gray-500 text-sm">Person not found.</div>
+
+  const inputCls    = "w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+  const textareaCls = `${inputCls} resize-none`
+  const labelCls    = "block text-xs font-semibold text-gray-600 mb-1"
+  const sectionCls  = "bg-white border border-gray-200 rounded-xl p-4 mb-5"
 
   return (
-    <div style={styles.page}>
+    <div className="p-4 sm:p-5 pb-16 max-w-4xl">
 
-      {/* HEADER BLOCK */}
-      <div style={styles.headerContainer}>
+      <div className="mb-4">
+        <Link href="/vms/intel" className="text-sm text-blue-700 hover:text-blue-900">← Back to Intel Terminal</Link>
+      </div>
 
-        {/* LEFT SIDE */}
-        <div style={styles.left}>
-
-          <h2 style={styles.name}>
+      {/* HEADER */}
+      <div className="bg-white border border-gray-200 rounded-xl p-5 mb-5 flex flex-col sm:flex-row gap-5">
+        <div className="flex-1 min-w-0">
+          <h1 className="text-2xl font-bold capitalize mb-2">
             {person.first_name} {person.middle_name || ""} {person.last_name}
-          </h2>
-
-          <button style={styles.flagBtn} onClick={flagPerson}>
-            🚩 Flag Person
-          </button>
-
-          <div>DOB: {person.dob}</div>
-          <div>DL: {person.oln || "N/A"}</div>
-
+          </h1>
+          <div className="flex flex-col gap-1 text-sm text-gray-700">
+            {person.dob       && <div><span className="text-gray-500">DOB:</span> {person.dob}</div>}
+            {person.oln       && <div><span className="text-gray-500">DL:</span> {person.oln}</div>}
+            {person.community && <div><span className="text-gray-500">Location:</span> {person.community}</div>}
+            {person.ban_date  && <div><span className="text-gray-500">Ban Date:</span> {person.ban_date}</div>}
+            {person.banned_by && <div><span className="text-gray-500">Banned By:</span> {person.banned_by}</div>}
+          </div>
+          {person.reason && (
+            <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-800 font-medium">
+              🚨 {person.reason}
+            </div>
+          )}
+          {(person.comments || person.notes) && (
+            <div className="mt-2 text-sm text-gray-600 italic">{person.comments || person.notes}</div>
+          )}
+          <div className="mt-4 flex gap-2 flex-wrap">
+            <button
+              onClick={flagPerson}
+              disabled={flagging}
+              className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer disabled:opacity-50"
+            >
+              {flagging ? "Flagging…" : "🚩 Flag Person"}
+            </button>
+            {flagError && <span className="text-red-600 text-xs self-center">{flagError}</span>}
+          </div>
         </div>
 
         {/* PHOTO */}
-        <div style={styles.photoBox}>
-
-          {person.photo_url ? (
-            <img src={person.photo_url} style={styles.photo}/>
-          ) : (
-            <div>No Photo</div>
-          )}
-
+        <div className="w-36 flex-shrink-0 text-center">
+          <div className="w-32 h-40 bg-gray-100 border border-gray-200 rounded-md overflow-hidden flex items-center justify-center mx-auto">
+            {person.photo_url
+              ? <img src={person.photo_url} alt="" className="w-full h-full object-cover" />
+              : <span className="text-xs text-gray-400">No photo</span>}
+          </div>
           <input
             type="file"
+            accept="image/*"
             onChange={handlePhotoUpload}
-            style={{ marginTop: 8 }}
+            disabled={uploading}
+            className="text-xs text-gray-600 mt-2 file:mr-2 file:py-1 file:px-2 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 disabled:opacity-50"
           />
-
-          {uploading && <div style={{ fontSize: 12 }}>Uploading...</div>}
-
-        </div>
-
-      </div>
-
-      {/* BAN DETAILS */}
-      <div style={styles.section}>
-        <h3>🚫 Ban Details</h3>
-
-        <div>Location: {person.community || "N/A"}</div>
-        <div>Ban Date: {person.ban_date}</div>
-        <div>Banned By: {person.banned_by}</div>
-
-        <div style={styles.reason}>
-          {person.reason}
-        </div>
-
-        <div style={styles.comments}>
-          {person.comments || "No additional comments"}
+          {uploading && <div className="text-xs text-gray-500 mt-1">Uploading…</div>}
+          {uploadError && <div className="text-xs text-red-600 mt-1">{uploadError}</div>}
         </div>
       </div>
 
       {/* NOTES */}
-      <div style={styles.section}>
-        <h3>📝 Officer Notes</h3>
-
-        <div style={styles.row}>
-          <input
-            placeholder="Officer Name"
-            value={officer}
-            onChange={(e)=>setOfficer(e.target.value)}
-          />
-
-          <select
-            value={severity}
-            onChange={(e)=>setSeverity(e.target.value)}
-          >
-            <option>LOW</option>
-            <option>MEDIUM</option>
-            <option>HIGH</option>
+      <div className={sectionCls}>
+        <h3 className="text-sm font-bold text-gray-800 mb-3">📝 Officer Notes <span className="text-gray-400 font-normal">({notes.length})</span></h3>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 mb-2">
+          <input  value={noteOfficer}  onChange={e => setNoteOfficer(e.target.value)}  placeholder="Officer name"           className={inputCls} />
+          <select value={noteSeverity} onChange={e => setNoteSeverity(e.target.value)}                                       className={inputCls}>
+            <option>LOW</option><option>MEDIUM</option><option>HIGH</option>
           </select>
+          <button
+            onClick={addNote}
+            disabled={savingNote || !noteText.trim()}
+            className="px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer disabled:opacity-50"
+          >
+            {savingNote ? "Adding…" : "+ Add Note"}
+          </button>
         </div>
+        <textarea
+          rows={2}
+          value={noteText}
+          onChange={e => setNoteText(e.target.value)}
+          placeholder="Note text…"
+          className={textareaCls}
+        />
+        {noteError && <div className="text-xs text-red-600 mt-1">{noteError}</div>}
 
-        <div style={styles.row}>
-          <input
-            placeholder="Enter note"
-            value={notes}
-            onChange={(e)=>setNotes(e.target.value)}
-            style={{ flex: 1 }}
-          />
-          <button onClick={addNote}>Add</button>
-        </div>
+        {notes.length === 0 ? (
+          <div className="text-sm text-gray-400 mt-4">No notes yet.</div>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2">
+            {notes.map(n => (
+              <div key={n.id} className="border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
+                <div className="flex justify-between items-start gap-2 flex-wrap mb-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {n.severity && (
+                      <span className={`px-2 py-0.5 text-[10px] font-bold uppercase rounded ${SEVERITY_BADGE[n.severity] || "bg-gray-100 text-gray-700"}`}>
+                        {n.severity}
+                      </span>
+                    )}
+                    <span className="text-xs text-gray-500">{n.officer_name || "Unknown officer"}</span>
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0">{fmt(n.created_at)}</span>
+                </div>
+                <div className="text-sm text-gray-800 whitespace-pre-wrap">{n.note}</div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* FLAGS */}
+      <div className={sectionCls}>
+        <h3 className="text-sm font-bold text-gray-800 mb-3">🚩 Flags <span className="text-gray-400 font-normal">({flags.length})</span></h3>
+        {flags.length === 0 ? (
+          <div className="text-sm text-gray-400">No flags yet. Use the 🚩 Flag Person button above to add one.</div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {flags.map(f => (
+              <div key={f.id} className="border border-amber-200 bg-amber-50 rounded-md px-3 py-2 flex justify-between items-center gap-2">
+                <span className="text-sm text-amber-900">🚩 {f.reason || (f.flagged ? "Flagged" : "Unflagged")}</span>
+                <span className="text-xs text-amber-700 shrink-0">{fmt(f.created_at)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* INCIDENTS */}
-      <div style={styles.section}>
-        <h3>📄 Incident Reports</h3>
-
-        <div style={styles.row}>
+      <div className={sectionCls}>
+        <h3 className="text-sm font-bold text-gray-800 mb-3">📄 Incident Reports <span className="text-gray-400 font-normal">({incidents.length})</span></h3>
+        <div className="flex gap-2 mb-1">
           <input
-            placeholder="New incident report"
-            value={incident}
-            onChange={(e)=>setIncident(e.target.value)}
-            style={{ flex: 1 }}
+            value={incidentText}
+            onChange={e => setIncidentText(e.target.value)}
+            placeholder="Quick incident report…"
+            className={inputCls}
           />
-          <button onClick={addIncident}>Add</button>
+          <button
+            onClick={addIncident}
+            disabled={savingIncident || !incidentText.trim()}
+            className="px-3 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer disabled:opacity-50 whitespace-nowrap"
+          >
+            {savingIncident ? "Adding…" : "+ Add"}
+          </button>
         </div>
+        <p className="text-xs text-gray-400 mt-1">For richer reports (date/location/type/follow-up), use <Link href="/admin" className="text-blue-700 hover:text-blue-900">Officer Reports</Link>.</p>
+        {incidentError && <div className="text-xs text-red-600 mt-1">{incidentError}</div>}
+
+        {incidents.length === 0 ? (
+          <div className="text-sm text-gray-400 mt-4">No incident reports.</div>
+        ) : (
+          <div className="mt-4 flex flex-col gap-2">
+            {incidents.map(r => (
+              <div key={r.id} className="border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
+                <div className="flex justify-between items-start gap-2 flex-wrap mb-1">
+                  <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600">
+                    {r.incident_type && (
+                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-semibold uppercase rounded text-[10px]">
+                        {r.incident_type}
+                      </span>
+                    )}
+                    {r.officer_name && <span>{r.officer_name}</span>}
+                    {r.location && <span>· 📍 {r.location}</span>}
+                  </div>
+                  <span className="text-xs text-gray-400 shrink-0">{r.date ? r.date : fmt(r.created_at)}</span>
+                </div>
+                <div className="text-sm text-gray-800 whitespace-pre-wrap">{r.description || r.report || "—"}</div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
-
     </div>
-  );
+  )
 }
-
-/* 🎨 STYLES */
-
-const styles: any = {
-  page: {
-    maxWidth: 900,
-    margin: "0 auto",
-    padding: 20
-  },
-  headerContainer: {
-    display: "flex",
-    justifyContent: "space-between",
-    alignItems: "flex-start",
-    gap: 40
-  },
-  left: {
-    flex: 1
-  },
-  name: {
-    marginBottom: 8
-  },
-  photoBox: {
-    width: 140,
-    textAlign: "center"
-  },
-  photo: {
-    width: 120,
-    height: 120,
-    objectFit: "cover",
-    border: "1px solid #ccc"
-  },
-  section: {
-    borderTop: "1px solid #ccc",
-    marginTop: 25,
-    paddingTop: 15
-  },
-  row: {
-    display: "flex",
-    gap: 10,
-    marginTop: 10
-  },
-  flagBtn: {
-    background: "red",
-    color: "#fff",
-    padding: "6px 10px",
-    borderRadius: 4,
-    marginBottom: 10
-  },
-  reason: {
-    color: "red",
-    marginTop: 10
-  },
-  comments: {
-    marginTop: 8,
-    fontStyle: "italic"
-  }
-};

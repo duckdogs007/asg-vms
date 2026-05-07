@@ -45,6 +45,7 @@ export interface VisitorLog {
 export interface WatchlistEntry {
   id: string
   first_name: string
+  middle_name?: string | null
   last_name: string
   dob?: string | null
   oln?: string | null
