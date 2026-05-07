@@ -1629,11 +1629,13 @@ export default function UserDashboard() {
                 <tbody>
                   {auditLogs.map((log, i) => {
                     const actionColor =
-                      log.action === "deleted"     ? "text-red-600 font-semibold" :
-                      log.action === "edited"      ? "text-blue-600 font-semibold" :
-                      log.action === "resolved"    ? "text-orange-500 font-semibold" :
-                      log.action === "reactivated" ? "text-purple-600 font-semibold" :
-                                                     "text-green-600 font-semibold"
+                      log.action === "deleted"      ? "text-red-600 font-semibold" :
+                      log.action === "edited"       ? "text-blue-600 font-semibold" :
+                      log.action === "resolved"     ? "text-orange-500 font-semibold" :
+                      log.action === "reactivated"  ? "text-purple-600 font-semibold" :
+                      log.action === "email_failed" ? "text-red-600 font-semibold" :
+                      log.action === "email_sent"   ? "text-emerald-600 font-semibold" :
+                                                      "text-green-600 font-semibold"
                     return (
                       <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
                         <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
