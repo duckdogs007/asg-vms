@@ -66,7 +66,7 @@ export async function logEmailDelivery(
   supabase: SupabaseClient,
   opts: {
     user_email:    string | null
-    resource_type: "Alert" | "Passdown" | "BOLO"
+    resource_type: "Alert" | "Passdown" | "BOLO" | "Watchlist"
     resource_id:   string
     recipients:    string[]
     result:        SendEmailResult
@@ -128,6 +128,69 @@ export function buildAlertEmailHtml(opts: {
       </div>
       ${body ? `<p style="padding:14px 18px 0;color:#374151;line-height:1.5;font-size:14px;">${body}</p>` : ""}
       ${factRows ? `<table style="margin:14px 18px;border-collapse:collapse;">${factRows}</table>` : ""}
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 18px 12px;" />
+      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG VMS · ${escapeHtml(ET_NOW())} ET</p>
+    </div>
+  `
+}
+
+export function buildWatchlistEmailHtml(opts: {
+  first_name:   string | null
+  last_name:    string | null
+  dob:          string | null
+  oln:          string | null
+  sex:          string | null
+  race:         string | null
+  reason:       string | null
+  comments:     string | null
+  community:    string | null
+  banned_by:    string | null
+  ban_date:     string | null
+  firearm_flag: boolean | null
+  photo_url:    string | null
+  event:        "added" | "updated" | "manual"
+}): string {
+  const headline = `${opts.first_name || ""} ${opts.last_name || ""}`.trim() || "Watchlist Entry"
+  const eventLabel =
+    opts.event === "added"   ? "BANNED PERSON ADDED" :
+    opts.event === "updated" ? "BANNED PERSON UPDATED" :
+                               "WATCHLIST ENTRY"
+  const facts: Array<[string, string | null]> = [
+    ["Reason",     opts.reason],
+    ["DOB",        opts.dob],
+    ["Driver License", opts.oln],
+    ["Sex",        opts.sex],
+    ["Race",       opts.race],
+    ["Location",   opts.community],
+    ["Banned by",  opts.banned_by],
+    ["Ban date",   opts.ban_date],
+  ]
+  const factRows = facts
+    .filter(([, v]) => v && v.trim() !== "")
+    .map(([k, v]) => `
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#6b7280;font-weight:600;font-size:13px;vertical-align:top;">${escapeHtml(k)}</td>
+        <td style="padding:4px 0;color:#111827;font-size:14px;">${escapeHtml(v as string)}</td>
+      </tr>`).join("")
+  const photoBlock = opts.photo_url
+    ? `<div style="margin:14px 18px;"><img src="${escapeHtml(opts.photo_url)}" alt="" style="max-width:100%;max-height:280px;border-radius:6px;border:1px solid #e5e7eb;" /></div>`
+    : ""
+  const firearmBlock = opts.firearm_flag
+    ? `<div style="margin:14px 18px;padding:10px 14px;background:#fef2f2;border:1px solid #fecaca;border-radius:6px;color:#991b1b;font-size:14px;font-weight:700;">🔫 Subject is known to carry a firearm.</div>`
+    : ""
+  const commentsBlock = opts.comments
+    ? `<div style="margin:0 18px;padding:14px;border:1px solid #fed7aa;border-radius:6px;background:#fff7ed;color:#7c2d12;font-size:14px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(opts.comments)}</div>`
+    : ""
+  return `
+    <div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;">
+      <div style="border-left:4px solid #b91c1c;padding:14px 18px;background:#fef2f2;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#991b1b;font-weight:700;">🚨 ${eventLabel}</div>
+        <h2 style="margin:6px 0 0;color:#991b1b;font-size:18px;">${escapeHtml(headline)}</h2>
+      </div>
+      ${photoBlock}
+      ${firearmBlock}
+      ${factRows ? `<table style="margin:14px 18px;border-collapse:collapse;">${factRows}</table>` : ""}
+      ${commentsBlock}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 18px 12px;" />
       <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG VMS · ${escapeHtml(ET_NOW())} ET</p>
     </div>

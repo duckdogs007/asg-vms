@@ -247,7 +247,7 @@ export default function UserDashboard() {
     if (!wlCommunity) { setWlError("Location is required.");  return }
     if (!wlReason)    { setWlError("Reason is required.");    return }
     setWlSaving(true); setWlError(""); setWlMessage("")
-    const { error } = await supabase.from("watchlist").insert({
+    const { data: inserted, error } = await supabase.from("watchlist").insert({
       first_name: wlFirst || null, last_name: wlLast,
       dob: wlDob || null, oln: wlOln || null,
       ssn: wlSsn || null,
@@ -258,10 +258,11 @@ export default function UserDashboard() {
       ban_date: new Date().toISOString().split("T")[0],
       status: "Active",
       firearm_flag: wlFirearm,
-    })
+    }).select("id").single()
     setWlSaving(false)
     if (error) { setWlError(error.message); return }
     setWlMessage("✅ Person added to watchlist.")
+    notifyWatchlist((inserted as { id?: string } | null)?.id, "added")
     setWlFirst(""); setWlLast(""); setWlDob(""); setWlOln(""); setWlSsn(""); setWlSex(""); setWlRace(""); setWlReason(""); setWlNotes(""); setWlFirearm(false)
     setShowAddWatchlist(false)
     await logActivity("created", "Watchlist", "", `Added ${wlFirst} ${wlLast} to watchlist`)
@@ -320,10 +321,31 @@ export default function UserDashboard() {
     if (error) { setWlError("Update failed: " + error.message); return }
     await logActivity("updated", "Watchlist", p.id, `Updated ${editFirst} ${editLast}`)
     setWlMessage(`✅ Updated ${editFirst} ${editLast}`)
+    notifyWatchlist(p.id, "updated")
     cancelWatchlistEdit()
     // Sync filter to the (possibly new) location so the user sees the row
     if (editCommunity !== communityId) setCommunityId(editCommunity)
     loadWatchlist(editCommunity)
+  }
+
+  // Fire-and-forget email notification for a watchlist entry. event indicates
+  // whether this is auto-fired on add/edit or a manual click.
+  function notifyWatchlist(id: string | null | undefined, event: "added" | "updated" | "manual") {
+    if (!id) return
+    fetch("/api/watchlist/notify", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ id, event }),
+    }).catch(e => console.error("[watchlist notify]", e))
+  }
+
+  function notifyBolo(id: string | null | undefined) {
+    if (!id) return
+    fetch("/api/bolos/notify", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ id }),
+    }).catch(e => console.error("[bolo notify]", e))
   }
 
   async function deleteWatchlistEntry(p: WatchlistEntry) {
@@ -751,6 +773,7 @@ export default function UserDashboard() {
     if (error) { setBoloError("Update failed: " + error.message); return }
     setBoloMessage(`✅ BOLO updated.`)
     await logActivity("edited", "BOLO", b.id, `Edited BOLO — ${editBoloName || editBoloDesc}`)
+    notifyBolo(b.id)
     cancelBoloEdit()
     loadBolos()
   }
@@ -980,6 +1003,7 @@ export default function UserDashboard() {
                     {isAdmin && (
                       <div className="flex gap-1.5 mt-1">
                         <button onClick={() => startWatchlistEdit(p)} title="Edit" className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded border-none cursor-pointer">✎ Edit</button>
+                        <button onClick={() => { notifyWatchlist(p.id, "manual"); setWlMessage(`📧 Email notification sent for ${p.first_name || ""} ${p.last_name}`); setTimeout(() => setWlMessage(""), 2500) }} title="Re-send email notification to recipients" className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-semibold rounded border-none cursor-pointer">📧 Notify</button>
                         <button onClick={() => deleteWatchlistEntry(p)} title="Delete" className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded border-none cursor-pointer">🗑</button>
                       </div>
                     )}
@@ -1828,10 +1852,17 @@ export default function UserDashboard() {
                         </button>
                       )}
                       {isAdmin && (
-                        <button onClick={() => startBoloEdit(b)}
-                          className="px-3 py-1.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 border-none cursor-pointer">
-                          ✎ Edit
-                        </button>
+                        <>
+                          <button onClick={() => startBoloEdit(b)}
+                            className="px-3 py-1.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 border-none cursor-pointer">
+                            ✎ Edit
+                          </button>
+                          <button onClick={() => { notifyBolo(b.id); setBoloMessage(`📧 Email notification sent for ${b.name || b.description?.slice(0, 40) || "BOLO"}`); setTimeout(() => setBoloMessage(""), 2500) }}
+                            title="Re-send email notification to recipients"
+                            className="px-3 py-1.5 text-xs font-semibold bg-emerald-50 text-emerald-700 rounded-lg hover:bg-emerald-100 border-none cursor-pointer">
+                            📧 Notify
+                          </button>
+                        </>
                       )}
                     </div>
                   </div>
