@@ -45,6 +45,8 @@ export default function UserDashboard() {
   const [wlDob,      setWlDob]      = useState("")
   const [wlOln,      setWlOln]      = useState("")
   const [wlSsn,      setWlSsn]      = useState("")
+  const [wlSex,      setWlSex]      = useState("")
+  const [wlRace,     setWlRace]     = useState("")
   const [wlReason,   setWlReason]   = useState("")
   const [wlNotes,    setWlNotes]    = useState("")
   const [wlFirearm,  setWlFirearm]  = useState(false)
@@ -62,6 +64,8 @@ export default function UserDashboard() {
   const [editDob,        setEditDob]        = useState("")
   const [editOln,        setEditOln]        = useState("")
   const [editSsn,        setEditSsn]        = useState("")
+  const [editSex,        setEditSex]        = useState("")
+  const [editRace,       setEditRace]       = useState("")
   const [editReason,     setEditReason]     = useState("")
   const [editNotes,      setEditNotes]      = useState("")
   const [editFirearm,    setEditFirearm]    = useState(false)
@@ -242,6 +246,7 @@ export default function UserDashboard() {
       first_name: wlFirst || null, last_name: wlLast,
       dob: wlDob || null, oln: wlOln || null,
       ssn: wlSsn || null,
+      sex: wlSex || null, race: wlRace || null,
       reason: wlReason, comments: wlNotes || null,
       community_id: wlCommunity || null,
       banned_by: officerName || null,
@@ -252,7 +257,7 @@ export default function UserDashboard() {
     setWlSaving(false)
     if (error) { setWlError(error.message); return }
     setWlMessage("✅ Person added to watchlist.")
-    setWlFirst(""); setWlLast(""); setWlDob(""); setWlOln(""); setWlSsn(""); setWlReason(""); setWlNotes(""); setWlFirearm(false)
+    setWlFirst(""); setWlLast(""); setWlDob(""); setWlOln(""); setWlSsn(""); setWlSex(""); setWlRace(""); setWlReason(""); setWlNotes(""); setWlFirearm(false)
     setShowAddWatchlist(false)
     await logActivity("created", "Watchlist", "", `Added ${wlFirst} ${wlLast} to watchlist`)
     // Sync the list filter to where the entry was actually placed so the
@@ -272,6 +277,8 @@ export default function UserDashboard() {
     setEditDob(p.dob || "")
     setEditOln(p.oln || "")
     setEditSsn(p.ssn || "")
+    setEditSex(p.sex || "")
+    setEditRace(p.race || "")
     setEditReason(p.reason || "")
     setEditNotes(p.comments || p.notes || "")
     setEditFirearm(!!p.firearm_flag)
@@ -282,6 +289,7 @@ export default function UserDashboard() {
   function cancelWatchlistEdit() {
     setEditingWlId(null)
     setEditFirst(""); setEditLast(""); setEditDob(""); setEditOln(""); setEditSsn("")
+    setEditSex(""); setEditRace("")
     setEditReason(""); setEditNotes(""); setEditFirearm(false); setEditCommunity("")
     setWlError("")
   }
@@ -297,6 +305,8 @@ export default function UserDashboard() {
       dob:           editDob || null,
       oln:           editOln || null,
       ssn:           editSsn || null,
+      sex:           editSex || null,
+      race:          editRace || null,
       reason:        editReason,
       comments:      editNotes || null,
       community_id:  editCommunity,
@@ -815,6 +825,17 @@ export default function UserDashboard() {
                   <input value={wlOln} onChange={e => setWlOln(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>SSN</label>
                   <input value={wlSsn} onChange={e => setWlSsn(e.target.value)} placeholder="XXX-XX-XXXX or last 4" maxLength={11} className={inputCls} /></div>
+                <div><label className={labelCls}>Sex</label>
+                  <select value={wlSex} onChange={e => setWlSex(e.target.value)} className={inputCls}>
+                    <option value="">—</option>
+                    <option>Male</option><option>Female</option><option>Other</option>
+                  </select></div>
+                <div><label className={labelCls}>Race</label>
+                  <select value={wlRace} onChange={e => setWlRace(e.target.value)} className={inputCls}>
+                    <option value="">—</option>
+                    <option>Black</option><option>White</option><option>Hispanic</option>
+                    <option>Asian</option><option>Native American</option><option>Other</option>
+                  </select></div>
                 <div><label className={labelCls}>Location <span className="text-red-500">*</span></label>
                   <select value={wlCommunity} onChange={e => setWlCommunity(e.target.value)} className={inputCls}>
                     <option value="">— Select —</option>
@@ -854,6 +875,17 @@ export default function UserDashboard() {
                       <input value={editOln} onChange={e => setEditOln(e.target.value)} className={inputCls} /></div>
                     <div><label className={labelCls}>SSN</label>
                       <input value={editSsn} onChange={e => setEditSsn(e.target.value)} placeholder="XXX-XX-XXXX or last 4" maxLength={11} className={inputCls} /></div>
+                    <div><label className={labelCls}>Sex</label>
+                      <select value={editSex} onChange={e => setEditSex(e.target.value)} className={inputCls}>
+                        <option value="">—</option>
+                        <option>Male</option><option>Female</option><option>Other</option>
+                      </select></div>
+                    <div><label className={labelCls}>Race</label>
+                      <select value={editRace} onChange={e => setEditRace(e.target.value)} className={inputCls}>
+                        <option value="">—</option>
+                        <option>Black</option><option>White</option><option>Hispanic</option>
+                        <option>Asian</option><option>Native American</option><option>Other</option>
+                      </select></div>
                     <div><label className={labelCls}>Location <span className="text-red-500">*</span></label>
                       <select value={editCommunity} onChange={e => setEditCommunity(e.target.value)} className={inputCls}>
                         <option value="">— Select —</option>
