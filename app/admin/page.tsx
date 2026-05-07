@@ -651,15 +651,24 @@ export default function UserDashboard() {
   async function savePassdown() {
     if (!pdNotes) { setPdError("Passdown notes are required."); return }
     setPdSaving(true); setPdError(""); setPdMessage("")
-    const { error } = await supabase.from("passdown_logs").insert({
+    const { data: created, error } = await supabase.from("passdown_logs").insert({
       date: pdDate, shift: pdShift,
       community_id: pdCommunity || null,
       officer_name: pdOfficer, notes: pdNotes,
       created_at: new Date().toISOString()
-    })
+    }).select("id").single()
     setPdSaving(false)
     if (error) { setPdError(error.message); return }
     setPdMessage("✅ Passdown submitted.")
+    // Fire-and-forget email notification to active recipients. Failures
+    // are logged but don't block the UI flow.
+    if ((created as { id?: string } | null)?.id) {
+      fetch("/api/passdowns/notify", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ id: (created as { id: string }).id }),
+      }).catch(e => console.error("[passdown notify]", e))
+    }
     logActivity("created", "Passdown", "", `Passdown submitted — ${pdDate} ${pdShift}`)
     setPdNotes("")
     loadPassdowns()

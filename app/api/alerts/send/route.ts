@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
+import { sendEmail, buildAlertEmailHtml } from "@/lib/email"
 
 type AlertType = "watchlist_hit" | "incident_high_priority" | "panic_sos"
 
@@ -137,7 +138,25 @@ export async function POST(req: Request) {
     Severity:    severity,
   }
 
-  const result = await sendToTeams(subject, body, meta, severity)
+  const teams = await sendToTeams(subject, body, meta, severity)
+
+  // Also send email to active recipients in parallel. Email failures don't
+  // block the Teams channel — both delivery channels are best-effort.
+  let emailResult: { ok: boolean; error?: string } = { ok: true }
+  if (recipients.length) {
+    emailResult = await sendEmail({
+      to:      recipients,
+      subject: `🚨 ${subject}`,
+      html:    buildAlertEmailHtml({ subject, body, meta, severity }),
+    })
+  }
+
+  // Audit row reflects both channels: status fails only if BOTH failed.
+  const status = (teams.ok || emailResult.ok) ? "sent" : "failed"
+  const error  = [
+    !teams.ok       ? `teams: ${teams.error}`       : null,
+    !emailResult.ok ? `email: ${emailResult.error}` : null,
+  ].filter(Boolean).join(" | ") || null
 
   await supabase.from("alerts").insert({
     type:         input.type,
@@ -146,10 +165,17 @@ export async function POST(req: Request) {
     payload:      input.payload || {},
     recipients,
     triggered_by: user.email || null,
-    status:       result.ok ? "sent" : "failed",
-    error:        result.ok ? null   : result.error,
+    status,
+    error,
   })
 
-  if (!result.ok) return NextResponse.json({ error: result.error }, { status: 502 })
-  return NextResponse.json({ ok: true, channel: "teams" })
+  if (status === "failed") return NextResponse.json({ error }, { status: 502 })
+  return NextResponse.json({
+    ok: true,
+    channels: {
+      teams: teams.ok,
+      email: emailResult.ok,
+      recipients_count: recipients.length,
+    },
+  })
 }
