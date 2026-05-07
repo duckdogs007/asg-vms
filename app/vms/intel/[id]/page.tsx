@@ -35,7 +35,8 @@ export default function ProfilePage({ params }: any) {
   async function flagPerson() {
     const { error } = await supabase.from("person_flags").insert({
       person_id: id,
-      flag_type: "MANUAL",
+      flagged: true,
+      reason: "Manual flag",
       created_at: new Date().toISOString()
     });
 
@@ -52,16 +53,20 @@ export default function ProfilePage({ params }: any) {
       if (!file) return;
 
       const fileExt = file.name.split(".").pop();
+      // Files are stored under a per-person subfolder so multiple uploads
+      // for the same person are timestamped without colliding with each other.
+      // The "photos" bucket is the same one /vms/intel uses (the previously
+      // referenced "person-photos" bucket never existed).
       const filePath = `${id}/${Date.now()}.${fileExt}`;
 
       const { error } = await supabase.storage
-        .from("person-photos")
+        .from("photos")
         .upload(filePath, file, { upsert: true });
 
       if (error) throw error;
 
       const { data } = supabase.storage
-        .from("person-photos")
+        .from("photos")
         .getPublicUrl(filePath);
 
       const photoUrl = data.publicUrl;
