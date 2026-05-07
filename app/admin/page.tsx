@@ -24,7 +24,7 @@ function isHighPriorityIncident(t: string | undefined): boolean {
   return HIGH_PRIORITY_INCIDENT_TYPES.some(k => s.includes(k))
 }
 
-type Tab       = "watchlist" | "rentroll" | "reports" | "passdown" | "bolo" | "audit"
+type Tab       = "watchlist" | "rentroll" | "reports" | "passdown" | "bolo"
 type ReportTab = "daily" | "incident" | "contact" | "vfi" | "view"
 
 export default function UserDashboard() {
@@ -95,9 +95,6 @@ export default function UserDashboard() {
   const [editingReport, setEditingReport] = useState<number | null>(null)
   const [editFields,    setEditFields]    = useState<Record<string, any>>({})
 
-  // Audit log
-  const [auditLogs,    setAuditLogs]    = useState<any[]>([])
-  const [auditLoading, setAuditLoading] = useState(false)
 
   // Daily log
   const [dailyDate,      setDailyDate]      = useState(new Date().toISOString().split("T")[0])
@@ -212,7 +209,6 @@ export default function UserDashboard() {
     if (activeTab === "reports")   loadPastReports()
     if (activeTab === "passdown")  loadPassdowns()
     if (activeTab === "bolo")      loadBolos()
-    if (activeTab === "audit")     loadAuditLog()
   }, [activeTab])
 
   async function loadInit() {
@@ -583,14 +579,6 @@ export default function UserDashboard() {
     })
   }
 
-  async function loadAuditLog() {
-    setAuditLoading(true)
-    const { data } = await supabase.from("audit_logs")
-      .select("*").order("created_at", { ascending: false }).limit(100)
-    setAuditLogs(data || [])
-    setAuditLoading(false)
-  }
-
   const REPORT_TABLE: Record<string, string> = {
     "Daily Log":     "officer_daily_logs",
     "Incident":      "incident_reports",
@@ -830,7 +818,6 @@ export default function UserDashboard() {
         <button className={tabCls("reports")}   onClick={() => setActiveTab("reports")}>📋 Officer Reports</button>
         <button className={tabCls("watchlist")} onClick={() => setActiveTab("watchlist")}>🚨 Watchlist</button>
         <button className={tabCls("rentroll")}  onClick={() => setActiveTab("rentroll")}>🏠 Rent Roll</button>
-        <button className={tabCls("audit")}     onClick={() => setActiveTab("audit")}>🔒 Audit Log</button>
       </div>
 
       {/* ── WATCHLIST TAB ── */}
@@ -1598,64 +1585,6 @@ export default function UserDashboard() {
       )}
 
       {/* ── AUDIT LOG TAB ── */}
-      {activeTab === "audit" && (
-        <div>
-          <div className="flex justify-between items-center mb-5">
-            <div>
-              <h3 className="text-lg font-bold text-gray-800">Activity Audit Log</h3>
-              <p className="text-xs text-gray-500 mt-0.5">All system actions logged chronologically — read only</p>
-            </div>
-            <button onClick={loadAuditLog}
-              className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 border-none cursor-pointer">
-              ↻ Refresh
-            </button>
-          </div>
-          {auditLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading...</div>}
-          {!auditLoading && auditLogs.length === 0 && (
-            <div className="text-gray-500 text-sm py-8 text-center">No activity recorded yet.</div>
-          )}
-          {!auditLoading && auditLogs.length > 0 && (
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Timestamp</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">User</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Action</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Detail</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditLogs.map((log, i) => {
-                    const actionColor =
-                      log.action === "deleted"      ? "text-red-600 font-semibold" :
-                      log.action === "edited"       ? "text-blue-600 font-semibold" :
-                      log.action === "resolved"     ? "text-orange-500 font-semibold" :
-                      log.action === "reactivated"  ? "text-purple-600 font-semibold" :
-                      log.action === "email_failed" ? "text-red-600 font-semibold" :
-                      log.action === "email_sent"   ? "text-emerald-600 font-semibold" :
-                                                      "text-green-600 font-semibold"
-                    return (
-                      <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
-                        <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                          {new Date(log.created_at.endsWith("Z") || log.created_at.includes("+") ? log.created_at : log.created_at + "Z")
-                            .toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-gray-700">{log.user_email}</td>
-                        <td className={`px-4 py-2.5 text-xs ${actionColor}`}>{log.action}</td>
-                        <td className="px-4 py-2.5 text-xs text-gray-600">{log.resource_type}</td>
-                        <td className="px-4 py-2.5 text-xs text-gray-500">{log.detail}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
       {/* ── PASSDOWN LOG TAB ── */}
       {activeTab === "passdown" && (
         <div>

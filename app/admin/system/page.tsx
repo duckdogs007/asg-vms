@@ -7,7 +7,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import pkg from "../../../package.json"
 
-type Tab = "communities" | "recipients" | "users" | "settings"
+type Tab = "communities" | "recipients" | "users" | "settings" | "audit"
 
 interface Community { id: string; name: string }
 interface Recipient {
@@ -48,6 +48,10 @@ export default function AdminSystemPage() {
   // ── USERS ──
   const [users,      setUsers]      = useState<UserRow[]>([])
   const [usersError, setUsersError] = useState("")
+
+  // ── AUDIT LOG ──
+  const [auditLogs,    setAuditLogs]    = useState<any[]>([])
+  const [auditLoading, setAuditLoading] = useState(false)
 
   // ── SETTINGS ──
   const [tableCounts,     setTableCounts]     = useState<Record<string, number> | null>(null)
@@ -93,7 +97,17 @@ export default function AdminSystemPage() {
       }
     } else if (activeTab === "settings") {
       void loadSettings()
+    } else if (activeTab === "audit") {
+      void loadAuditLog()
     }
+  }
+
+  async function loadAuditLog() {
+    setAuditLoading(true)
+    const { data } = await supabase.from("audit_logs")
+      .select("*").order("created_at", { ascending: false }).limit(100)
+    setAuditLogs(data || [])
+    setAuditLoading(false)
   }
 
   // ── SETTINGS loaders ──
@@ -268,6 +282,7 @@ export default function AdminSystemPage() {
         <button onClick={() => setActiveTab("recipients")}  className={tabBtnCls("recipients")}>🔔 Notification Recipients</button>
         <button onClick={() => setActiveTab("users")}       className={tabBtnCls("users")}>👥 Users</button>
         <button onClick={() => setActiveTab("settings")}    className={tabBtnCls("settings")}>🛠 Settings</button>
+        <button onClick={() => setActiveTab("audit")}       className={tabBtnCls("audit")}>🔒 Audit Log</button>
         <Link href="/admin/post-orders" className="px-4 py-2 text-sm font-semibold rounded-t-md transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">📋 Post Orders</Link>
       </div>
 
@@ -497,6 +512,65 @@ export default function AdminSystemPage() {
             <Row k="Database backups"  v="Supabase managed (daily snapshots / point-in-time restore)" />
           </Section>
 
+        </div>
+      )}
+
+      {/* AUDIT LOG */}
+      {activeTab === "audit" && (
+        <div>
+          <div className="flex justify-between items-center mb-5">
+            <div>
+              <h3 className="text-lg font-bold text-gray-800">Activity Audit Log</h3>
+              <p className="text-xs text-gray-500 mt-0.5">All system actions logged chronologically — read only</p>
+            </div>
+            <button onClick={loadAuditLog}
+              className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 border-none cursor-pointer">
+              ↻ Refresh
+            </button>
+          </div>
+          {auditLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading...</div>}
+          {!auditLoading && auditLogs.length === 0 && (
+            <div className="text-gray-500 text-sm py-8 text-center">No activity recorded yet.</div>
+          )}
+          {!auditLoading && auditLogs.length > 0 && (
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Timestamp</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">User</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Action</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
+                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Detail</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {auditLogs.map((log, i) => {
+                    const actionColor =
+                      log.action === "deleted"      ? "text-red-600 font-semibold" :
+                      log.action === "edited"       ? "text-blue-600 font-semibold" :
+                      log.action === "resolved"     ? "text-orange-500 font-semibold" :
+                      log.action === "reactivated"  ? "text-purple-600 font-semibold" :
+                      log.action === "email_failed" ? "text-red-600 font-semibold" :
+                      log.action === "email_sent"   ? "text-emerald-600 font-semibold" :
+                                                      "text-green-600 font-semibold"
+                    return (
+                      <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
+                        <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                          {new Date(log.created_at.endsWith("Z") || log.created_at.includes("+") ? log.created_at : log.created_at + "Z")
+                            .toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                        </td>
+                        <td className="px-4 py-2.5 text-xs text-gray-700">{log.user_email}</td>
+                        <td className={`px-4 py-2.5 text-xs ${actionColor}`}>{log.action}</td>
+                        <td className="px-4 py-2.5 text-xs text-gray-600">{log.resource_type}</td>
+                        <td className="px-4 py-2.5 text-xs text-gray-500">{log.detail}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
         </div>
       )}
     </div>
