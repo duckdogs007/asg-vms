@@ -189,6 +189,15 @@ export default function UserDashboard() {
   const [boloError,      setBoloError]      = useState("")
   const [boloShowAll,    setBoloShowAll]    = useState(false)
   const [showAddBolo,    setShowAddBolo]    = useState(false)
+  // Inline edit state (admin only)
+  const [editingBoloId,    setEditingBoloId]    = useState<string | null>(null)
+  const [editBoloName,     setEditBoloName]     = useState("")
+  const [editBoloDesc,     setEditBoloDesc]     = useState("")
+  const [editBoloReason,   setEditBoloReason]   = useState("")
+  const [editBoloVehicle,  setEditBoloVehicle]  = useState("")
+  const [editBoloCommunity,setEditBoloCommunity]= useState("")
+  const [editBoloAddedBy,  setEditBoloAddedBy]  = useState("")
+  const [savingBoloEdit,   setSavingBoloEdit]   = useState(false)
 
   useEffect(() => { loadInit() }, [])
 
@@ -718,6 +727,43 @@ export default function UserDashboard() {
     logActivity("created", "BOLO", "", `BOLO added — ${boloName || boloDesc}`)
     setBoloName(""); setBoloDesc(""); setBoloReason(""); setBoloVehicle("")
     setBoloPhotoFile(null); setBoloPhotoPreview(""); setShowAddBolo(false)
+    loadBolos()
+  }
+
+  function startBoloEdit(b: any) {
+    setEditingBoloId(b.id)
+    setEditBoloName(b.name || "")
+    setEditBoloDesc(b.description || "")
+    setEditBoloReason(b.reason || "")
+    setEditBoloVehicle(b.vehicle || "")
+    setEditBoloCommunity(b.community_id || "")
+    setEditBoloAddedBy(b.added_by || "")
+    setBoloError(""); setBoloMessage("")
+  }
+
+  function cancelBoloEdit() {
+    setEditingBoloId(null)
+    setEditBoloName(""); setEditBoloDesc(""); setEditBoloReason("")
+    setEditBoloVehicle(""); setEditBoloCommunity(""); setEditBoloAddedBy("")
+    setBoloError("")
+  }
+
+  async function saveBoloEdit(b: any) {
+    if (!editBoloName && !editBoloDesc) { setBoloError("Name or description is required."); return }
+    setSavingBoloEdit(true); setBoloError(""); setBoloMessage("")
+    const { error } = await supabase.from("bolos").update({
+      name:         editBoloName || null,
+      description:  editBoloDesc || null,
+      reason:       editBoloReason || null,
+      vehicle:      editBoloVehicle || null,
+      community_id: editBoloCommunity || null,
+      added_by:     editBoloAddedBy || null,
+    }).eq("id", b.id)
+    setSavingBoloEdit(false)
+    if (error) { setBoloError("Update failed: " + error.message); return }
+    setBoloMessage(`✅ BOLO updated.`)
+    await logActivity("edited", "BOLO", b.id, `Edited BOLO — ${editBoloName || editBoloDesc}`)
+    cancelBoloEdit()
     loadBolos()
   }
 
@@ -1773,46 +1819,93 @@ export default function UserDashboard() {
           {!boloLoading && displayedBolos.map((b, i) => (
             <div key={b.id || i}
               className={`border-2 rounded-xl px-5 py-4 mb-3 ${b.active ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50 opacity-60"}`}>
-              <div className="flex gap-4">
-                {b.photo_url && (
-                  <img src={b.photo_url} alt="BOLO subject" className="w-20 h-24 object-cover rounded-lg flex-shrink-0 border border-red-200" />
-                )}
-                <div className="flex-1 min-w-0">
-                  <div className="flex justify-between items-start mb-1">
-                    <div>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full mr-2 ${b.active ? "bg-red-600 text-white" : "bg-gray-400 text-white"}`}>
-                        {b.active ? "🔴 ACTIVE" : "✓ Resolved"}
-                      </span>
-                      {b.community_id && <span className="text-xs text-gray-800 font-semibold">📍 {getCommunityName(b.community_id)}</span>}
-                    </div>
-                    <div className="text-xs text-gray-400 text-right shrink-0 ml-2">
-                      <div>{new Date(b.created_at).toLocaleDateString()}</div>
-                      {b.added_by && <div>By: {b.added_by}</div>}
-                    </div>
-                  </div>
-                  {b.name && <div className="font-bold text-gray-900 text-lg">{b.name}</div>}
-                  {b.reason && <div className="text-red-700 font-semibold text-sm mb-1">{b.reason}</div>}
-                  {b.description && <div className="text-sm text-gray-700 mb-1 whitespace-pre-wrap">{b.description}</div>}
-                  {b.vehicle && (
-                    <div className="text-xs text-gray-600 mt-1">
-                      🚗 <span className="font-medium">Vehicle:</span> {b.vehicle}
-                    </div>
-                  )}
-                  <div className="flex gap-2 mt-3">
-                    {b.active ? (
-                      <button onClick={() => resolveBolo(b.id)}
-                        className="px-3 py-1.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 border-none cursor-pointer">
-                        ✓ Mark Resolved
-                      </button>
-                    ) : (
-                      <button onClick={() => reactivateBolo(b.id)}
-                        className="px-3 py-1.5 text-xs font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 border-none cursor-pointer">
-                        🔴 Reactivate
-                      </button>
+              {editingBoloId === b.id ? (
+                /* INLINE EDIT FORM (admin only) */
+                <div>
+                  <h4 className="font-bold text-red-800 mb-3 text-sm uppercase tracking-wide">Edit BOLO</h4>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
+                    <div><label className={labelCls}>Subject Name</label>
+                      <input value={editBoloName} onChange={e => setEditBoloName(e.target.value)} className={inputCls} /></div>
+                    <div><label className={labelCls}>Reason / Alert Type</label>
+                      <input value={editBoloReason} onChange={e => setEditBoloReason(e.target.value)} className={inputCls} /></div>
+                    <div className="sm:col-span-2"><label className={labelCls}>Description</label>
+                      <textarea rows={3} value={editBoloDesc} onChange={e => setEditBoloDesc(e.target.value)} className={textareaCls} /></div>
+                    <div><label className={labelCls}>Vehicle Description</label>
+                      <input value={editBoloVehicle} onChange={e => setEditBoloVehicle(e.target.value)} className={inputCls} /></div>
+                    <div><label className={labelCls}>Location</label>
+                      <select value={editBoloCommunity} onChange={e => setEditBoloCommunity(e.target.value)} className={inputCls}>
+                        <option value="">All Properties</option>
+                        {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select></div>
+                    <div><label className={labelCls}>Added By</label>
+                      <input value={editBoloAddedBy} onChange={e => setEditBoloAddedBy(e.target.value)} className={inputCls} /></div>
+                    {b.photo_url && (
+                      <div className="sm:col-span-2 flex items-center gap-3">
+                        <img src={b.photo_url} alt="" className="w-16 h-20 object-cover rounded border border-gray-300" />
+                        <span className="text-xs text-gray-500">Photo replacement coming soon — current photo unchanged on save.</span>
+                      </div>
                     )}
                   </div>
+                  <div className="flex gap-2">
+                    <button onClick={() => saveBoloEdit(b)} disabled={savingBoloEdit}
+                      className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer disabled:opacity-50">
+                      {savingBoloEdit ? "Saving..." : "💾 Save"}
+                    </button>
+                    <button onClick={cancelBoloEdit}
+                      className="px-4 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 text-sm font-semibold rounded-md border-none cursor-pointer">
+                      Cancel
+                    </button>
+                  </div>
                 </div>
-              </div>
+              ) : (
+                /* DISPLAY MODE */
+                <div className="flex gap-4">
+                  {b.photo_url && (
+                    <img src={b.photo_url} alt="BOLO subject" className="w-20 h-24 object-cover rounded-lg flex-shrink-0 border border-red-200" />
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex justify-between items-start mb-1">
+                      <div>
+                        <span className={`text-xs font-bold px-2 py-0.5 rounded-full mr-2 ${b.active ? "bg-red-600 text-white" : "bg-gray-400 text-white"}`}>
+                          {b.active ? "🔴 ACTIVE" : "✓ Resolved"}
+                        </span>
+                        {b.community_id && <span className="text-xs text-gray-800 font-semibold">📍 {getCommunityName(b.community_id)}</span>}
+                      </div>
+                      <div className="text-xs text-gray-400 text-right shrink-0 ml-2">
+                        <div>{new Date(b.created_at).toLocaleDateString()}</div>
+                        {b.added_by && <div>By: {b.added_by}</div>}
+                      </div>
+                    </div>
+                    {b.name && <div className="font-bold text-gray-900 text-lg">{b.name}</div>}
+                    {b.reason && <div className="text-red-700 font-semibold text-sm mb-1">{b.reason}</div>}
+                    {b.description && <div className="text-sm text-gray-700 mb-1 whitespace-pre-wrap">{b.description}</div>}
+                    {b.vehicle && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        🚗 <span className="font-medium">Vehicle:</span> {b.vehicle}
+                      </div>
+                    )}
+                    <div className="flex gap-2 mt-3 flex-wrap">
+                      {b.active ? (
+                        <button onClick={() => resolveBolo(b.id)}
+                          className="px-3 py-1.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 border-none cursor-pointer">
+                          ✓ Mark Resolved
+                        </button>
+                      ) : (
+                        <button onClick={() => reactivateBolo(b.id)}
+                          className="px-3 py-1.5 text-xs font-semibold bg-red-100 text-red-700 rounded-lg hover:bg-red-200 border-none cursor-pointer">
+                          🔴 Reactivate
+                        </button>
+                      )}
+                      {isAdmin && (
+                        <button onClick={() => startBoloEdit(b)}
+                          className="px-3 py-1.5 text-xs font-semibold bg-blue-100 text-blue-800 rounded-lg hover:bg-blue-200 border-none cursor-pointer">
+                          ✎ Edit
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>
