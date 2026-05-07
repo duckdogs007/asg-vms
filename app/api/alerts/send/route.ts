@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import { sendEmail, buildAlertEmailHtml } from "@/lib/email"
+import { sendEmail, buildAlertEmailHtml, logEmailDelivery } from "@/lib/email"
 
 type AlertType = "watchlist_hit" | "incident_high_priority" | "panic_sos"
 
@@ -158,7 +158,7 @@ export async function POST(req: Request) {
     !emailResult.ok ? `email: ${emailResult.error}` : null,
   ].filter(Boolean).join(" | ") || null
 
-  await supabase.from("alerts").insert({
+  const { data: alertRow } = await supabase.from("alerts").insert({
     type:         input.type,
     severity,
     community_id: cid,
@@ -167,7 +167,19 @@ export async function POST(req: Request) {
     triggered_by: user.email || null,
     status,
     error,
-  })
+  }).select("id").single()
+
+  // Audit-log the email leg specifically (Teams delivery is captured by the
+  // alerts row's status/error fields). Surfaces in /admin → Audit Log.
+  if (recipients.length) {
+    await logEmailDelivery(supabase, {
+      user_email:    user.email || null,
+      resource_type: "Alert",
+      resource_id:   (alertRow as { id?: string } | null)?.id || "",
+      recipients,
+      result:        emailResult,
+    })
+  }
 
   if (status === "failed") return NextResponse.json({ error }, { status: 502 })
   return NextResponse.json({

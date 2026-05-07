@@ -6,6 +6,8 @@
 // address. To send to arbitrary recipients, verify a domain at
 // https://resend.com/domains and update RESEND_FROM_EMAIL to use it.
 
+import type { SupabaseClient } from "@supabase/supabase-js"
+
 export interface SendEmailInput {
   to:      string[]
   subject: string
@@ -52,6 +54,36 @@ export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult>
   } catch (e: any) {
     return { ok: false, error: e?.message || String(e) }
   }
+}
+
+// ── Audit log helper ──────────────────────────────────────────
+
+// Records a row in audit_logs for each email-delivery attempt. Surfaces
+// in the /admin Audit Log tab. Skips logging when the email was a no-op
+// (no recipients configured + no error) so the audit doesn't fill with
+// "Sent to 0 recipients" noise.
+export async function logEmailDelivery(
+  supabase: SupabaseClient,
+  opts: {
+    user_email:    string | null
+    resource_type: "Alert" | "Passdown" | "BOLO"
+    resource_id:   string
+    recipients:    string[]
+    result:        SendEmailResult
+  }
+): Promise<void> {
+  if (!opts.recipients.length && opts.result.ok) return
+  const detail = opts.result.ok
+    ? `Email sent to ${opts.recipients.length} recipient${opts.recipients.length === 1 ? "" : "s"}: ${opts.recipients.join(", ")}`
+    : `Email failed: ${opts.result.error || "unknown error"}`
+  await supabase.from("audit_logs").insert({
+    user_email:    opts.user_email || "system",
+    action:        opts.result.ok ? "email_sent" : "email_failed",
+    resource_type: opts.resource_type,
+    resource_id:   opts.resource_id,
+    detail,
+    created_at:    new Date().toISOString(),
+  })
 }
 
 // ── Shared HTML templates ─────────────────────────────────────

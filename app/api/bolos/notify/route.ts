@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import { sendEmail, buildBoloEmailHtml } from "@/lib/email"
+import { sendEmail, buildBoloEmailHtml, logEmailDelivery } from "@/lib/email"
 
 // POST /api/bolos/notify  body: { id: string }
 //
@@ -65,6 +65,15 @@ export async function POST(req: Request) {
   })
 
   const result = await sendEmail({ to: recipients, subject, html, reply_to: user.email || undefined })
+
+  await logEmailDelivery(supabase, {
+    user_email:    user.email || null,
+    resource_type: "BOLO",
+    resource_id:   b.id,
+    recipients,
+    result,
+  })
+
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 502 })
   }
