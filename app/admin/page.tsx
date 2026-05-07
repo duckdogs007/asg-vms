@@ -697,16 +697,24 @@ export default function UserDashboard() {
         photoUrl = publicUrl
       }
     }
-    const { error } = await supabase.from("bolos").insert({
+    const { data: created, error } = await supabase.from("bolos").insert({
       name: boloName || null, description: boloDesc || null,
       reason: boloReason || null, vehicle: boloVehicle || null,
       community_id: boloCommunity || null, added_by: boloAddedBy || null,
       photo_url: photoUrl, active: true,
       created_at: new Date().toISOString()
-    })
+    }).select("id").single()
     setBoloSaving(false)
     if (error) { setBoloError(error.message); return }
     setBoloMessage("✅ BOLO added.")
+    // Fire-and-forget email notification to active recipients
+    if ((created as { id?: string } | null)?.id) {
+      fetch("/api/bolos/notify", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ id: (created as { id: string }).id }),
+      }).catch(e => console.error("[bolo notify]", e))
+    }
     logActivity("created", "BOLO", "", `BOLO added — ${boloName || boloDesc}`)
     setBoloName(""); setBoloDesc(""); setBoloReason(""); setBoloVehicle("")
     setBoloPhotoFile(null); setBoloPhotoPreview(""); setShowAddBolo(false)

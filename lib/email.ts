@@ -102,6 +102,53 @@ export function buildAlertEmailHtml(opts: {
   `
 }
 
+export function buildBoloEmailHtml(opts: {
+  name:        string | null
+  description: string | null
+  reason:      string | null
+  vehicle:     string | null
+  community:   string | null
+  added_by:    string | null
+  photo_url:   string | null
+}): string {
+  const facts: Array<[string, string | null]> = [
+    ["Name",        opts.name],
+    ["Reason",      opts.reason],
+    ["Vehicle",     opts.vehicle],
+    ["Location",    opts.community],
+    ["Issued by",   opts.added_by],
+  ]
+  const factRows = facts
+    .filter(([, v]) => v && v.trim() !== "")
+    .map(([k, v]) => `
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#6b7280;font-weight:600;font-size:13px;vertical-align:top;">${escapeHtml(k)}</td>
+        <td style="padding:4px 0;color:#111827;font-size:14px;">${escapeHtml(v as string)}</td>
+      </tr>`).join("")
+
+  const photoBlock = opts.photo_url
+    ? `<div style="margin:14px 18px;"><img src="${escapeHtml(opts.photo_url)}" alt="" style="max-width:100%;max-height:280px;border-radius:6px;border:1px solid #e5e7eb;" /></div>`
+    : ""
+
+  const descriptionBlock = opts.description
+    ? `<div style="margin:0 18px;padding:14px;border:1px solid #fecaca;border-radius:6px;background:#fff5f5;color:#7f1d1d;font-size:14px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(opts.description)}</div>`
+    : ""
+
+  return `
+    <div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:600px;margin:0 auto;">
+      <div style="border-left:4px solid #b91c1c;padding:14px 18px;background:#fef2f2;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:#991b1b;font-weight:700;">🔍 BOLO ISSUED</div>
+        <h2 style="margin:6px 0 0;color:#991b1b;font-size:18px;">${escapeHtml(opts.name || opts.description?.slice(0, 60) || "New BOLO")}</h2>
+      </div>
+      ${photoBlock}
+      ${factRows ? `<table style="margin:14px 18px;border-collapse:collapse;">${factRows}</table>` : ""}
+      ${descriptionBlock}
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 18px 12px;" />
+      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG VMS · ${escapeHtml(ET_NOW())} ET</p>
+    </div>
+  `
+}
+
 export function buildPassdownEmailHtml(opts: {
   date:         string | null
   shift:        string | null
