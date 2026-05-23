@@ -23,7 +23,10 @@ export default function LoginPage() {
       if (error) {
         setError(error.message)
       } else if (data.session) {
-        window.location.href = "/"
+        // Sign-on flow: officer must confirm their post for this shift.
+        // The confirm page saves the assignment + localStorage and then
+        // routes admin → /admin, everyone else → /vms.
+        window.location.href = "/confirm-location"
       } else {
         setError("Login failed — no session returned")
       }

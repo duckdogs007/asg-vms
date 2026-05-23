@@ -251,17 +251,47 @@ export default function UserDashboard() {
     }
   }
 
+  // Admin override: change another officer's assignment from the On Duty tab.
+  // value is "" (unassigned), "__admin_super__", or a community_id.
+  async function saveOfficerAssignment(userId: string, value: string) {
+    const body =
+      value === "__admin_super__" ? { user_id: userId, community_id: null, role: "admin_super" } :
+      value === ""                ? { user_id: userId, community_id: null, role: null } :
+                                    { user_id: userId, community_id: value, role: null }
+
+    setOfficers(prev => prev.map(o => o.id !== userId ? o : ({
+      ...o,
+      community_id: body.community_id,
+      community:    body.community_id ? (communities.find(c => c.id === body.community_id)?.name || null) : null,
+      role:         body.role,
+    })))
+
+    const r = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    if (!r.ok) {
+      const json = await r.json().catch(() => ({}))
+      setOfficersError(json.error || `HTTP ${r.status}`)
+    }
+  }
+
   async function loadInit() {
     const { data: c } = await supabase.from("communities").select("*")
     setCommunities(c || [])
     if (c?.length) {
-      setCommunityId(c[0].id)
-      setDailyCommunity(c[0].id)
-      setIncCommunity(c[0].id)
-      setWlCommunity(c[0].id)
-      setPdCommunity(c[0].id)
-      setBoloCommunity(c[0].id)
-      setVfiCommunity(c[0].id)
+      // Prefer the location the user picked at sign-on (mirrored to
+      // localStorage by /confirm-location); fall back to first community.
+      const savedId = typeof window !== "undefined" ? localStorage.getItem("asg-current-community-id") : null
+      const defaultId = (savedId && c.some((x: any) => x.id === savedId)) ? savedId : c[0].id
+      setCommunityId(defaultId)
+      setDailyCommunity(defaultId)
+      setIncCommunity(defaultId)
+      setWlCommunity(defaultId)
+      setPdCommunity(defaultId)
+      setBoloCommunity(defaultId)
+      setVfiCommunity(defaultId)
     }
     const { data: { user } } = await supabase.auth.getUser()
     if (user?.email) {
@@ -965,10 +995,18 @@ export default function UserDashboard() {
                             {o.display_name || o.email}
                             {isSupervisor && <span className="ml-2 text-xs text-blue-700 font-semibold">SUP</span>}
                           </td>
-                          <td className="px-4 py-2 text-gray-700 text-xs">
-                            {label === "Unassigned"
-                              ? <span className="text-gray-400 italic">Unassigned</span>
-                              : label}
+                          <td className="px-4 py-2">
+                            <select
+                              value={o.role === "admin_super" ? "__admin_super__" : (o.community_id || "")}
+                              onChange={(e) => saveOfficerAssignment(o.id, e.target.value)}
+                              className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600"
+                            >
+                              <option value="">— Unassigned —</option>
+                              <option value="__admin_super__">Admin / Super</option>
+                              {communities.map(c => (
+                                <option key={c.id} value={c.id}>{c.name}</option>
+                              ))}
+                            </select>
                           </td>
                           <td className="px-4 py-2 text-gray-600 text-xs">
                             {o.on_duty_at
