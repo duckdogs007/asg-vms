@@ -44,26 +44,13 @@ export async function GET() {
   const { data: communities } = await admin.from("communities").select("id, name")
   const commName = new Map((communities || []).map(c => [c.id as string, c.name as string]))
 
-  // 4. Most-recent officer_daily_logs per officer_name (last 90 days)
-  const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString()
-  const { data: logs } = await admin
-    .from("officer_daily_logs")
-    .select("officer_name, community_id, created_at")
-    .gte("created_at", since)
-    .order("created_at", { ascending: false })
-
-  // Build a guess: per surname (lowercased), the most recent community_id we saw.
-  const surnameToCommunity = new Map<string, string>()
-  for (const row of (logs || [])) {
-    const officerName = (row.officer_name || "").toLowerCase()
-    if (!officerName || !row.community_id) continue
-    // Take the LAST token of the officer name as surname guess
-    const tokens = officerName.split(/\s+/).filter(Boolean)
-    const surname = tokens[tokens.length - 1]
-    if (surname && !surnameToCommunity.has(surname)) {
-      surnameToCommunity.set(surname, row.community_id)
-    }
-  }
+  // 4. Explicit assignments set on /admin/system Users tab
+  const { data: assigns } = await admin
+    .from("user_assignments")
+    .select("user_id, community_id, role")
+  const assignMap = new Map(
+    (assigns || []).map(a => [a.user_id as string, { community_id: a.community_id as string | null, role: a.role as string | null }])
+  )
 
   // 5. Stitch
   const now = Date.now()
@@ -73,13 +60,18 @@ export async function GET() {
     const email = u.email || ""
     const ev = eventMap.get(email.toLowerCase())
     const updatedAt = u.updated_at ? new Date(u.updated_at).getTime() : 0
-
-    // Surname guess from email local-part: strip the first char (e.g.
-    // "dconner" → "conner", "jhall" → "hall"). Falls back to full local-part.
     const local = email.split("@")[0]?.toLowerCase() || ""
-    const surnameGuess = local.length >= 2 ? local.slice(1) : local
 
-    const communityId = surnameToCommunity.get(surnameGuess) || null
+    const a = assignMap.get(u.id)
+    const communityId = a?.community_id || null
+
+    // off_duty_at should only show if the user is currently signed out —
+    // i.e. their last logout is NEWER than their last login. Otherwise the
+    // displayed "Off Duty" would be a stale past date even though they're
+    // active right now. Same for is_online.
+    const loginTs  = ev?.last_login  ? new Date(ev.last_login).getTime()  : 0
+    const logoutTs = ev?.last_logout ? new Date(ev.last_logout).getTime() : 0
+    const offDutyAt = logoutTs > loginTs ? ev?.last_logout ?? null : null
 
     return {
       id:           u.id,
@@ -87,13 +79,12 @@ export async function GET() {
       display_name: derivePersonName(local),
       community_id: communityId,
       community:    communityId ? (commName.get(communityId) || null) : null,
+      role:         a?.role || null,
       on_duty_at:   ev?.last_login || null,
-      off_duty_at:  ev?.last_logout || null,
+      off_duty_at:  offDutyAt,
       // online if their session refreshed in the last ONLINE_WINDOW_MIN
-      // AND there isn't a logout newer than that refresh
-      is_online:    updatedAt >= onlineCutoff && !(
-        ev?.last_logout && new Date(ev.last_logout).getTime() > updatedAt
-      ),
+      // AND they haven't logged out since
+      is_online:    updatedAt >= onlineCutoff && logoutTs <= loginTs,
     }
   })
 

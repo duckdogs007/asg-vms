@@ -35,6 +35,7 @@ interface OfficerOnDuty {
   display_name: string
   community_id: string | null
   community:    string | null
+  role:         string | null
   on_duty_at:   string | null
   off_duty_at:  string | null
   is_online:    boolean
@@ -912,22 +913,26 @@ export default function UserDashboard() {
           )}
 
           {(() => {
-            // Group online officers by location. Offline users hidden by default
-            // (this tab is "who's on duty right now").
-            const online = officers.filter(o => o.is_online)
-            const byLocation = new Map<string, OfficerOnDuty[]>()
-            for (const o of online) {
-              const key = o.community || "Unassigned"
-              if (!byLocation.has(key)) byLocation.set(key, [])
-              byLocation.get(key)!.push(o)
-            }
-            const groups = [...byLocation.entries()].sort(([a], [b]) => {
-              if (a === "Unassigned") return 1
-              if (b === "Unassigned") return -1
-              return a.localeCompare(b)
-            })
+            // Only show currently-online officers. Assignment label comes
+            // from /admin/system → Users tab (community name or Admin/Super).
+            const labelFor = (o: OfficerOnDuty) =>
+              o.role === "admin_super" ? "Admin / Super" :
+              o.community               || "Unassigned"
 
-            if (groups.length === 0) {
+            const online = officers
+              .filter(o => o.is_online)
+              .sort((a, b) => {
+                const la = labelFor(a), lb = labelFor(b)
+                // Admin/Super first, Unassigned last, communities A→Z in between
+                if (la === "Admin / Super" && lb !== "Admin / Super") return -1
+                if (lb === "Admin / Super" && la !== "Admin / Super") return  1
+                if (la === "Unassigned"    && lb !== "Unassigned")    return  1
+                if (lb === "Unassigned"    && la !== "Unassigned")    return -1
+                if (la !== lb) return la.localeCompare(lb)
+                return (a.display_name || a.email).localeCompare(b.display_name || b.email)
+              })
+
+            if (online.length === 0) {
               return (
                 <div className="px-3 py-8 text-center text-sm text-gray-500 bg-gray-50 rounded-md">
                   {officersLoading ? "" : "No officers currently on duty."}
@@ -936,49 +941,50 @@ export default function UserDashboard() {
             }
 
             return (
-              <div className="space-y-5">
-                {groups.map(([location, list]) => (
-                  <div key={location} className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
-                      <div className="text-sm font-semibold text-gray-900">📍 {location}</div>
-                      <div className="text-xs text-gray-500">{list.length} on duty</div>
-                    </div>
-                    <table className="w-full text-sm">
-                      <thead className="bg-white text-xs uppercase text-gray-500">
-                        <tr>
-                          <th className="px-4 py-2 text-left">Officer</th>
-                          <th className="px-4 py-2 text-left">On Duty</th>
-                          <th className="px-4 py-2 text-left">Off Duty</th>
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                    <tr>
+                      <th className="px-4 py-2 text-left">Officer</th>
+                      <th className="px-4 py-2 text-left">Location</th>
+                      <th className="px-4 py-2 text-left">On Duty</th>
+                      <th className="px-4 py-2 text-left">Off Duty</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {online.map(o => {
+                      const local = (o.email.split("@")[0] || "").toLowerCase()
+                      const isSupervisor =
+                        o.role === "admin_super" ||
+                        SUPERVISOR_SURNAMES.some(s => local.includes(s))
+                      const label = labelFor(o)
+                      return (
+                        <tr key={o.id} className="border-t border-gray-100 hover:bg-gray-50">
+                          <td className={`px-4 py-2 ${isSupervisor ? "font-bold text-gray-900" : "text-gray-800"}`}>
+                            <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2 align-middle" />
+                            {o.display_name || o.email}
+                            {isSupervisor && <span className="ml-2 text-xs text-blue-700 font-semibold">SUP</span>}
+                          </td>
+                          <td className="px-4 py-2 text-gray-700 text-xs">
+                            {label === "Unassigned"
+                              ? <span className="text-gray-400 italic">Unassigned</span>
+                              : label}
+                          </td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">
+                            {o.on_duty_at
+                              ? new Date(o.on_duty_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                              : <span className="text-gray-400">—</span>}
+                          </td>
+                          <td className="px-4 py-2 text-gray-600 text-xs">
+                            {o.off_duty_at
+                              ? new Date(o.off_duty_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                              : <span className="text-gray-400">— (still on)</span>}
+                          </td>
                         </tr>
-                      </thead>
-                      <tbody>
-                        {list.map(o => {
-                          const local = (o.email.split("@")[0] || "").toLowerCase()
-                          const isSupervisor = SUPERVISOR_SURNAMES.some(s => local.includes(s))
-                          return (
-                            <tr key={o.id} className="border-t border-gray-100">
-                              <td className={`px-4 py-2 ${isSupervisor ? "font-bold text-gray-900" : "text-gray-800"}`}>
-                                <span className="inline-block w-2 h-2 rounded-full bg-green-500 mr-2 align-middle" />
-                                {o.display_name || o.email}
-                                {isSupervisor && <span className="ml-2 text-xs text-blue-700 font-semibold">SUP</span>}
-                              </td>
-                              <td className="px-4 py-2 text-gray-600 text-xs">
-                                {o.on_duty_at
-                                  ? new Date(o.on_duty_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-                                  : <span className="text-gray-400">—</span>}
-                              </td>
-                              <td className="px-4 py-2 text-gray-600 text-xs">
-                                {o.off_duty_at
-                                  ? new Date(o.off_duty_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-                                  : <span className="text-gray-400">— (still on)</span>}
-                              </td>
-                            </tr>
-                          )
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                ))}
+                      )
+                    })}
+                  </tbody>
+                </table>
               </div>
             )
           })()}

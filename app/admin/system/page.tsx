@@ -27,6 +27,9 @@ interface UserRow {
   updated_at:         string | null
   email_confirmed_at: string | null
   is_admin?:          boolean
+  community_id?:      string | null
+  community?:         string | null
+  role?:              string | null
 }
 
 // updated_at is bumped on every token refresh, last_sign_in_at only on
@@ -87,6 +90,10 @@ export default function AdminSystemPage() {
     } else if (activeTab === "users") {
       setUsersError("")
       try {
+        // Communities power the Location dropdown on each row
+        const { data: c } = await supabase.from("communities").select("id,name").order("name")
+        setCommunities(c || [])
+
         const r = await fetch("/api/admin/users", { cache: "no-store" })
         const json = await r.json()
         if (!r.ok) {
@@ -148,6 +155,35 @@ export default function AdminSystemPage() {
       else       status[bucket] = { ok: true,  sample: data?.length || 0 }
     }
     setBucketStatus(status)
+  }
+
+  // Dropdown sentinel for the "Admin/Super" choice
+  const ADMIN_SUPER = "__admin_super__"
+
+  async function saveAssignment(userId: string, value: string) {
+    // value is either "" (unassigned), "__admin_super__", or a community_id
+    const body =
+      value === ADMIN_SUPER ? { user_id: userId, community_id: null, role: "admin_super" } :
+      value === ""          ? { user_id: userId, community_id: null, role: null } :
+                              { user_id: userId, community_id: value, role: null }
+
+    // Optimistic update
+    setUsers(prev => prev.map(u => u.id !== userId ? u : ({
+      ...u,
+      community_id: body.community_id,
+      community:    body.community_id ? (communities.find(c => c.id === body.community_id)?.name || null) : null,
+      role:         body.role,
+    })))
+
+    const r = await fetch("/api/admin/users", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    if (!r.ok) {
+      const json = await r.json().catch(() => ({}))
+      setUsersError(json.error || `HTTP ${r.status}`)
+    }
   }
 
   async function loadAdminList() {
@@ -413,6 +449,7 @@ export default function AdminSystemPage() {
                 <tr>
                   <th className="px-3 py-2 text-left">Email</th>
                   <th className="px-3 py-2 text-left">Role</th>
+                  <th className="px-3 py-2 text-left">Location</th>
                   <th className="px-3 py-2 text-left">Confirmed</th>
                   <th className="px-3 py-2 text-left">Created</th>
                   <th className="px-3 py-2 text-left">Last Seen</th>
@@ -426,6 +463,19 @@ export default function AdminSystemPage() {
                       {u.is_admin
                         ? <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded">Admin</span>
                         : <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded">User</span>}
+                    </td>
+                    <td className="px-3 py-2">
+                      <select
+                        value={u.role === "admin_super" ? ADMIN_SUPER : (u.community_id || "")}
+                        onChange={(e) => saveAssignment(u.id, e.target.value)}
+                        className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600"
+                      >
+                        <option value="">— Unassigned —</option>
+                        <option value={ADMIN_SUPER}>Admin / Super</option>
+                        {communities.map(c => (
+                          <option key={c.id} value={c.id}>{c.name}</option>
+                        ))}
+                      </select>
                     </td>
                     <td className="px-3 py-2">
                       {u.email_confirmed_at
