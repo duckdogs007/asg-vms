@@ -157,7 +157,7 @@ export default function Home() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
 
           <ModuleCard
-            href="/admin"
+            href="/userdash"
             icon="📋"
             title="User Dashboard"
             desc="Passdowns, BOLOs, Officer Reports, Watchlist, Rent Roll, Audit Log."

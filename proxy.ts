@@ -39,8 +39,13 @@ export async function proxy(request: NextRequest) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
-  // Admin-only section — allow listed emails (centralized in lib/admin.ts)
-  if (pathname.startsWith("/admin") && !ADMIN_EMAILS.includes(user.email ?? "")) {
+  // Admin-only sections — allow listed emails (centralized in lib/admin.ts).
+  // /userdash = User Dashboard (Passdown, BOLO, Reports, Watchlist, On Duty,
+  // Rent Roll). /admin/system + /admin/post-orders = system admin pages.
+  if (
+    (pathname.startsWith("/admin") || pathname.startsWith("/userdash")) &&
+    !ADMIN_EMAILS.includes(user.email ?? "")
+  ) {
     return NextResponse.redirect(new URL("/vms", request.url));
   }
 

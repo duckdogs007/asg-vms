@@ -86,7 +86,7 @@ export default function ConfirmLocationPage() {
         .select("user_id")
         .eq("user_id", user?.id || "")
         .maybeSingle()
-      router.replace(adminRow ? "/admin" : "/vms")
+      router.replace(adminRow ? "/userdash" : "/vms")
     } catch (err: any) {
       setError(err?.message || "Unexpected error")
       setSaving(false)

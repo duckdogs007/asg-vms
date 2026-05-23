@@ -322,7 +322,7 @@ export default function ProfilePage({ params }: any) {
             {savingIncident ? "Adding…" : "+ Add"}
           </button>
         </div>
-        <p className="text-xs text-gray-400 mt-1">For richer reports (date/location/type/follow-up), use <Link href="/admin" className="text-blue-700 hover:text-blue-900">Officer Reports</Link>.</p>
+        <p className="text-xs text-gray-400 mt-1">For richer reports (date/location/type/follow-up), use <Link href="/userdash" className="text-blue-700 hover:text-blue-900">Officer Reports</Link>.</p>
         {incidentError && <div className="text-xs text-red-600 mt-1">{incidentError}</div>}
 
         {incidents.length === 0 ? (

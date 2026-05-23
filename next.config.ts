@@ -21,6 +21,15 @@ const nextConfig: NextConfig = {
     workerThreads: false,
     cpus: 1,
   },
+  // Backwards-compat: User Dashboard moved /admin → /userdash on 2026-05-23
+  // so the URL reflects its purpose (the system Admin Dashboard lives at
+  // /admin/system). Only the exact /admin path redirects — sub-routes like
+  // /admin/system and /admin/post-orders are unaffected.
+  async redirects() {
+    return [
+      { source: "/admin", destination: "/userdash", permanent: true },
+    ]
+  },
 };
 
 export default nextConfig;
