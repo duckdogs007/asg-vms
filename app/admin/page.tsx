@@ -44,7 +44,7 @@ type ReportTab = "daily" | "incident" | "contact" | "vfi" | "view"
 
 export default function UserDashboard() {
 
-  const [activeTab,   setActiveTab]   = useState<Tab>("passdown")
+  const [activeTab,   setActiveTab]   = useState<Tab>("onduty")
   const [communities, setCommunities] = useState<any[]>([])
   const [communityId, setCommunityId] = useState("")
   const [officerName, setOfficerName] = useState("")
