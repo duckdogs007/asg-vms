@@ -35,11 +35,14 @@ export async function GET() {
   const { data: admins } = await admin.from("admin_users").select("user_id")
   const adminSet = new Set((admins || []).map(a => a.user_id))
 
+  // updated_at is bumped by GoTrue on every session/token refresh, so it
+  // reflects real activity. last_sign_in_at only moves on fresh sign-in.
   const users = (data.users || []).map(u => ({
     id:                  u.id,
     email:               u.email,
     created_at:          u.created_at,
     last_sign_in_at:     u.last_sign_in_at,
+    updated_at:          u.updated_at,
     email_confirmed_at:  u.email_confirmed_at,
     banned_until:        (u as any).banned_until || null,
     user_metadata:       u.user_metadata || {},

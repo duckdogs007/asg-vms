@@ -24,8 +24,17 @@ interface UserRow {
   email:              string | null
   created_at:         string
   last_sign_in_at:    string | null
+  updated_at:         string | null
   email_confirmed_at: string | null
   is_admin?:          boolean
+}
+
+// updated_at is bumped on every token refresh, last_sign_in_at only on
+// fresh sign-in — take whichever is newer.
+const lastActiveOf = (u: { updated_at?: string | null; last_sign_in_at?: string | null }) => {
+  const a = u.updated_at || ""
+  const b = u.last_sign_in_at || ""
+  return a > b ? a : b
 }
 
 export default function AdminSystemPage() {
@@ -59,7 +68,7 @@ export default function AdminSystemPage() {
   const [webhookTesting,  setWebhookTesting]  = useState(false)
   const [webhookResult,   setWebhookResult]   = useState<"" | "ok" | "fail">("")
   const [webhookError,    setWebhookError]    = useState("")
-  const [adminList,       setAdminList]       = useState<{ email: string; last_sign_in_at: string | null }[]>([])
+  const [adminList,       setAdminList]       = useState<{ email: string; last_active_at: string | null }[]>([])
   const [auditStats,      setAuditStats]      = useState<{ count: number; oldest: string | null; newest: string | null } | null>(null)
   const [settingsLoading, setSettingsLoading] = useState(false)
 
@@ -84,11 +93,9 @@ export default function AdminSystemPage() {
           setUsersError(json.error || `HTTP ${r.status}`)
           setUsers([])
         } else {
-          const rows = (json.users as UserRow[]).sort((a, b) => {
-            const al = a.last_sign_in_at || ""
-            const bl = b.last_sign_in_at || ""
-            return bl.localeCompare(al)
-          })
+          const rows = (json.users as UserRow[]).sort(
+            (a, b) => lastActiveOf(b).localeCompare(lastActiveOf(a))
+          )
           setUsers(rows)
         }
       } catch (e: any) {
@@ -150,8 +157,8 @@ export default function AdminSystemPage() {
       const { users } = await r.json()
       const admins = (users || [])
         .filter((u: any) => u.is_admin)
-        .map((u: any) => ({ email: u.email || "—", last_sign_in_at: u.last_sign_in_at }))
-        .sort((a: any, b: any) => (b.last_sign_in_at || "").localeCompare(a.last_sign_in_at || ""))
+        .map((u: any) => ({ email: u.email || "—", last_active_at: lastActiveOf(u) || null }))
+        .sort((a: any, b: any) => (b.last_active_at || "").localeCompare(a.last_active_at || ""))
       setAdminList(admins)
     } catch {
       setAdminList([])
@@ -408,7 +415,7 @@ export default function AdminSystemPage() {
                   <th className="px-3 py-2 text-left">Role</th>
                   <th className="px-3 py-2 text-left">Confirmed</th>
                   <th className="px-3 py-2 text-left">Created</th>
-                  <th className="px-3 py-2 text-left">Last Sign-In</th>
+                  <th className="px-3 py-2 text-left">Last Seen</th>
                 </tr>
               </thead>
               <tbody>
@@ -429,9 +436,12 @@ export default function AdminSystemPage() {
                       {new Date(u.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </td>
                     <td className="px-3 py-2 text-gray-600 text-xs">
-                      {u.last_sign_in_at
-                        ? new Date(u.last_sign_in_at).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-                        : <span className="text-gray-400">never</span>}
+                      {(() => {
+                        const ts = lastActiveOf(u)
+                        return ts
+                          ? new Date(ts).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+                          : <span className="text-gray-400">never</span>
+                      })()}
                     </td>
                   </tr>
                 ))}
@@ -499,7 +509,7 @@ export default function AdminSystemPage() {
             <Row k="Admin routes" v="/admin, /admin/system, /admin/post-orders" />
             {adminList.length === 0 && <Row k="Active admins" v={settingsLoading ? "Loading…" : "—"} />}
             {adminList.map(a => (
-              <Row key={a.email} k={a.email} v={a.last_sign_in_at ? `Last sign-in ${fmtDate(a.last_sign_in_at)}` : "Never signed in"} />
+              <Row key={a.email} k={a.email} v={a.last_active_at ? `Last seen ${fmtDate(a.last_active_at)}` : "Never signed in"} />
             ))}
           </Section>
 
