@@ -125,34 +125,38 @@ export default function TopNav() {
       {/* MAIN NAV BAR */}
       <div className="flex justify-between items-center px-4 sm:px-5 py-3">
 
-        {/* LEFT — desktop nav links */}
-        <div className="hidden md:flex gap-5">
-          <Link href="/"            className={navLinkCls}>Home</Link>
-          <Link href="/vms"         className={navLinkCls}>VMS</Link>
-          <Link href="/alerts"      className={navLinkCls}>Alerts</Link>
-          {isAdmin && <Link href="/userdash"     className={navLinkCls}>User Dashboard</Link>}
-          {isAdmin && <Link href="/admin/system" className={navLinkCls}>Admin Dashboard</Link>}
-          <Link href="/vms/intel"       className={navLinkCls}>Intel Terminal</Link>
-          <Link href="/vms/reports"     className={navLinkCls}>Reports</Link>
-          <Link href="/vms/post-orders" className={navLinkCls}>Post Orders</Link>
-        </div>
+        {/* LEFT GROUP — hamburger (always visible) + desktop link row */}
+        <div className="flex items-center gap-3 md:gap-5">
 
-        {/* LEFT — mobile hamburger */}
-        <button
-          className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100 border-none cursor-pointer"
-          onClick={() => setMobileNavOpen(!mobileNavOpen)}
-          aria-label="Toggle menu"
-        >
-          {mobileNavOpen ? (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          ) : (
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-          )}
-        </button>
+          {/* Hamburger — opens the all-pages dropdown on every screen size */}
+          <button
+            className="p-2 rounded-md text-gray-600 hover:bg-gray-100 border-none cursor-pointer"
+            onClick={() => setMobileNavOpen(!mobileNavOpen)}
+            aria-label="Toggle menu"
+          >
+            {mobileNavOpen ? (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            ) : (
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            )}
+          </button>
+
+          {/* Desktop nav links (hidden below md) — Admin Dashboard sits last */}
+          <div className="hidden md:flex gap-5">
+            <Link href="/"            className={navLinkCls}>Home</Link>
+            <Link href="/vms"         className={navLinkCls}>VMS</Link>
+            <Link href="/alerts"      className={navLinkCls}>Alerts</Link>
+            {isAdmin && <Link href="/userdash"     className={navLinkCls}>User Dashboard</Link>}
+            <Link href="/vms/intel"       className={navLinkCls}>Intel Terminal</Link>
+            <Link href="/vms/reports"     className={navLinkCls}>Reports</Link>
+            <Link href="/vms/post-orders" className={navLinkCls}>Post Orders</Link>
+            {isAdmin && <Link href="/admin/system" className={navLinkCls}>Admin Dashboard</Link>}
+          </div>
+        </div>
 
         {/* RIGHT */}
         <div className="flex items-center gap-2 sm:gap-3">
@@ -241,17 +245,17 @@ export default function TopNav() {
         </div>
       )}
 
-      {/* MOBILE NAV DROPDOWN */}
+      {/* NAV DROPDOWN — opens from the hamburger on every screen size */}
       {mobileNavOpen && (
-        <div className="md:hidden border-t border-gray-100 bg-white">
+        <div className="border-t border-gray-100 bg-white">
           <Link href="/"            className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
           <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
           <Link href="/alerts"      className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alerts</Link>
           {isAdmin && <Link href="/userdash"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>}
-          {isAdmin && <Link href="/admin/system" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ Admin Dashboard</Link>}
           <Link href="/vms/intel"       className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
           <Link href="/vms/reports"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
           <Link href="/vms/post-orders" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 Post Orders</Link>
+          {isAdmin && <Link href="/admin/system" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ Admin Dashboard</Link>}
           <div className="px-4 py-3 text-xs text-gray-400">{currentTime}</div>
         </div>
       )}
