@@ -115,12 +115,12 @@ export default function TopNav() {
     : ""
 
   const navLinkCls = "text-gray-700 hover:text-blue-800 text-sm font-medium transition-colors"
-  const mobileNavLinkCls = "block px-4 py-3 text-sm font-medium text-gray-700 hover:bg-gray-50 border-b border-gray-100"
+  const mobileNavLinkCls = "block px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 whitespace-nowrap"
 
   if (pathname === "/login") return null
 
   return (
-    <nav className="border-b border-gray-200 bg-white shadow-sm">
+    <nav className="relative border-b border-gray-200 bg-white shadow-sm">
 
       {/* MAIN NAV BAR */}
       <div className="flex justify-between items-center px-4 sm:px-5 py-3">
@@ -245,19 +245,23 @@ export default function TopNav() {
         </div>
       )}
 
-      {/* NAV DROPDOWN — opens from the hamburger on every screen size */}
+      {/* NAV DROPDOWN — floating panel anchored under the hamburger */}
       {mobileNavOpen && (
-        <div className="border-t border-gray-100 bg-white">
-          <Link href="/"            className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
-          <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
-          <Link href="/alerts"      className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alerts</Link>
-          {isAdmin && <Link href="/userdash"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>}
-          <Link href="/vms/intel"       className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
-          <Link href="/vms/reports"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
-          <Link href="/vms/post-orders" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 Post Orders</Link>
-          {isAdmin && <Link href="/admin/system" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ Admin Dashboard</Link>}
-          <div className="px-4 py-3 text-xs text-gray-400">{currentTime}</div>
-        </div>
+        <>
+          {/* Click-outside catcher */}
+          <div className="fixed inset-0 z-40" onClick={() => setMobileNavOpen(false)} />
+          <div className="absolute left-3 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[220px] py-1">
+            <Link href="/"            className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
+            <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
+            <Link href="/alerts"      className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alerts</Link>
+            {isAdmin && <Link href="/userdash"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>}
+            <Link href="/vms/intel"       className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
+            <Link href="/vms/reports"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
+            <Link href="/vms/post-orders" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 Post Orders</Link>
+            {isAdmin && <Link href="/admin/system" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ Admin Dashboard</Link>}
+            <div className="border-t border-gray-100 mt-1 pt-1.5 pb-1.5 px-4 text-xs text-gray-400">{currentTime}</div>
+          </div>
+        </>
       )}
 
     </nav>
