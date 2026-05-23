@@ -19,8 +19,10 @@ export async function GET() {
   return NextResponse.json({ assignment: data || null, last_sign_in_at: user.last_sign_in_at })
 }
 
-// POST — upsert the CURRENT user's own assignment
-// body: { community_id?: string|null, role?: string|null }
+// POST — upsert the CURRENT user's own assignment.
+// body: { community_id?: string|null }
+// role is intentionally NOT accepted here — only admins can set role via
+// PATCH /api/admin/users. set_my_assignment() never writes role.
 export async function POST(req: Request) {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -28,17 +30,14 @@ export async function POST(req: Request) {
 
   const body = await req.json().catch(() => null) as {
     community_id?: string | null
-    role?: string | null
   } | null
 
-  // RLS only lets admins write user_assignments. For self-assign we need
-  // a SECURITY DEFINER RPC or service-role. Going with the RPC.
-  // Until that exists, only admins can save. (See follow-up note.)
-  const { error } = await supabase.rpc("set_my_assignment", {
-    p_community_id: body?.community_id ?? null,
-    p_role:         body?.role         ?? null,
-  })
+  const cid = body?.community_id ?? null
+  if (cid !== null && typeof cid !== "string") {
+    return NextResponse.json({ error: "community_id must be a string or null" }, { status: 400 })
+  }
 
+  const { error } = await supabase.rpc("set_my_assignment", { p_community_id: cid })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

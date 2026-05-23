@@ -9,12 +9,12 @@
 CREATE TABLE IF NOT EXISTS public.user_assignments (
   user_id      uuid PRIMARY KEY REFERENCES auth.users(id)        ON DELETE CASCADE,
   community_id uuid          REFERENCES public.communities(id) ON DELETE SET NULL,
-  role         text,
+  role         text CHECK (role IS NULL OR role = 'admin_super'),
   updated_at   timestamptz NOT NULL DEFAULT now()
 );
 
 COMMENT ON COLUMN public.user_assignments.role IS
-  'Optional role override. When "admin_super", user is displayed/grouped as Admin/Super regardless of community_id.';
+  'Optional role override. When "admin_super", user is displayed/grouped as Admin/Super regardless of community_id. Only admins set this — set_my_assignment() never writes a role.';
 
 COMMENT ON TABLE public.user_assignments IS
   'Per-user home community assignment. Set by admins via /admin/system Users tab.';

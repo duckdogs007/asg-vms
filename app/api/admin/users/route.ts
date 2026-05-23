@@ -74,6 +74,8 @@ export async function GET() {
 
 // PATCH /api/admin/users  body: { user_id, community_id?: string|null, role?: string|null }
 // Upserts a row in user_assignments.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
 export async function PATCH(req: Request) {
   const gate = await requireAdmin()
   if (gate.error) return gate.error
@@ -84,8 +86,15 @@ export async function PATCH(req: Request) {
     community_id?: string | null
     role?: string | null
   } | null
-  if (!body?.user_id) {
-    return NextResponse.json({ error: "user_id required" }, { status: 400 })
+
+  if (!body?.user_id || !UUID_RE.test(body.user_id)) {
+    return NextResponse.json({ error: "user_id must be a UUID" }, { status: 400 })
+  }
+  if (body.community_id !== undefined && body.community_id !== null && !UUID_RE.test(body.community_id)) {
+    return NextResponse.json({ error: "community_id must be a UUID or null" }, { status: 400 })
+  }
+  if (body.role !== undefined && body.role !== null && body.role !== "admin_super") {
+    return NextResponse.json({ error: "role must be null or 'admin_super'" }, { status: 400 })
   }
 
   const { error } = await admin
