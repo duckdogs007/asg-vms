@@ -116,13 +116,23 @@ export default function AdminSystemPage() {
     }
   }
 
-  async function loadAuditLog() {
-    setAuditLoading(true)
+  // silent=true skips the loading spinner so the interval poll doesn't flicker
+  // the table (the render hides the table while auditLoading is true).
+  async function loadAuditLog(silent = false) {
+    if (!silent) setAuditLoading(true)
     const { data } = await supabase.from("audit_logs")
       .select("*").order("created_at", { ascending: false }).limit(100)
     setAuditLogs(data || [])
-    setAuditLoading(false)
+    if (!silent) setAuditLoading(false)
   }
+
+  // Live updates: while the Audit Log tab is open, re-poll every 10s. New
+  // entries appear within the interval without a manual refresh.
+  useEffect(() => {
+    if (activeTab !== "audit") return
+    const t = setInterval(() => loadAuditLog(true), 10000)
+    return () => clearInterval(t)
+  }, [activeTab])
 
   // ── SETTINGS loaders ──
   async function loadSettings() {
@@ -583,7 +593,7 @@ export default function AdminSystemPage() {
               <h3 className="text-lg font-bold text-gray-800">Activity Audit Log</h3>
               <p className="text-xs text-gray-500 mt-0.5">All system actions logged chronologically — read only</p>
             </div>
-            <button onClick={loadAuditLog}
+            <button onClick={() => loadAuditLog()}
               className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 border-none cursor-pointer">
               ↻ Refresh
             </button>
