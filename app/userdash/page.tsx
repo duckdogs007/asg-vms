@@ -193,6 +193,12 @@ export default function UserDashboard() {
   const [boloName,       setBoloName]       = useState("")
   const [boloDesc,       setBoloDesc]       = useState("")
   const [boloReason,     setBoloReason]     = useState("")
+  const [boloDob,        setBoloDob]        = useState("")
+  const [boloOln,        setBoloOln]        = useState("")
+  const [boloSsn,        setBoloSsn]        = useState("")
+  const [boloSex,        setBoloSex]        = useState("")
+  const [boloRace,       setBoloRace]       = useState("")
+  const [boloFirearm,    setBoloFirearm]    = useState(false)
   const [boloVehicle,    setBoloVehicle]    = useState("")
   const [boloCommunity,  setBoloCommunity]  = useState("")
   const [boloAddedBy,    setBoloAddedBy]    = useState("")
@@ -208,6 +214,12 @@ export default function UserDashboard() {
   const [editBoloName,     setEditBoloName]     = useState("")
   const [editBoloDesc,     setEditBoloDesc]     = useState("")
   const [editBoloReason,   setEditBoloReason]   = useState("")
+  const [editBoloDob,      setEditBoloDob]      = useState("")
+  const [editBoloOln,      setEditBoloOln]      = useState("")
+  const [editBoloSsn,      setEditBoloSsn]      = useState("")
+  const [editBoloSex,      setEditBoloSex]      = useState("")
+  const [editBoloRace,     setEditBoloRace]     = useState("")
+  const [editBoloFirearm,  setEditBoloFirearm]  = useState(false)
   const [editBoloVehicle,  setEditBoloVehicle]  = useState("")
   const [editBoloCommunity,setEditBoloCommunity]= useState("")
   const [editBoloAddedBy,  setEditBoloAddedBy]  = useState("")
@@ -804,6 +816,8 @@ export default function UserDashboard() {
     const { data: created, error } = await supabase.from("bolos").insert({
       name: boloName || null, description: boloDesc || null,
       reason: boloReason || null, vehicle: boloVehicle || null,
+      dob: boloDob || null, oln: boloOln || null, ssn: boloSsn || null,
+      sex: boloSex || null, race: boloRace || null, firearm_flag: boloFirearm,
       community_id: boloCommunity || null, added_by: boloAddedBy || null,
       photo_url: photoUrl, active: true,
       created_at: new Date().toISOString()
@@ -821,6 +835,7 @@ export default function UserDashboard() {
     }
     logActivity("created", "BOLO", "", `BOLO added — ${boloName || boloDesc}`)
     setBoloName(""); setBoloDesc(""); setBoloReason(""); setBoloVehicle("")
+    setBoloDob(""); setBoloOln(""); setBoloSsn(""); setBoloSex(""); setBoloRace(""); setBoloFirearm(false)
     setBoloPhotoFile(null); setBoloPhotoPreview(""); setShowAddBolo(false)
     loadBolos()
   }
@@ -830,6 +845,12 @@ export default function UserDashboard() {
     setEditBoloName(b.name || "")
     setEditBoloDesc(b.description || "")
     setEditBoloReason(b.reason || "")
+    setEditBoloDob(b.dob || "")
+    setEditBoloOln(b.oln || "")
+    setEditBoloSsn(b.ssn || "")
+    setEditBoloSex(b.sex || "")
+    setEditBoloRace(b.race || "")
+    setEditBoloFirearm(!!b.firearm_flag)
     setEditBoloVehicle(b.vehicle || "")
     setEditBoloCommunity(b.community_id || "")
     setEditBoloAddedBy(b.added_by || "")
@@ -839,6 +860,7 @@ export default function UserDashboard() {
   function cancelBoloEdit() {
     setEditingBoloId(null)
     setEditBoloName(""); setEditBoloDesc(""); setEditBoloReason("")
+    setEditBoloDob(""); setEditBoloOln(""); setEditBoloSsn(""); setEditBoloSex(""); setEditBoloRace(""); setEditBoloFirearm(false)
     setEditBoloVehicle(""); setEditBoloCommunity(""); setEditBoloAddedBy("")
     setBoloError("")
   }
@@ -850,6 +872,12 @@ export default function UserDashboard() {
       name:         editBoloName || null,
       description:  editBoloDesc || null,
       reason:       editBoloReason || null,
+      dob:          editBoloDob || null,
+      oln:          editBoloOln || null,
+      ssn:          editBoloSsn || null,
+      sex:          editBoloSex || null,
+      race:         editBoloRace || null,
+      firearm_flag: editBoloFirearm,
       vehicle:      editBoloVehicle || null,
       community_id: editBoloCommunity || null,
       added_by:     editBoloAddedBy || null,
@@ -1952,6 +1980,27 @@ export default function UserDashboard() {
                   <input value={boloName} onChange={e => setBoloName(e.target.value)} placeholder="First Last" className={inputCls} /></div>
                 <div><label className={labelCls}>Reason / Alert Type</label>
                   <input value={boloReason} onChange={e => setBoloReason(e.target.value)} placeholder="e.g. Trespassing, Theft, Warrant" className={inputCls} /></div>
+                <div><label className={labelCls}>DOB</label>
+                  <input type="date" value={boloDob} onChange={e => setBoloDob(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>OLN (Driver License #)</label>
+                  <input value={boloOln} onChange={e => setBoloOln(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>SSN</label>
+                  <input value={boloSsn} onChange={e => setBoloSsn(e.target.value)} placeholder="XXX-XX-XXXX or last 4" maxLength={11} className={inputCls} /></div>
+                <div><label className={labelCls}>Sex</label>
+                  <select value={boloSex} onChange={e => setBoloSex(e.target.value)} className={inputCls}>
+                    <option value="">—</option>
+                    <option>Male</option><option>Female</option><option>Other</option>
+                  </select></div>
+                <div><label className={labelCls}>Race</label>
+                  <select value={boloRace} onChange={e => setBoloRace(e.target.value)} className={inputCls}>
+                    <option value="">—</option>
+                    <option>Black</option><option>White</option><option>Hispanic</option>
+                    <option>Asian</option><option>Native American</option><option>Other</option>
+                  </select></div>
+                <div className="sm:col-span-2 flex items-center gap-2">
+                  <input type="checkbox" id="boloFirearm" checked={boloFirearm} onChange={e => setBoloFirearm(e.target.checked)} className="w-4 h-4 accent-red-700" />
+                  <label htmlFor="boloFirearm" className="text-sm font-medium text-gray-700">🔫 Firearm flag — known to carry</label>
+                </div>
                 <div className="sm:col-span-2"><label className={labelCls}>Description</label>
                   <textarea rows={3} value={boloDesc} onChange={e => setBoloDesc(e.target.value)}
                     placeholder="Physical description, clothing, identifying features, last known location..."
@@ -2015,6 +2064,27 @@ export default function UserDashboard() {
                       <input value={editBoloName} onChange={e => setEditBoloName(e.target.value)} className={inputCls} /></div>
                     <div><label className={labelCls}>Reason / Alert Type</label>
                       <input value={editBoloReason} onChange={e => setEditBoloReason(e.target.value)} className={inputCls} /></div>
+                    <div><label className={labelCls}>DOB</label>
+                      <input type="date" value={editBoloDob} onChange={e => setEditBoloDob(e.target.value)} className={inputCls} /></div>
+                    <div><label className={labelCls}>OLN (Driver License #)</label>
+                      <input value={editBoloOln} onChange={e => setEditBoloOln(e.target.value)} className={inputCls} /></div>
+                    <div><label className={labelCls}>SSN</label>
+                      <input value={editBoloSsn} onChange={e => setEditBoloSsn(e.target.value)} placeholder="XXX-XX-XXXX or last 4" maxLength={11} className={inputCls} /></div>
+                    <div><label className={labelCls}>Sex</label>
+                      <select value={editBoloSex} onChange={e => setEditBoloSex(e.target.value)} className={inputCls}>
+                        <option value="">—</option>
+                        <option>Male</option><option>Female</option><option>Other</option>
+                      </select></div>
+                    <div><label className={labelCls}>Race</label>
+                      <select value={editBoloRace} onChange={e => setEditBoloRace(e.target.value)} className={inputCls}>
+                        <option value="">—</option>
+                        <option>Black</option><option>White</option><option>Hispanic</option>
+                        <option>Asian</option><option>Native American</option><option>Other</option>
+                      </select></div>
+                    <div className="sm:col-span-2 flex items-center gap-2">
+                      <input type="checkbox" id={`editBoloFirearm-${b.id}`} checked={editBoloFirearm} onChange={e => setEditBoloFirearm(e.target.checked)} className="w-4 h-4 accent-red-700" />
+                      <label htmlFor={`editBoloFirearm-${b.id}`} className="text-sm font-medium text-gray-700">🔫 Firearm flag — known to carry</label>
+                    </div>
                     <div className="sm:col-span-2"><label className={labelCls}>Description</label>
                       <textarea rows={3} value={editBoloDesc} onChange={e => setEditBoloDesc(e.target.value)} className={textareaCls} /></div>
                     <div><label className={labelCls}>Vehicle Description</label>
@@ -2065,6 +2135,16 @@ export default function UserDashboard() {
                     </div>
                     {b.name && <div className="font-bold text-gray-900 text-lg">{b.name}</div>}
                     {b.reason && <div className="text-red-700 font-semibold text-sm mb-1">{b.reason}</div>}
+                    {(b.dob || b.oln || b.ssn || b.sex || b.race || b.firearm_flag) && (
+                      <div className="flex flex-wrap gap-4 mt-1 mb-1 text-xs text-gray-500">
+                        {b.dob  && <span>DOB: {b.dob}</span>}
+                        {b.oln  && <span>OLN: {b.oln}</span>}
+                        {b.ssn  && <span>SSN: {maskSSN(b.ssn)}</span>}
+                        {b.sex  && <span>Sex: {b.sex}</span>}
+                        {b.race && <span>Race: {b.race}</span>}
+                        {b.firearm_flag && <span className="text-red-600 font-semibold">🔫 Firearm</span>}
+                      </div>
+                    )}
                     {b.description && <div className="text-sm text-gray-700 mb-1 whitespace-pre-wrap">{b.description}</div>}
                     {b.vehicle && (
                       <div className="text-xs text-gray-600 mt-1">
