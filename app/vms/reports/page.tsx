@@ -143,9 +143,13 @@ export default function ReportsPage() {
     supabase.from("communities").select("id,name").order("name").then(({ data }) => {
       if (!data) return
       setCommunities(data)
-      const stLuke = data.find(c => c.name.toLowerCase().includes("st. luke") || c.name.toLowerCase().includes("st luke"))
-      if (stLuke) setCommunity(stLuke.id)
-      else if (data.length) setCommunity(data[0].id)
+      // Default to the location chosen at sign-on (confirm-location), mirrored
+      // to localStorage. Fall back to St Luke then the first community.
+      const savedId    = typeof window !== "undefined" ? localStorage.getItem("asg-current-community-id") || "" : ""
+      const savedMatch = data.find(c => c.id === savedId)
+      const stLuke     = data.find(c => c.name.toLowerCase().includes("st. luke") || c.name.toLowerCase().includes("st luke"))
+      const chosen     = savedMatch || stLuke || data[0]
+      if (chosen) setCommunity(chosen.id)
     })
   }, [])
 

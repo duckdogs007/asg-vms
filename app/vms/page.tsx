@@ -79,9 +79,17 @@ export default function VMSPage() {
     if (error) { setLoadError("Failed to load communities."); return }
     setCommunities(data || [])
     if (data?.length) {
-      setCommunityId(data[0].id)
-      rememberCommunity(data[0].id, data[0].name)
-      loadUnits(data[0].id, data)
+      // Default to the location chosen at sign-on (confirm-location), mirrored
+      // to localStorage. Fall back to St Luke then the first community. Don't
+      // blindly select data[0] — that discarded the user's login location and
+      // clobbered the shared key for every other page.
+      const savedId    = typeof window !== "undefined" ? localStorage.getItem("asg-current-community-id") || "" : ""
+      const savedMatch = data.find(c => c.id === savedId)
+      const stLuke     = data.find(c => /st\.?\s*luke/i.test(c.name))
+      const chosen     = savedMatch || stLuke || data[0]
+      setCommunityId(chosen.id)
+      rememberCommunity(chosen.id, chosen.name)
+      loadUnits(chosen.id, data)
     }
   }
 
