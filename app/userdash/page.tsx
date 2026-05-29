@@ -44,7 +44,7 @@ type ReportTab = "daily" | "incident" | "contact" | "vfi" | "view"
 
 export default function UserDashboard() {
 
-  const [activeTab,   setActiveTab]   = useState<Tab>("onduty")
+  const [activeTab,   setActiveTab]   = useState<Tab>("reports")
   const [communities, setCommunities] = useState<any[]>([])
   const [communityId, setCommunityId] = useState("")
   const [officerName, setOfficerName] = useState("")
@@ -996,17 +996,21 @@ export default function UserDashboard() {
                             {isSupervisor && <span className="ml-2 text-xs text-blue-700 font-semibold">SUP</span>}
                           </td>
                           <td className="px-4 py-2">
-                            <select
-                              value={o.role === "admin_super" ? "__admin_super__" : (o.community_id || "")}
-                              onChange={(e) => saveOfficerAssignment(o.id, e.target.value)}
-                              className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600"
-                            >
-                              <option value="">— Unassigned —</option>
-                              <option value="__admin_super__">Admin / Super</option>
-                              {communities.map(c => (
-                                <option key={c.id} value={c.id}>{c.name}</option>
-                              ))}
-                            </select>
+                            {isAdmin ? (
+                              <select
+                                value={o.role === "admin_super" ? "__admin_super__" : (o.community_id || "")}
+                                onChange={(e) => saveOfficerAssignment(o.id, e.target.value)}
+                                className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600"
+                              >
+                                <option value="">— Unassigned —</option>
+                                <option value="__admin_super__">Admin / Super</option>
+                                {communities.map(c => (
+                                  <option key={c.id} value={c.id}>{c.name}</option>
+                                ))}
+                              </select>
+                            ) : (
+                              <span className="text-xs text-gray-700">{label}</span>
+                            )}
                           </td>
                           <td className="px-4 py-2 text-gray-600 text-xs">
                             {o.on_duty_at

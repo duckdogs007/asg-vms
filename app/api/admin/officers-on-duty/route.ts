@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@supabase/supabase-js"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import { ADMIN_EMAILS } from "@/lib/admin"
 
 export const dynamic = "force-dynamic"
 
@@ -12,9 +11,10 @@ export async function GET() {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
 
+  // Any authenticated user can view the on-duty roster (read-only). Editing an
+  // officer's assignment is still admin-only — gated separately in the
+  // /api/admin/users PATCH route.
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
-  if (!ADMIN_EMAILS.includes(user.email || ""))
-    return NextResponse.json({ error: "forbidden" }, { status: 403 })
 
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   if (!serviceKey)

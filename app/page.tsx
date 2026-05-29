@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import { ADMIN_EMAILS } from "@/lib/admin"
 import pkg from "../package.json"
 
 interface Stats {
@@ -24,6 +25,13 @@ export default function Home() {
     openAlerts: 0,
   })
   const [time, setTime] = useState("")
+  const [isAdmin, setIsAdmin] = useState(false)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsAdmin(ADMIN_EMAILS.includes(user?.email || ""))
+    })
+  }, [])
 
   useEffect(() => {
     loadStats()
@@ -164,13 +172,15 @@ export default function Home() {
             color="gray"
           />
 
-          <ModuleCard
-            href="/admin/system"
-            icon="⚙️"
-            title="Admin Dashboard"
-            desc="Manage communities, users, notification recipients, and system settings."
-            color="indigo"
-          />
+          {isAdmin && (
+            <ModuleCard
+              href="/admin/system"
+              icon="⚙️"
+              title="Admin Dashboard"
+              desc="Manage communities, users, notification recipients, and system settings."
+              color="indigo"
+            />
+          )}
 
         </div>
 
