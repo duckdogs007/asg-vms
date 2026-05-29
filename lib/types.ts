@@ -64,6 +64,7 @@ export interface WatchlistEntry {
   property?: string | null
   status?: string | null
   community_id?: string | null
+  photo_url?: string | null
   match_level?: string
   confidence?: number
 }

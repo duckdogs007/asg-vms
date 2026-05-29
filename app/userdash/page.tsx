@@ -66,6 +66,8 @@ export default function UserDashboard() {
   const [wlNotes,    setWlNotes]    = useState("")
   const [wlFirearm,  setWlFirearm]  = useState(false)
   const [wlCommunity,setWlCommunity]= useState("")
+  const [wlPhotoFile,   setWlPhotoFile]   = useState<File | null>(null)
+  const [wlPhotoPreview,setWlPhotoPreview]= useState("")
   const [wlSaving,   setWlSaving]   = useState(false)
   const [wlMessage,  setWlMessage]  = useState("")
   const [wlError,    setWlError]    = useState("")
@@ -317,6 +319,17 @@ export default function UserDashboard() {
     if (!wlCommunity) { setWlError("Location is required.");  return }
     if (!wlReason)    { setWlError("Reason is required.");    return }
     setWlSaving(true); setWlError(""); setWlMessage("")
+    let photoUrl: string | null = null
+    if (wlPhotoFile) {
+      const ext  = wlPhotoFile.name.split(".").pop() || "jpg"
+      const path = `watchlist_${Date.now()}.${ext}`
+      const { data: up, error: upErr } = await supabase.storage
+        .from("photos").upload(path, wlPhotoFile, { upsert: false })
+      if (!upErr && up) {
+        const { data: { publicUrl } } = supabase.storage.from("photos").getPublicUrl(up.path)
+        photoUrl = publicUrl
+      }
+    }
     const { data: inserted, error } = await supabase.from("watchlist").insert({
       first_name: wlFirst || null, last_name: wlLast,
       dob: wlDob || null, oln: wlOln || null,
@@ -328,12 +341,14 @@ export default function UserDashboard() {
       ban_date: new Date().toISOString().split("T")[0],
       status: "Active",
       firearm_flag: wlFirearm,
+      photo_url: photoUrl,
     }).select("id").single()
     setWlSaving(false)
     if (error) { setWlError(error.message); return }
     setWlMessage("✅ Person added to watchlist.")
     notifyWatchlist((inserted as { id?: string } | null)?.id, "added")
     setWlFirst(""); setWlLast(""); setWlDob(""); setWlOln(""); setWlSsn(""); setWlSex(""); setWlRace(""); setWlReason(""); setWlNotes(""); setWlFirearm(false)
+    setWlPhotoFile(null); setWlPhotoPreview("")
     setShowAddWatchlist(false)
     await logActivity("created", "Watchlist", "", `Added ${wlFirst} ${wlLast} to watchlist`)
     // Sync the list filter to where the entry was actually placed so the
@@ -1112,6 +1127,28 @@ export default function UserDashboard() {
                   <input type="checkbox" id="wlFirearm" checked={wlFirearm} onChange={e => setWlFirearm(e.target.checked)} className="w-4 h-4 accent-red-700" />
                   <label htmlFor="wlFirearm" className="text-sm font-medium text-gray-700">🔫 Firearm flag — known to carry</label>
                 </div>
+
+                {/* PHOTO */}
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Subject Photo</label>
+                  <div className="flex items-start gap-4">
+                    <div className="w-24 h-28 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
+                      {wlPhotoPreview
+                        ? <img src={wlPhotoPreview} alt="preview" className="w-full h-full object-cover" />
+                        : <span className="text-gray-400 text-xs text-center px-1">No photo</span>}
+                    </div>
+                    <div className="flex-1 pt-1">
+                      <input type="file" accept="image/*"
+                        onChange={e => {
+                          const file = e.target.files?.[0] || null
+                          setWlPhotoFile(file)
+                          setWlPhotoPreview(file ? URL.createObjectURL(file) : "")
+                        }}
+                        className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-700 file:text-white hover:file:bg-red-800 cursor-pointer" />
+                      <p className="text-xs text-gray-400 mt-1">JPG, PNG accepted</p>
+                    </div>
+                  </div>
+                </div>
               </div>
               <button onClick={saveWatchlistEntry} disabled={wlSaving}
                 className="px-5 py-2.5 bg-red-700 text-white font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer disabled:opacity-50">
@@ -1171,19 +1208,24 @@ export default function UserDashboard() {
               ) : (
                 /* DISPLAY ROW */
                 <div className="flex justify-between items-start">
-                  <div>
-                    <div className="font-bold text-gray-900">
-                      {p.last_name}, {p.first_name}
+                  <div className="flex items-start gap-3">
+                    {p.photo_url && (
+                      <img src={p.photo_url} alt="" className="w-16 h-20 object-cover rounded-lg flex-shrink-0 border border-red-200" />
+                    )}
+                    <div>
+                      <div className="font-bold text-gray-900">
+                        {p.last_name}, {p.first_name}
+                      </div>
+                      <div className="text-sm text-red-600 font-medium mt-0.5">🚨 {p.reason || "No reason listed"}</div>
+                      <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
+                        {p.dob  && <span>DOB: {p.dob}</span>}
+                        {p.oln  && <span>OLN: {p.oln}</span>}
+                        {p.ssn  && <span>SSN: {maskSSN(p.ssn)}</span>}
+                        {p.sex  && <span>Sex: {p.sex}</span>}
+                        {p.race && <span>Race: {p.race}</span>}
+                      </div>
+                      {(p.notes || p.comments) && <div className="text-xs text-gray-400 mt-1">Notes: {p.notes || p.comments}</div>}
                     </div>
-                    <div className="text-sm text-red-600 font-medium mt-0.5">🚨 {p.reason || "No reason listed"}</div>
-                    <div className="flex flex-wrap gap-4 mt-2 text-xs text-gray-500">
-                      {p.dob  && <span>DOB: {p.dob}</span>}
-                      {p.oln  && <span>OLN: {p.oln}</span>}
-                      {p.ssn  && <span>SSN: {maskSSN(p.ssn)}</span>}
-                      {p.sex  && <span>Sex: {p.sex}</span>}
-                      {p.race && <span>Race: {p.race}</span>}
-                    </div>
-                    {(p.notes || p.comments) && <div className="text-xs text-gray-400 mt-1">Notes: {p.notes || p.comments}</div>}
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
                     <div className="text-right text-xs text-gray-400">
