@@ -26,6 +26,16 @@ function isHighPriorityIncident(t: string | undefined): boolean {
 
 type Tab       = "onduty" | "watchlist" | "rentroll" | "reports" | "passdown" | "bolo"
 
+// One-line descriptor shown under the tab bar so officers know what each tab is for.
+const TAB_DESCRIPTIONS: Record<Tab, string> = {
+  onduty:    "Officers currently signed on, grouped by assigned property — live status.",
+  passdown:  "Shift-to-shift notes so the next officer knows what happened on the prior watch.",
+  bolo:      "Be-On-the-Lookout alerts for persons or vehicles of interest at the property.",
+  reports:   "File and review Daily Logs, Incident Reports, Field Contacts, and Vehicle FIs.",
+  watchlist: "Persons barred from the property — checked during visitor and ID-scan check-in.",
+  rentroll:  "Current residents and units from the property rent roll, used to verify visitors.",
+}
+
 // Surnames whose entries should render bold on the On Duty tab.
 const SUPERVISOR_SURNAMES = ["conner", "oconner", "holmes", "hall", "simpson", "carthy"] as const
 
@@ -956,6 +966,9 @@ export default function UserDashboard() {
         <button className={tabCls("watchlist")} onClick={() => setActiveTab("watchlist")}>🚨 Watchlist</button>
         <button className={tabCls("rentroll")}  onClick={() => setActiveTab("rentroll")}>🏠 Rent Roll</button>
       </div>
+
+      {/* Active-tab descriptor — quick context for the officer */}
+      <p className="text-sm text-gray-500 -mt-4 mb-6">{TAB_DESCRIPTIONS[activeTab]}</p>
 
       {/* ── ON DUTY TAB ── */}
       {activeTab === "onduty" && (
