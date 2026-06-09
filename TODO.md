@@ -34,14 +34,7 @@ Build a St Luke–specific Gate Checklist in the VMS, modeled on the "ST LUKE �
 - **Instructions block** matching the source (access each gate, test operation, confirm open/close, confirm lock mechanism, inspect both vehicle and pedestrian components, annotate issues, report immediately)
 
 ### 2. Watchlist — ban sheet upload box
-On the Watchlist database page, add a second upload box for a file or photo of the **ban sheet**, in addition to the existing person photo box.
-
-- New upload box labeled for the ban sheet (e.g., "Ban Sheet — file or photo")
-- Accept both images and documents (e.g., PDF)
-- Keep the existing person photo box unchanged; ban sheet box sits alongside it
-- Thumbnail/preview for images, file link/name for documents
-- Allow multiple files if a ban sheet runs more than one page
-- **Note:** the person-photo box (item 12) is already done; this adds the ban-sheet box alongside it
+_Done 2026-06-09 — see Done section below._
 
 ### 4. "Add User" from Admin Dashboard — User page
 Add the ability to create/add a new user from the Admin Dashboard User page.
@@ -64,6 +57,7 @@ Login location does not persist across pages.
 
 ## Done
 
+- **2026-06-09 — #2 Watchlist ban-sheet upload box.** Added a "Ban Sheet — file or photo" upload box to the Add-to-Watchlist form on `/userdash`, alongside the existing person-photo box. Accepts images **and** PDF, multiple files (multi-page ban sheets), with thumbnail previews for images / filename chips for documents. Files upload to the `photos` bucket; URLs stored in the new `watchlist.ban_sheet_urls text[]` column. Each entry card shows ban-sheet thumbnails (images) and "📄 Page N" links (docs).
 - **2026-06-09 — #13 User Dashboard tab routing bug.** Non-admins were redirected to `/vms` (Check-In) after confirming their post. Root cause: `app/confirm-location/page.tsx` routed `adminRow ? "/userdash" : "/vms"`. Since the User Dashboard is open to all signed-in users (commit `878372e`), changed the redirect to send everyone to `/userdash`; removed the now-unused role query; fixed stale routing comment in `app/login/page.tsx`.
 - **2026-06-09 — #3 Incident Report new incident types.** Added Shooting, Firearm Violation, Loitering, Fire to the User Dashboard incident-type dropdown. Shooting + Firearm Violation (and Fire) fire a critical supervisor alert via the existing `isHighPriorityIncident()` → `fireAlert()` path (`"shooting"` added to the high-priority list; `"firearm"`/`"fire"` already present). Loitering is intentionally non-alerting.
 - **2026-06-09 — #10 Audit Log (verified pre-existing).** `audit_logs` table + `logActivity()` helper already wired across `/admin/system`, `/userdash`, and `/vms/reports`.

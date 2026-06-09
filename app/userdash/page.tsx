@@ -79,6 +79,7 @@ export default function UserDashboard() {
   const [wlCommunity,setWlCommunity]= useState("")
   const [wlPhotoFile,   setWlPhotoFile]   = useState<File | null>(null)
   const [wlPhotoPreview,setWlPhotoPreview]= useState("")
+  const [wlBanFiles,    setWlBanFiles]    = useState<File[]>([])
   const [wlSaving,   setWlSaving]   = useState(false)
   const [wlMessage,  setWlMessage]  = useState("")
   const [wlError,    setWlError]    = useState("")
@@ -353,6 +354,20 @@ export default function UserDashboard() {
         photoUrl = publicUrl
       }
     }
+    // Ban sheet — images or PDFs, possibly multiple pages. Each file is
+    // uploaded to the photos bucket and its public URL collected into an array.
+    const banSheetUrls: string[] = []
+    for (let i = 0; i < wlBanFiles.length; i++) {
+      const f    = wlBanFiles[i]
+      const ext  = f.name.split(".").pop() || "bin"
+      const path = `bansheet_${Date.now()}_${i}.${ext}`
+      const { data: up, error: upErr } = await supabase.storage
+        .from("photos").upload(path, f, { upsert: false })
+      if (!upErr && up) {
+        const { data: { publicUrl } } = supabase.storage.from("photos").getPublicUrl(up.path)
+        banSheetUrls.push(publicUrl)
+      }
+    }
     const { data: inserted, error } = await supabase.from("watchlist").insert({
       first_name: wlFirst || null, last_name: wlLast,
       dob: wlDob || null, oln: wlOln || null,
@@ -365,13 +380,14 @@ export default function UserDashboard() {
       status: "Active",
       firearm_flag: wlFirearm,
       photo_url: photoUrl,
+      ban_sheet_urls: banSheetUrls.length ? banSheetUrls : null,
     }).select("id").single()
     setWlSaving(false)
     if (error) { setWlError(error.message); return }
     setWlMessage("✅ Person added to watchlist.")
     notifyWatchlist((inserted as { id?: string } | null)?.id, "added")
     setWlFirst(""); setWlLast(""); setWlDob(""); setWlOln(""); setWlSsn(""); setWlSex(""); setWlRace(""); setWlReason(""); setWlNotes(""); setWlFirearm(false)
-    setWlPhotoFile(null); setWlPhotoPreview("")
+    setWlPhotoFile(null); setWlPhotoPreview(""); setWlBanFiles([])
     setShowAddWatchlist(false)
     await logActivity("created", "Watchlist", "", `Added ${wlFirst} ${wlLast} to watchlist`)
     // Sync the list filter to where the entry was actually placed so the
@@ -1191,6 +1207,26 @@ export default function UserDashboard() {
                     </div>
                   </div>
                 </div>
+
+                {/* BAN SHEET — file or photo (images or PDF, multi-page allowed) */}
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Ban Sheet — file or photo</label>
+                  <input type="file" accept="image/*,application/pdf" multiple
+                    onChange={e => setWlBanFiles(Array.from(e.target.files || []))}
+                    className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-700 file:text-white hover:file:bg-red-800 cursor-pointer" />
+                  <p className="text-xs text-gray-400 mt-1">Images or PDF. Multiple files allowed (e.g. multi-page ban sheets).</p>
+                  {wlBanFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {wlBanFiles.map((f, i) => (
+                        <div key={i} className="w-20 h-24 bg-gray-100 rounded-lg overflow-hidden flex flex-col items-center justify-center flex-shrink-0 border border-gray-300 p-1">
+                          {f.type.startsWith("image/")
+                            ? <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover rounded" />
+                            : <><span className="text-2xl">📄</span><span className="text-[9px] text-gray-500 text-center leading-tight mt-1 break-all line-clamp-2">{f.name}</span></>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
               <button onClick={saveWatchlistEntry} disabled={wlSaving}
                 className="px-5 py-2.5 bg-red-700 text-white font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer disabled:opacity-50">
@@ -1267,6 +1303,23 @@ export default function UserDashboard() {
                         {p.race && <span>Race: {p.race}</span>}
                       </div>
                       {(p.notes || p.comments) && <div className="text-xs text-gray-400 mt-1">Notes: {p.notes || p.comments}</div>}
+                      {Array.isArray(p.ban_sheet_urls) && p.ban_sheet_urls.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                          <span className="text-xs text-gray-500 font-medium">Ban sheet:</span>
+                          {p.ban_sheet_urls.map((url: string, i: number) => {
+                            const isImg = /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(url)
+                            return isImg ? (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" title={`Ban sheet ${i + 1}`}>
+                                <img src={url} alt={`Ban sheet ${i + 1}`} className="w-10 h-12 object-cover rounded border border-gray-300 hover:border-red-400" />
+                              </a>
+                            ) : (
+                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                                📄 Page {i + 1}
+                              </a>
+                            )
+                          })}
+                        </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0 ml-4">
