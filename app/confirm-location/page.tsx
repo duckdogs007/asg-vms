@@ -68,14 +68,11 @@ export default function ConfirmLocationPage() {
       localStorage.setItem("asg-current-community-id",   selected)
       if (c) localStorage.setItem("asg-current-community-name", c.name)
 
-      // Get user role to send to the right home
-      const { data: { user } } = await supabase.auth.getUser()
-      const { data: adminRow } = await supabase
-        .from("admin_users")
-        .select("user_id")
-        .eq("user_id", user?.id || "")
-        .maybeSingle()
-      router.replace(adminRow ? "/userdash" : "/vms")
+      // Everyone lands on the User Dashboard after confirming their post.
+      // The Dashboard is open to all signed-in users (commit 878372e);
+      // admin-only pages stay gated separately. Previously non-admins were
+      // sent to /vms (Check-In) here, which was the #13 routing bug.
+      router.replace("/userdash")
     } catch (err: any) {
       setError(err?.message || "Unexpected error")
       setSaving(false)

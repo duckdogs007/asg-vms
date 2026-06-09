@@ -12,6 +12,7 @@ import { checkIsAdmin } from "@/lib/admin"
 
 const HIGH_PRIORITY_INCIDENT_TYPES = [
   "weapons", "weapon", "firearm",
+  "shooting",
   "domestic", "domestic dispute", "domestic violence",
   "missing person", "missing",
   "fire",
@@ -1489,7 +1490,10 @@ export default function UserDashboard() {
                     <option>Disturbance</option><option>Trespassing</option><option>Theft</option>
                     <option>Property Damage</option><option>Medical Emergency</option>
                     <option>Suspicious Activity</option><option>Domestic</option>
-                    <option>Noise Complaint</option><option>Vehicle Incident</option><option>Other</option>
+                    <option>Noise Complaint</option><option>Vehicle Incident</option>
+                    <option>Shooting</option><option>Firearm Violation</option>
+                    <option>Loitering</option><option>Fire</option>
+                    <option>Other</option>
                   </select></div>
               </div>
               <div className="mb-4">

@@ -25,7 +25,7 @@ export default function LoginPage() {
       } else if (data.session) {
         // Sign-on flow: officer must confirm their post for this shift.
         // The confirm page saves the assignment + localStorage and then
-        // routes admin → /admin, everyone else → /vms.
+        // routes everyone to the User Dashboard (/userdash).
         window.location.href = "/confirm-location"
       } else {
         setError("Login failed — no session returned")
