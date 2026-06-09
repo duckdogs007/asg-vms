@@ -60,6 +60,54 @@ export default function AdminSystemPage() {
   // ── USERS ──
   const [users,      setUsers]      = useState<UserRow[]>([])
   const [usersError, setUsersError] = useState("")
+  // Add User form
+  const [showAddUser, setShowAddUser] = useState(false)
+  const [auEmail,     setAuEmail]     = useState("")
+  const [auPassword,  setAuPassword]  = useState("")
+  const [auName,      setAuName]      = useState("")
+  const [auCommunity, setAuCommunity] = useState("")
+  const [auIsAdmin,   setAuIsAdmin]   = useState(false)
+  const [auSaving,    setAuSaving]    = useState(false)
+  const [auError,     setAuError]     = useState("")
+  const [auMessage,   setAuMessage]   = useState("")
+
+  async function refreshUsers() {
+    const r = await fetch("/api/admin/users", { cache: "no-store" })
+    const json = await r.json().catch(() => ({}))
+    if (r.ok) {
+      setUsers((json.users as UserRow[]).sort((a, b) => lastActiveOf(b).localeCompare(lastActiveOf(a))))
+    }
+  }
+
+  async function addUser() {
+    setAuError(""); setAuMessage("")
+    if (!auEmail.trim())          { setAuError("Email is required."); return }
+    if (auPassword.length < 8)    { setAuError("Password must be at least 8 characters."); return }
+    setAuSaving(true)
+    try {
+      const r = await fetch("/api/admin/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email:        auEmail.trim(),
+          password:     auPassword,
+          full_name:    auName.trim() || undefined,
+          community_id: auCommunity || null,
+          is_admin:     auIsAdmin,
+        }),
+      })
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok) { setAuError(json.error || `HTTP ${r.status}`); setAuSaving(false); return }
+      setAuMessage(`✅ User created: ${auEmail.trim()}`)
+      setAuEmail(""); setAuPassword(""); setAuName(""); setAuCommunity(""); setAuIsAdmin(false)
+      setShowAddUser(false)
+      await refreshUsers()
+    } catch (e: any) {
+      setAuError(e?.message || String(e))
+    } finally {
+      setAuSaving(false)
+    }
+  }
 
   // ── AUDIT LOG ──
   const [auditLogs,    setAuditLogs]    = useState<any[]>([])
@@ -438,9 +486,64 @@ export default function AdminSystemPage() {
       {/* USERS */}
       {activeTab === "users" && (
         <div className="bg-white border border-gray-200 rounded-xl p-5">
-          <p className="text-xs text-gray-500 mb-3">
-            Live from Supabase Authentication via service-role key.
-          </p>
+          <div className="flex items-center justify-between mb-3">
+            <p className="text-xs text-gray-500">
+              Live from Supabase Authentication via service-role key.
+            </p>
+            <button
+              onClick={() => { setShowAddUser(v => !v); setAuError(""); setAuMessage("") }}
+              className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded border-none cursor-pointer"
+            >
+              {showAddUser ? "✕ Cancel" : "+ Add User"}
+            </button>
+          </div>
+
+          {auMessage && (
+            <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-3 py-2 rounded-md mb-3">{auMessage}</div>
+          )}
+
+          {showAddUser && (
+            <div className="border border-blue-200 bg-blue-50/40 rounded-lg p-4 mb-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Email *</label>
+                  <input type="email" value={auEmail} onChange={e => setAuEmail(e.target.value)} placeholder="officer@teamasg.com"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Temporary Password *</label>
+                  <input type="text" value={auPassword} onChange={e => setAuPassword(e.target.value)} placeholder="min 8 characters"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Full Name</label>
+                  <input type="text" value={auName} onChange={e => setAuName(e.target.value)} placeholder="optional"
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white" />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-600 mb-1">Location</label>
+                  <select value={auCommunity} onChange={e => setAuCommunity(e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-600 bg-white">
+                    <option value="">— Unassigned —</option>
+                    {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select>
+                </div>
+              </div>
+              <label className="flex items-center gap-2 mt-3 cursor-pointer">
+                <input type="checkbox" checked={auIsAdmin} onChange={e => setAuIsAdmin(e.target.checked)} className="w-4 h-4 accent-blue-700" />
+                <span className="text-sm text-gray-700">Grant admin access</span>
+              </label>
+              {auError && <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-md mt-3">{auError}</div>}
+              <div className="mt-3">
+                <button onClick={addUser} disabled={auSaving}
+                  className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded border-none cursor-pointer disabled:opacity-50">
+                  {auSaving ? "Creating…" : "Create User"}
+                </button>
+                <span className="text-xs text-gray-500 ml-3">Email is pre-confirmed; the user can sign in immediately with this password.</span>
+              </div>
+            </div>
+          )}
+
           {usersError && (
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-md mb-3">
               {usersError}
