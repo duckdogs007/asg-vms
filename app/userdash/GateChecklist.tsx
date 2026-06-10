@@ -9,7 +9,7 @@ const ST_LUKE_ID = "c1f93a83-8f04-458a-b00c-1ff8cf46edd1"
 const GATE_COUNT = 7
 
 const INSTRUCTIONS = [
-  "Access each numbered gate using your issued access device.",
+  "Access and check each numbered gate.",
   "Test the gate to ensure it operates as intended.",
   "Confirm the gate opens and closes properly.",
   "Confirm the lock/security mechanism locks as intended.",
@@ -71,7 +71,6 @@ export default function GateChecklist({
   const [date,       setDate]       = useState(todayStr())
   const [guardName,  setGuardName]  = useState(officerName || "")
   const [shift,      setShift]      = useState("Day")
-  const [device,     setDevice]     = useState("")
   const [startTime,  setStartTime]  = useState("")
   const [endTime,    setEndTime]    = useState("")
   const [gates,      setGates]      = useState<GateRow[]>(() => Array.from({ length: GATE_COUNT }, emptyGate))
@@ -160,7 +159,6 @@ export default function GateChecklist({
         checklist_date: date || todayStr(),
         guard_name: guardName.trim(),
         shift,
-        device_used: device || null,
         start_time: startTime || null,
         end_time: endTime || null,
         gates: gatesOut,
@@ -178,7 +176,7 @@ export default function GateChecklist({
       setMessage("✅ Gate checklist submitted.")
       // Reset the fillable fields; keep location/guard/shift for the next tour.
       setGates(Array.from({ length: GATE_COUNT }, emptyGate))
-      setDevice(""); setStartTime(""); setEndTime(""); setAddlNotes(""); setGenPhotos([]); setSignature("")
+      setStartTime(""); setEndTime(""); setAddlNotes(""); setGenPhotos([]); setSignature("")
       await loadList()
     } catch (e: any) {
       setError(e?.message || String(e))
@@ -223,18 +221,12 @@ export default function GateChecklist({
             </select>
           </div>
           <div>
-            <label className={labelCls}>Device Used (Issued Access Device)</label>
-            <input value={device} onChange={e => setDevice(e.target.value)} placeholder="Access each gate using your issued device" className={inputCls} />
+            <label className={labelCls}>Start Time</label>
+            <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={inputCls} />
           </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className={labelCls}>Start Time</label>
-              <input type="time" value={startTime} onChange={e => setStartTime(e.target.value)} className={inputCls} />
-            </div>
-            <div>
-              <label className={labelCls}>End Time</label>
-              <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={inputCls} />
-            </div>
+          <div>
+            <label className={labelCls}>End Time</label>
+            <input type="time" value={endTime} onChange={e => setEndTime(e.target.value)} className={inputCls} />
           </div>
         </div>
 
@@ -358,8 +350,7 @@ export default function GateChecklist({
 
                   {open && (
                     <div className="px-4 pb-4 border-t border-gray-100 text-sm">
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs text-gray-600 mt-3 mb-3">
-                        <div><span className="text-gray-400">Device:</span> {rec.device_used || "—"}</div>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs text-gray-600 mt-3 mb-3">
                         <div><span className="text-gray-400">Start:</span> {rec.start_time || "—"}</div>
                         <div><span className="text-gray-400">End:</span> {rec.end_time || "—"}</div>
                         <div><span className="text-gray-400">Signed:</span> {rec.guard_signature || "—"} {rec.signature_time ? `· ${rec.signature_time}` : ""}</div>
