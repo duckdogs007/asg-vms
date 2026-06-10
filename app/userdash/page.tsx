@@ -9,6 +9,7 @@ import Papa from "papaparse"
 import { fireAlert } from "@/lib/alerts"
 import { maskSSN } from "@/lib/format"
 import { checkIsAdmin } from "@/lib/admin"
+import GateChecklist from "./GateChecklist"
 
 const HIGH_PRIORITY_INCIDENT_TYPES = [
   "weapons", "weapon", "firearm",
@@ -25,7 +26,7 @@ function isHighPriorityIncident(t: string | undefined): boolean {
   return HIGH_PRIORITY_INCIDENT_TYPES.some(k => s.includes(k))
 }
 
-type Tab       = "onduty" | "watchlist" | "rentroll" | "reports" | "passdown" | "bolo"
+type Tab       = "onduty" | "watchlist" | "rentroll" | "reports" | "passdown" | "bolo" | "gatecheck"
 
 // One-line descriptor shown under the tab bar so officers know what each tab is for.
 const TAB_DESCRIPTIONS: Record<Tab, string> = {
@@ -35,6 +36,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   reports:   "File and review Daily Logs, Incident Reports, Field Contacts, and Vehicle FIs.",
   watchlist: "Persons barred from the property — checked during visitor and ID-scan check-in.",
   rentroll:  "Current residents and units from the property rent roll, used to verify visitors.",
+  gatecheck: "Per-tour security gate inspection — operation, locks, and damage for each numbered gate.",
 }
 
 // Surnames whose entries should render bold on the On Duty tab.
@@ -980,12 +982,18 @@ export default function UserDashboard() {
           🔍 BOLO {activeBoloCount > 0 && <span className="ml-1.5 bg-red-600 text-white text-xs rounded-full px-1.5 py-0.5">{activeBoloCount}</span>}
         </button>
         <button className={tabCls("reports")}   onClick={() => setActiveTab("reports")}>📋 Officer Reports</button>
+        <button className={tabCls("gatecheck")} onClick={() => setActiveTab("gatecheck")}>🚪 Gate Checklist</button>
         <button className={tabCls("watchlist")} onClick={() => setActiveTab("watchlist")}>🚨 Watchlist</button>
         <button className={tabCls("rentroll")}  onClick={() => setActiveTab("rentroll")}>🏠 Rent Roll</button>
       </div>
 
       {/* Active-tab descriptor — quick context for the officer */}
       <p className="text-sm text-gray-500 -mt-4 mb-6">{TAB_DESCRIPTIONS[activeTab]}</p>
+
+      {/* ── GATE CHECKLIST TAB ── */}
+      {activeTab === "gatecheck" && (
+        <GateChecklist communities={communities} officerName={officerName} isAdmin={isAdmin} />
+      )}
 
       {/* ── ON DUTY TAB ── */}
       {activeTab === "onduty" && (

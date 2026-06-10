@@ -16,28 +16,7 @@ _(none open)_
 
 ## Features
 
-### 1. St Luke Gate Checklist
-Build a St Luke–specific Gate Checklist in the VMS, modeled on the "ST LUKE – SECURITY GATE CHECKLIST" (Rev. 05/2024).
-
-- **Header fields:** Date, Guard Name, Shift (Day/Evening/Night), Device Used (issued access device), Start Time, End Time
-- **Per-gate rows (Gates 1–7):** Gate Number, Access with Issued Device (initials)
-- **Inspection columns**, each split into Vehicle Gate and Pedestrian Gate with Yes/No:
-  - Gate Operation – Opens as Intended
-  - Locks/Secures as Intended
-  - Damage Observed
-- **Notes/Action Taken** column (issue description, location details, action taken)
-- **Photo attachments:**
-  - Per-gate photo upload placeholder (photos of any damage/issue for each gate)
-  - General photo upload placeholder in the Additional Notes/Observations section
-  - Multiple images per upload, thumbnail preview, optional caption per photo
-- **Footer:** Additional Notes/Observations, "Report any issues immediately to supervisor/management," Guard Signature, Date, Time
-- **Instructions block** matching the source (access each gate, test operation, confirm open/close, confirm lock mechanism, inspect both vehicle and pedestrian components, annotate issues, report immediately)
-
-### 2. Watchlist — ban sheet upload box
-_Done 2026-06-09 — see Done section below._
-
-### 4. "Add User" from Admin Dashboard — User page
-_Done 2026-06-09 — see Done section below._
+_(all complete — #1, #2, #4 moved to Done)_
 
 ---
 
@@ -52,6 +31,7 @@ Login location does not persist across pages.
 
 ## Done
 
+- **2026-06-09 — #1 St Luke Gate Checklist.** New "🚪 Gate Checklist" tab in the User Dashboard (`app/userdash/GateChecklist.tsx`). Location dropdown lists all communities, defaults to St Luke Apartments. Header (date, guard, shift, device, start/end time) + verbatim instructions block. Per-gate cards (gates 1–7) with initials, touch-friendly Yes/No toggles for the three inspections × Vehicle/Pedestrian (Gate Operation, Locks/Secures, Damage Observed), notes, and per-gate photo upload. Footer: additional notes, general photos, supervisor-report notice, typed guard signature with auto date/time. Saves to new `gate_checklists` table (header cols + `gates jsonb` + `general_photo_urls text[]`); photos → `photos` bucket. Includes a saved-records list per location with issue/all-clear badges, expandable detail grid, and admin delete. RLS mirrors `officer_daily_logs`.
 - **2026-06-09 — #4 Add User from Admin Dashboard.** Added `POST /api/admin/users` (service-role, admin-gated) using `supabase.auth.admin.createUser()` with `email_confirm: true`, optional community assignment (`user_assignments`) and optional admin grant (`admin_users`). Added an "+ Add User" button + inline form on the `/admin/system` Users tab (email, temp password, full name, location, grant-admin checkbox) that creates the user and refreshes the list.
 - **2026-06-09 — #2 Watchlist ban-sheet upload box.** Added a "Ban Sheet — file or photo" upload box to the Add-to-Watchlist form on `/userdash`, alongside the existing person-photo box. Accepts images **and** PDF, multiple files (multi-page ban sheets), with thumbnail previews for images / filename chips for documents. Files upload to the `photos` bucket; URLs stored in the new `watchlist.ban_sheet_urls text[]` column. Each entry card shows ban-sheet thumbnails (images) and "📄 Page N" links (docs).
 - **2026-06-09 — #13 User Dashboard tab routing bug.** Non-admins were redirected to `/vms` (Check-In) after confirming their post. Root cause: `app/confirm-location/page.tsx` routed `adminRow ? "/userdash" : "/vms"`. Since the User Dashboard is open to all signed-in users (commit `878372e`), changed the redirect to send everyone to `/userdash`; removed the now-unused role query; fixed stale routing comment in `app/login/page.tsx`.
