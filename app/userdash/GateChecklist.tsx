@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import Papa from "papaparse"
 
 // St Luke is the default location, but the dropdown lists all communities so
 // the checklist can be reused elsewhere if needed.
@@ -392,9 +393,13 @@ export default function GateChecklist({
                           ))}
                         </div>
                       )}
-                      {isAdmin && (
-                        <button onClick={() => deleteRecord(rec)} className="mt-3 px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded border-none cursor-pointer">🗑 Delete</button>
-                      )}
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button onClick={() => printRecord(rec)} className="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded border-none cursor-pointer">⬇ PDF Report</button>
+                        <button onClick={() => exportRecordCsv(rec)} className="px-2.5 py-1 bg-gray-700 hover:bg-gray-800 text-white text-xs font-semibold rounded border-none cursor-pointer">⬇ CSV</button>
+                        {isAdmin && (
+                          <button onClick={() => deleteRecord(rec)} className="px-2.5 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded border-none cursor-pointer">🗑 Delete</button>
+                        )}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -413,10 +418,119 @@ export default function GateChecklist({
     setExpandedId(null)
     await loadList()
   }
+
+  // CSV — one row per gate, with the header fields repeated for context.
+  function exportRecordCsv(rec: any) {
+    const recGates = Array.isArray(rec.gates) ? rec.gates : []
+    const rows = recGates.map((g: any) => ({
+      Date: rec.checklist_date || "", Location: communityName(rec.community_id),
+      Guard: rec.guard_name || "", Shift: rec.shift || "",
+      "Start Time": rec.start_time || "", "End Time": rec.end_time || "",
+      Gate: g.gate_number, Initials: g.initials || "",
+      "Operation — Vehicle": ynLong(g.operation_vehicle), "Operation — Pedestrian": ynLong(g.operation_pedestrian),
+      "Locks — Vehicle": ynLong(g.locks_vehicle), "Locks — Pedestrian": ynLong(g.locks_pedestrian),
+      "Damage — Vehicle": ynLong(g.damage_vehicle), "Damage — Pedestrian": ynLong(g.damage_pedestrian),
+      Notes: g.notes || "", Photos: Array.isArray(g.photo_urls) ? g.photo_urls.join(" ") : "",
+      "Additional Notes": rec.additional_notes || "", Signature: rec.guard_signature || "",
+    }))
+    const csv  = Papa.unparse(rows)
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a")
+    a.href = url
+    a.download = `gate-checklist-${communityName(rec.community_id).replace(/\s+/g, "-").toLowerCase()}-${rec.checklist_date || "record"}.csv`
+    a.click(); URL.revokeObjectURL(url)
+  }
+
+  // PDF — opens a print-friendly report; the browser's print dialog saves to PDF.
+  function printRecord(rec: any) {
+    const recGates = Array.isArray(rec.gates) ? rec.gates : []
+    const gateRows = recGates.map((g: any) => {
+      const issue = gateHasIssue(g)
+      return `<tr${issue ? ' class="issue"' : ""}>
+        <td class="c">${escHtml(g.gate_number)}</td>
+        <td class="c">${escHtml(g.initials || "")}</td>
+        <td class="c">${ynLong(g.operation_vehicle)}</td><td class="c">${ynLong(g.operation_pedestrian)}</td>
+        <td class="c">${ynLong(g.locks_vehicle)}</td><td class="c">${ynLong(g.locks_pedestrian)}</td>
+        <td class="c">${ynLong(g.damage_vehicle)}</td><td class="c">${ynLong(g.damage_pedestrian)}</td>
+        <td>${escHtml(g.notes || "")}</td>
+      </tr>`
+    }).join("")
+
+    const html = `<!doctype html><html><head><meta charset="utf-8">
+      <title>Gate Checklist — ${escHtml(communityName(rec.community_id))} — ${escHtml(rec.checklist_date || "")}</title>
+      <style>
+        * { box-sizing: border-box; }
+        body { font-family: Arial, Helvetica, sans-serif; color: #111; margin: 28px; font-size: 12px; }
+        h1 { text-align: center; font-size: 18px; margin: 0 0 2px; }
+        .sub { text-align: center; color: #555; font-size: 11px; margin-bottom: 16px; }
+        .meta { display: flex; flex-wrap: wrap; gap: 6px 28px; margin-bottom: 14px; }
+        .meta div { font-size: 12px; }
+        .meta .k { color: #666; }
+        table { width: 100%; border-collapse: collapse; margin-top: 6px; }
+        th, td { border: 1px solid #999; padding: 4px 6px; font-size: 11px; vertical-align: top; }
+        th { background: #f0f0f0; text-align: center; font-size: 10px; }
+        td.c { text-align: center; }
+        tr.issue td { background: #fde8e8; }
+        .grp { font-size: 9px; color: #444; }
+        .foot { margin-top: 16px; font-size: 11px; }
+        .sig { margin-top: 18px; display: flex; justify-content: space-between; gap: 24px; }
+        .warn { margin-top: 14px; color: #b00; font-weight: bold; font-size: 11px; }
+        @media print { body { margin: 12mm; } }
+      </style></head><body>
+      <h1>Security Gate Checklist</h1>
+      <div class="sub">${escHtml(communityName(rec.community_id))} · All numbered gates must be checked during each tour.</div>
+      <div class="meta">
+        <div><span class="k">Date:</span> ${escHtml(rec.checklist_date || "—")}</div>
+        <div><span class="k">Guard:</span> ${escHtml(rec.guard_name || "—")}</div>
+        <div><span class="k">Shift:</span> ${escHtml(rec.shift || "—")}</div>
+        <div><span class="k">Start:</span> ${escHtml(rec.start_time || "—")}</div>
+        <div><span class="k">End:</span> ${escHtml(rec.end_time || "—")}</div>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th rowspan="2">Gate</th><th rowspan="2">Init.</th>
+            <th colspan="2">Gate Operation</th><th colspan="2">Locks / Secures</th><th colspan="2">Damage Observed</th>
+            <th rowspan="2">Notes / Action Taken</th>
+          </tr>
+          <tr>
+            <th class="grp">Vehicle</th><th class="grp">Pedestrian</th>
+            <th class="grp">Vehicle</th><th class="grp">Pedestrian</th>
+            <th class="grp">Vehicle</th><th class="grp">Pedestrian</th>
+          </tr>
+        </thead>
+        <tbody>${gateRows}</tbody>
+      </table>
+      ${rec.additional_notes ? `<div class="foot"><b>Additional Notes / Observations:</b><br>${escHtml(rec.additional_notes)}</div>` : ""}
+      <div class="warn">Report any issues immediately to supervisor / management.</div>
+      <div class="sig">
+        <div><b>Guard Signature:</b> ${escHtml(rec.guard_signature || "—")}</div>
+        <div><b>Date:</b> ${escHtml(rec.signature_date || rec.checklist_date || "—")}</div>
+        <div><b>Time:</b> ${escHtml(rec.signature_time || "—")}</div>
+      </div>
+      <script>window.onload = function(){ window.print(); }</script>
+      </body></html>`
+
+    const w = window.open("", "_blank")
+    if (!w) { window.alert("Pop-up blocked — allow pop-ups to export the PDF report."); return }
+    w.document.write(html)
+    w.document.close()
+  }
 }
 
 function ynShort(v: string): string {
   return v === "yes" ? "Y" : v === "no" ? "N" : "—"
+}
+
+function ynLong(v: string): string {
+  return v === "yes" ? "Yes" : v === "no" ? "No" : "—"
+}
+
+function escHtml(s: any): string {
+  return String(s ?? "")
+    .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#39;")
 }
 
 function YesNoPair({ label, value, onChange, bad }: {
