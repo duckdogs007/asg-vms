@@ -1,7 +1,12 @@
 // Client-side helper to fire alerts via /api/alerts/send.
 // Fire-and-forget by design — UI should not block on email delivery.
 
-export type AlertType = "watchlist_hit" | "incident_high_priority" | "panic_sos"
+export type AlertType =
+  | "watchlist_hit"
+  | "incident_high_priority"
+  | "panic_sos"
+  | "parking_bolo_hit"
+  | "parking_tow_requested"
 
 export interface FireAlertInput {
   type:         AlertType
