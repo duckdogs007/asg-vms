@@ -6,6 +6,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { checkIsAdmin } from "@/lib/admin"
 import PostOrdersTab from "@/components/PostOrdersTab"
+import RentRollTab from "@/components/RentRollTab"
 
 interface Community {
   id: string; name: string
@@ -22,7 +23,7 @@ interface Vehicle  {
   notes: string | null
 }
 
-type Tab = "post-orders" | "info" | "documents" | "vehicles"
+type Tab = "post-orders" | "info" | "documents" | "vehicles" | "rentroll"
 const DOC_TYPES = ["Lease", "House Rules", "Property Map", "Floor Plan", "Other"]
 
 const inputCls    = "w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
@@ -206,6 +207,7 @@ export default function PropertyHubPage() {
         <button className={tabCls("info")}        onClick={() => setTab("info")}>🏘️ Community Info</button>
         <button className={tabCls("documents")}   onClick={() => setTab("documents")}>📁 Documents</button>
         <button className={tabCls("vehicles")}    onClick={() => setTab("vehicles")}>🚗 Vehicles</button>
+        <button className={tabCls("rentroll")}    onClick={() => setTab("rentroll")}>🏠 Rent Roll</button>
       </div>
 
       {msg && <div className="mb-4 text-sm px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">{msg}</div>}
@@ -215,6 +217,9 @@ export default function PropertyHubPage() {
 
       {/* POST ORDERS */}
       {tab === "post-orders" && <PostOrdersTab communityId={communityId} />}
+
+      {/* RENT ROLL */}
+      {tab === "rentroll" && <RentRollTab communityId={communityId} communityName={community?.name} isAdmin={isAdmin} />}
 
       {/* COMMUNITY INFO */}
       {tab === "info" && (
