@@ -7,6 +7,7 @@ export type AlertType =
   | "panic_sos"
   | "parking_bolo_hit"
   | "parking_tow_requested"
+  | "bolo_vehicle_hit"
 
 export interface FireAlertInput {
   type:         AlertType

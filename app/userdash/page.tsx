@@ -186,6 +186,8 @@ export default function UserDashboard() {
   const [vfiNotes,        setVfiNotes]        = useState("")
   const [vfiPhotoFile,    setVfiPhotoFile]    = useState<File | null>(null)
   const [vfiPhotoPreview, setVfiPhotoPreview] = useState("")
+  const [vfiBoloHits,     setVfiBoloHits]     = useState<any[]>([])
+  const [vfiBoloChecked,  setVfiBoloChecked]  = useState(false)
 
   // Parking violation
   const [pvDate,          setPvDate]          = useState(new Date().toISOString().split("T")[0])
@@ -242,6 +244,8 @@ export default function UserDashboard() {
   const [boloRace,       setBoloRace]       = useState("")
   const [boloFirearm,    setBoloFirearm]    = useState(false)
   const [boloVehicle,    setBoloVehicle]    = useState("")
+  const [boloPlate,      setBoloPlate]      = useState("")
+  const [boloPlateState, setBoloPlateState] = useState("")
   const [boloCommunity,  setBoloCommunity]  = useState("")
   const [boloAddedBy,    setBoloAddedBy]    = useState("")
   const [boloPhotoFile,  setBoloPhotoFile]  = useState<File | null>(null)
@@ -263,6 +267,8 @@ export default function UserDashboard() {
   const [editBoloRace,     setEditBoloRace]     = useState("")
   const [editBoloFirearm,  setEditBoloFirearm]  = useState(false)
   const [editBoloVehicle,  setEditBoloVehicle]  = useState("")
+  const [editBoloPlate,      setEditBoloPlate]      = useState("")
+  const [editBoloPlateState, setEditBoloPlateState] = useState("")
   const [editBoloCommunity,setEditBoloCommunity]= useState("")
   const [editBoloAddedBy,  setEditBoloAddedBy]  = useState("")
   const [savingBoloEdit,   setSavingBoloEdit]   = useState(false)
@@ -719,6 +725,10 @@ export default function UserDashboard() {
         photoUrl = publicUrl
       }
     }
+    // Active-BOLO plate cross-check, snapshotted onto the row (same as parking).
+    const hits = await lookupBolosByPlate(vfiVehicle.plate)
+    const boloMatch = hits.length > 0
+
     const { error } = await supabase.from("vehicle_fi_logs").insert({
       date: vfiDate, time: vfiTime || null,
       community_id: vfiCommunity || null,
@@ -734,37 +744,82 @@ export default function UserDashboard() {
       violation_number: vfiViolation ? (vfiViolationNum || null) : null,
       notes: vfiNotes || null,
       photo_url: photoUrl,
+      bolo_match: boloMatch,
       created_at: new Date().toISOString()
     })
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
-    setReportMessage("✅ Vehicle FI logged.")
+
+    // Supervisor alert on a BOLO hit — a flagged vehicle showing up on a field
+    // interview is at least as urgent as on a parking ticket.
+    if (boloMatch) {
+      const communityName = communities.find(c => c.id === vfiCommunity)?.name || "Unknown"
+      const plateLabel    = `${vfiVehicle.plate}${vfiVehicle.state ? " (" + vfiVehicle.state + ")" : ""}`
+      fireAlert({
+        type:         "bolo_vehicle_hit",
+        severity:     "critical",
+        community_id: vfiCommunity || null,
+        subject:      `🚨 BOLO VEHICLE — Vehicle FI — ${plateLabel} @ ${communityName}`,
+        body:         `A Vehicle FI was logged on a vehicle matching an active BOLO.\n\nPlate: ${plateLabel}\nBOLO: ${hits.map(h => h.name || h.vehicle).filter(Boolean).join("; ") || "—"}`,
+        payload: {
+          Community: communityName,
+          Date:      vfiDate,
+          Time:      vfiTime || "—",
+          Plate:     plateLabel,
+          Officer:   vfiOfficer || "—",
+          BOLO:      "MATCH",
+        },
+      })
+    }
+
+    setReportMessage("✅ Vehicle FI logged." + (boloMatch ? " ⚠ BOLO match — supervisor alerted." : ""))
     logActivity("created", "Vehicle FI", "", `Vehicle FI logged — ${vfiVehicle.plate || vfiVehicle.make} ${vfiDate}`)
     setVfiLocation(""); setVfiVehicle(EMPTY_VEHICLE); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
     setVfiFollowUp(false); setVfiViolation(false); setVfiViolationNum("")
     setVfiPhotoFile(null); setVfiPhotoPreview("")
+    setVfiBoloHits([]); setVfiBoloChecked(false)
     setVfiDate(new Date().toISOString().split("T")[0]); setVfiTime("")
   }
 
-  // ── PARKING VIOLATION ──
-  // Cross-checks a plate against active BOLOs. bolos.vehicle is free text
-  // (e.g. "Red Honda Civic ABC1234"), so this is a substring match. Watchlist
-  // is person-only (no plate column) and the vehicle registry (#7) doesn't
-  // exist yet — both are intentionally out of scope until that data lands.
-  async function checkPlateBolo(plate: string): Promise<any[]> {
-    const p = plate.trim()
-    if (!p) { setPvBoloHits([]); setPvBoloChecked(false); return [] }
+  // ── BOLO PLATE CROSS-CHECK ──
+  // Normalize a plate for comparison: uppercase, alphanumerics only (so
+  // "ABC-1234", "abc 1234" and "ABC1234" all compare equal).
+  function normPlate(s: string): string {
+    return (s || "").toUpperCase().replace(/[^A-Z0-9]/g, "")
+  }
+
+  // Looks up active BOLOs matching a plate. Primary match is the structured
+  // bolos.plate (normalized exact). Legacy BOLOs with no structured plate fall
+  // back to a substring match inside the free-text `vehicle` description.
+  // Watchlist is person-only (no plate) and the vehicle registry (#7) doesn't
+  // exist yet — both remain out of scope until that data lands.
+  async function lookupBolosByPlate(plate: string): Promise<any[]> {
+    const q = normPlate(plate)
+    if (!q) return []
     const { data } = await supabase
       .from("bolos")
-      .select("id, name, vehicle, reason")
+      .select("id, name, vehicle, reason, plate, plate_state")
       .eq("active", true)
-      .ilike("vehicle", `%${p}%`)
-    const hits = data || []
-    setPvBoloHits(hits)
-    setPvBoloChecked(true)
+    return (data || []).filter(b =>
+      b.plate ? normPlate(b.plate) === q : normPlate(b.vehicle || "").includes(q)
+    )
+  }
+
+  // Per-form blur handlers that drive each form's match banner.
+  async function pvCheckPlate(plate: string): Promise<any[]> {
+    if (!plate.trim()) { setPvBoloHits([]); setPvBoloChecked(false); return [] }
+    const hits = await lookupBolosByPlate(plate)
+    setPvBoloHits(hits); setPvBoloChecked(true)
+    return hits
+  }
+  async function vfiCheckPlate(plate: string): Promise<any[]> {
+    if (!plate.trim()) { setVfiBoloHits([]); setVfiBoloChecked(false); return [] }
+    const hits = await lookupBolosByPlate(plate)
+    setVfiBoloHits(hits); setVfiBoloChecked(true)
     return hits
   }
 
+  // ── PARKING VIOLATION ──
   async function saveParkingViolation() {
     if (!pvVehicle.plate.trim()) { setReportError("License plate is required for a parking violation."); return }
     setReportSaving(true); setReportError(""); setReportMessage("")
@@ -782,7 +837,7 @@ export default function UserDashboard() {
     }
 
     // Active-BOLO plate cross-check, snapshotted onto the row at submission.
-    const hits = await checkPlateBolo(pvVehicle.plate)
+    const hits = await lookupBolosByPlate(pvVehicle.plate)
     const boloMatch = hits.length > 0
 
     const { error } = await supabase.from("parking_violations").insert({
@@ -978,6 +1033,7 @@ export default function UserDashboard() {
     const { data: created, error } = await supabase.from("bolos").insert({
       name: boloName || null, description: boloDesc || null,
       reason: boloReason || null, vehicle: boloVehicle || null,
+      plate: boloPlate || null, plate_state: boloPlateState || null,
       dob: boloDob || null, oln: boloOln || null, ssn: boloSsn || null,
       sex: boloSex || null, race: boloRace || null, firearm_flag: boloFirearm,
       community_id: boloCommunity || null, added_by: boloAddedBy || null,
@@ -996,7 +1052,7 @@ export default function UserDashboard() {
       }).catch(e => console.error("[bolo notify]", e))
     }
     logActivity("created", "BOLO", "", `BOLO added — ${boloName || boloDesc}`)
-    setBoloName(""); setBoloDesc(""); setBoloReason(""); setBoloVehicle("")
+    setBoloName(""); setBoloDesc(""); setBoloReason(""); setBoloVehicle(""); setBoloPlate(""); setBoloPlateState("")
     setBoloDob(""); setBoloOln(""); setBoloSsn(""); setBoloSex(""); setBoloRace(""); setBoloFirearm(false)
     setBoloPhotoFile(null); setBoloPhotoPreview(""); setShowAddBolo(false)
     loadBolos()
@@ -1014,6 +1070,8 @@ export default function UserDashboard() {
     setEditBoloRace(b.race || "")
     setEditBoloFirearm(!!b.firearm_flag)
     setEditBoloVehicle(b.vehicle || "")
+    setEditBoloPlate(b.plate || "")
+    setEditBoloPlateState(b.plate_state || "")
     setEditBoloCommunity(b.community_id || "")
     setEditBoloAddedBy(b.added_by || "")
     setBoloError(""); setBoloMessage("")
@@ -1023,7 +1081,7 @@ export default function UserDashboard() {
     setEditingBoloId(null)
     setEditBoloName(""); setEditBoloDesc(""); setEditBoloReason("")
     setEditBoloDob(""); setEditBoloOln(""); setEditBoloSsn(""); setEditBoloSex(""); setEditBoloRace(""); setEditBoloFirearm(false)
-    setEditBoloVehicle(""); setEditBoloCommunity(""); setEditBoloAddedBy("")
+    setEditBoloVehicle(""); setEditBoloPlate(""); setEditBoloPlateState(""); setEditBoloCommunity(""); setEditBoloAddedBy("")
     setBoloError("")
   }
 
@@ -1041,6 +1099,8 @@ export default function UserDashboard() {
       race:         editBoloRace || null,
       firearm_flag: editBoloFirearm,
       vehicle:      editBoloVehicle || null,
+      plate:        editBoloPlate || null,
+      plate_state:  editBoloPlateState || null,
       community_id: editBoloCommunity || null,
       added_by:     editBoloAddedBy || null,
     }).eq("id", b.id)
@@ -1816,6 +1876,7 @@ export default function UserDashboard() {
                   labelCls={labelCls}
                   requireMake
                   requirePlate
+                  onPlateBlur={plate => vfiCheckPlate(plate)}
                 />
                 <div className="sm:col-span-2"><label className={labelCls}>Other Descriptors</label>
                   <input value={vfiDescriptors} onChange={e => setVfiDescriptors(e.target.value)}
@@ -1824,6 +1885,24 @@ export default function UserDashboard() {
                   <input value={vfiReason} onChange={e => setVfiReason(e.target.value)}
                     placeholder="e.g. Suspicious activity, no parking permit, loitering" className={inputCls} /></div>
               </div>
+
+              {/* BOLO cross-check banner */}
+              {vfiBoloChecked && vfiBoloHits.length > 0 && (
+                <div className="bg-red-50 border-2 border-red-300 text-red-800 px-4 py-3 rounded-lg mb-4 text-sm">
+                  <div className="font-bold mb-1">🚨 BOLO MATCH — plate {vfiVehicle.plate} matches {vfiBoloHits.length} active BOLO{vfiBoloHits.length > 1 ? "s" : ""}:</div>
+                  <ul className="list-disc ml-5">
+                    {vfiBoloHits.map(h => (
+                      <li key={h.id}>{[h.name, h.vehicle, h.reason].filter(Boolean).join(" — ")}</li>
+                    ))}
+                  </ul>
+                  <div className="mt-1 text-xs">Submitting will alert a supervisor.</div>
+                </div>
+              )}
+              {vfiBoloChecked && vfiBoloHits.length === 0 && vfiVehicle.plate.trim() && (
+                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg mb-4 text-xs">
+                  ✓ No active BOLO match for {vfiVehicle.plate}.
+                </div>
+              )}
               <div className="mb-4">
                 <label className={labelCls}>Notes</label>
                 <textarea rows={4} value={vfiNotes} onChange={e => setVfiNotes(e.target.value)}
@@ -1904,7 +1983,7 @@ export default function UserDashboard() {
                   inputCls={inputCls}
                   labelCls={labelCls}
                   requirePlate
-                  onPlateBlur={plate => checkPlateBolo(plate)}
+                  onPlateBlur={plate => pvCheckPlate(plate)}
                 />
               </div>
 
@@ -2333,7 +2412,13 @@ export default function UserDashboard() {
                     placeholder="Physical description, clothing, identifying features, last known location..."
                     className={textareaCls} /></div>
                 <div><label className={labelCls}>Vehicle Description</label>
-                  <input value={boloVehicle} onChange={e => setBoloVehicle(e.target.value)} placeholder="Year, Make, Model, Color, Plate" className={inputCls} /></div>
+                  <input value={boloVehicle} onChange={e => setBoloVehicle(e.target.value)} placeholder="Year, Make, Model, Color" className={inputCls} /></div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="col-span-2"><label className={labelCls}>License Plate</label>
+                    <input value={boloPlate} onChange={e => setBoloPlate(e.target.value.toUpperCase())} placeholder="ABC1234" className={inputCls} /></div>
+                  <div><label className={labelCls}>State</label>
+                    <input value={boloPlateState} onChange={e => setBoloPlateState(e.target.value.toUpperCase())} placeholder="VA" maxLength={2} className={inputCls} /></div>
+                </div>
                 <div><label className={labelCls}>Location</label>
                   <select value={boloCommunity} onChange={e => setBoloCommunity(e.target.value)} className={inputCls}>
                     <option value="">All Properties</option>
@@ -2416,6 +2501,12 @@ export default function UserDashboard() {
                       <textarea rows={3} value={editBoloDesc} onChange={e => setEditBoloDesc(e.target.value)} className={textareaCls} /></div>
                     <div><label className={labelCls}>Vehicle Description</label>
                       <input value={editBoloVehicle} onChange={e => setEditBoloVehicle(e.target.value)} className={inputCls} /></div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="col-span-2"><label className={labelCls}>License Plate</label>
+                        <input value={editBoloPlate} onChange={e => setEditBoloPlate(e.target.value.toUpperCase())} placeholder="ABC1234" className={inputCls} /></div>
+                      <div><label className={labelCls}>State</label>
+                        <input value={editBoloPlateState} onChange={e => setEditBoloPlateState(e.target.value.toUpperCase())} placeholder="VA" maxLength={2} className={inputCls} /></div>
+                    </div>
                     <div><label className={labelCls}>Location</label>
                       <select value={editBoloCommunity} onChange={e => setEditBoloCommunity(e.target.value)} className={inputCls}>
                         <option value="">All Properties</option>
@@ -2476,6 +2567,11 @@ export default function UserDashboard() {
                     {b.vehicle && (
                       <div className="text-xs text-gray-600 mt-1">
                         🚗 <span className="font-medium">Vehicle:</span> {b.vehicle}
+                      </div>
+                    )}
+                    {b.plate && (
+                      <div className="text-xs text-gray-600 mt-1">
+                        🔖 <span className="font-medium">Plate:</span> {b.plate}{b.plate_state ? ` (${b.plate_state})` : ""}
                       </div>
                     )}
                     <div className="flex gap-2 mt-3 flex-wrap">
