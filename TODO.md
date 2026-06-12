@@ -16,7 +16,15 @@ _(none open)_
 
 ## Features
 
-_(all complete — #1, #2, #4 moved to Done)_
+- **#7 Property Management vehicle registry** — per-location authorized resident/visitor vehicle list; plate lookup feeds Parking Violations (authorized-resident / temp-visitor / unknown). Blocks the registry half of #6.
+- **#8 Multi-location officer assignments** — many-to-many officer ↔ location; dropdown scoping + defaults.
+- **#5 Property Docs hub + locations/location_contacts backbone** — the shared location model the docs filter, tow rules, and registry hang off.
+
+### Parking Violations — follow-ons (deferred, from #6)
+- Per-location **automatic tow rules** + tow-company notification (needs #5 location model). Today: manual "Request tow" flag + dispatch log + supervisor alert only.
+- **Plate → vehicle-registry lookup** (authorized-resident / temp-visitor / unknown) once #7 lands.
+- **Repeat-offense detection** (plate seen N times → escalate/tow).
+- Watchlist plate cross-check is **not possible** as-is — `watchlist` is person-only (no plate column); only `bolos.vehicle` (free text) is checked.
 
 ---
 
@@ -28,6 +36,7 @@ _(all complete — #11 moved to Done)_
 
 ## Done
 
+- **2026-06-11 — #6 Parking Violations report type.** New "🅿️ Parking Violation" sub-tab under Officer Reports, as an **independent** report type (`parking_violations` table; migration `2026-06-11_parking_violations.sql`), distinct from the observational Vehicle FI. Fields: date/time/officer/community, shared `<VehicleFields>` (make/model/color/year/plate/state — also retrofitted into Vehicle FI), lot/area, space, **structured violation_type** dropdown (No Permit / Expired Permit / Fire Lane / Handicap / Blocking / Double-Parked / Reserved / Expired Reg / Abandoned / Other), notes, photo (`contact-photos` bucket). **BOLO cross-check** on plate blur + at submit (`bolos.vehicle ILIKE`) with an inline match banner; result snapshotted to `bolo_match`. **Tow**: manual "Request tow" flag + reason → logged with `tow_requested_at/by`. **Alerting**: standard violations just log; a supervisor alert fires only on a BOLO hit (`parking_bolo_hit`, critical) or a tow request (`parking_tow_requested`, high). Wired into View/Edit/CSV/delete via the `_type` pattern. Also surfaced in **/vms Reports & Analytics** as its own "Parking Violations" section (count, tow/BOLO/by-type breakdown, list + CSV, realtime), scoped by community + date range. Deferred follow-ons (registry lookup, auto-tow rules, repeat-offense) tracked under Features. Typecheck + `next build` clean.
 - **2026-06-09 — #11 Login location persistence (verified fixed).** Location persists across pages via the shared `asg-current-community-id` / `asg-current-community-name` localStorage keys: written by `confirm-location`, `/vms`, `/vms/scan`, `/vms/manual` on change; read as the default on load by `/userdash`, `/vms`, `/vms/reports`, `/vms/scan`, `/vms/manual`, `/admin/post-orders`. Resolved by commits `baf8e89` and `2b956df`.
 - **2026-06-09 — #1 St Luke Gate Checklist.** New "🚪 Gate Checklist" tab in the User Dashboard (`app/userdash/GateChecklist.tsx`). Location dropdown lists all communities, defaults to St Luke Apartments. Header (date, guard, shift, device, start/end time) + verbatim instructions block. Per-gate cards (gates 1–7) with initials, touch-friendly Yes/No toggles for the three inspections × Vehicle/Pedestrian (Gate Operation, Locks/Secures, Damage Observed), notes, and per-gate photo upload. Footer: additional notes, general photos, supervisor-report notice, typed guard signature with auto date/time. Saves to new `gate_checklists` table (header cols + `gates jsonb` + `general_photo_urls text[]`); photos → `photos` bucket. Includes a saved-records list per location with issue/all-clear badges, expandable detail grid, and admin delete. Each saved record exports as a **PDF report** (print-to-PDF, form-style layout) or **CSV** (one row per gate). RLS mirrors `officer_daily_logs`.
 - **2026-06-09 — #4 Add User from Admin Dashboard.** Added `POST /api/admin/users` (service-role, admin-gated) using `supabase.auth.admin.createUser()` with `email_confirm: true`, optional community assignment (`user_assignments`) and optional admin grant (`admin_users`). Added an "+ Add User" button + inline form on the `/admin/system` Users tab (email, temp password, full name, location, grant-admin checkbox) that creates the user and refreshes the list.

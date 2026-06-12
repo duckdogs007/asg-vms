@@ -10,6 +10,22 @@ import { fireAlert } from "@/lib/alerts"
 import { maskSSN } from "@/lib/format"
 import { checkIsAdmin } from "@/lib/admin"
 import GateChecklist from "./GateChecklist"
+import { VehicleFields, EMPTY_VEHICLE, type VehicleInfo } from "@/components/VehicleFields"
+
+// Structured parking-violation categories. A real enum (not a free-text flag)
+// so reporting, per-location tow rules, and auto-remit routing can key off it.
+const PARKING_VIOLATION_TYPES = [
+  "No Parking Permit",
+  "Expired Permit",
+  "Fire Lane",
+  "Handicap Zone",
+  "Blocking / Obstruction",
+  "Double Parked",
+  "Reserved / Assigned Space",
+  "Expired Registration",
+  "Abandoned Vehicle",
+  "Other",
+] as const
 
 const HIGH_PRIORITY_INCIDENT_TYPES = [
   "weapons", "weapon", "firearm",
@@ -33,7 +49,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   onduty:    "Officers currently signed on, grouped by assigned property — live status.",
   passdown:  "Shift-to-shift notes so the next officer knows what happened on the prior watch.",
   bolo:      "Be-On-the-Lookout alerts for persons or vehicles of interest at the property.",
-  reports:   "File and review Daily Logs, Incident Reports, Field Contacts, and Vehicle FIs.",
+  reports:   "File and review Daily Logs, Incident Reports, Field Contacts, Vehicle FIs, and Parking Violations.",
   watchlist: "Persons barred from the property — checked during visitor and ID-scan check-in.",
   rentroll:  "Current residents and units from the property rent roll, used to verify visitors.",
   gatecheck: "Per-tour security gate inspection — operation, locks, and damage for each numbered gate.",
@@ -53,7 +69,7 @@ interface OfficerOnDuty {
   off_duty_at:  string | null
   is_online:    boolean
 }
-type ReportTab = "daily" | "incident" | "contact" | "vfi" | "view"
+type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "view"
 
 export default function UserDashboard() {
 
@@ -161,12 +177,7 @@ export default function UserDashboard() {
   const [vfiCommunity,    setVfiCommunity]    = useState("")
   const [vfiOfficer,      setVfiOfficer]      = useState("")
   const [vfiLocation,     setVfiLocation]     = useState("")
-  const [vfiMake,         setVfiMake]         = useState("")
-  const [vfiModel,        setVfiModel]        = useState("")
-  const [vfiColor,        setVfiColor]        = useState("")
-  const [vfiYear,         setVfiYear]         = useState("")
-  const [vfiState,        setVfiState]        = useState("")
-  const [vfiPlate,        setVfiPlate]        = useState("")
+  const [vfiVehicle,      setVfiVehicle]      = useState<VehicleInfo>(EMPTY_VEHICLE)
   const [vfiDescriptors,  setVfiDescriptors]  = useState("")
   const [vfiReason,       setVfiReason]       = useState("")
   const [vfiFollowUp,     setVfiFollowUp]     = useState(false)
@@ -175,6 +186,23 @@ export default function UserDashboard() {
   const [vfiNotes,        setVfiNotes]        = useState("")
   const [vfiPhotoFile,    setVfiPhotoFile]    = useState<File | null>(null)
   const [vfiPhotoPreview, setVfiPhotoPreview] = useState("")
+
+  // Parking violation
+  const [pvDate,          setPvDate]          = useState(new Date().toISOString().split("T")[0])
+  const [pvTime,          setPvTime]          = useState("")
+  const [pvCommunity,     setPvCommunity]     = useState("")
+  const [pvOfficer,       setPvOfficer]       = useState("")
+  const [pvVehicle,       setPvVehicle]       = useState<VehicleInfo>(EMPTY_VEHICLE)
+  const [pvLocation,      setPvLocation]      = useState("")
+  const [pvSpace,         setPvSpace]         = useState("")
+  const [pvViolationType, setPvViolationType] = useState<string>(PARKING_VIOLATION_TYPES[0])
+  const [pvNotes,         setPvNotes]         = useState("")
+  const [pvPhotoFile,     setPvPhotoFile]     = useState<File | null>(null)
+  const [pvPhotoPreview,  setPvPhotoPreview]  = useState("")
+  const [pvTowRequested,  setPvTowRequested]  = useState(false)
+  const [pvTowReason,     setPvTowReason]     = useState("")
+  const [pvBoloHits,      setPvBoloHits]      = useState<any[]>([])
+  const [pvBoloChecked,   setPvBoloChecked]   = useState(false)
 
   // Incident report
   const [incDate,        setIncDate]        = useState(new Date().toISOString().split("T")[0])
@@ -570,17 +598,19 @@ export default function UserDashboard() {
   // ── OFFICER REPORTS ──
   async function loadPastReports() {
     setReportsLoading(true)
-    const [{ data: daily }, { data: incidents }, { data: contacts }, { data: vfi }] = await Promise.all([
+    const [{ data: daily }, { data: incidents }, { data: contacts }, { data: vfi }, { data: parking }] = await Promise.all([
       supabase.from("officer_daily_logs").select("*").order("date", { ascending: false }).limit(20),
       supabase.from("incident_reports").select("*").order("date", { ascending: false }).limit(20),
       supabase.from("contact_history").select("*").order("created_at", { ascending: false }).limit(20),
       supabase.from("vehicle_fi_logs").select("*").order("date", { ascending: false }).limit(20),
+      supabase.from("parking_violations").select("*").order("date", { ascending: false }).limit(20),
     ])
     const combined = [
       ...(daily     || []).map(r => ({ ...r, _type: "Daily Log"     })),
       ...(incidents || []).map(r => ({ ...r, _type: "Incident"      })),
       ...(contacts  || []).map(r => ({ ...r, _type: "Field Contact", date: r.contacted_at?.split("T")[0] || r.created_at?.split("T")[0] })),
       ...(vfi       || []).map(r => ({ ...r, _type: "Vehicle FI"    })),
+      ...(parking   || []).map(r => ({ ...r, _type: "Parking Violation" })),
     ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
     setPastReports(combined)
     setReportsLoading(false)
@@ -676,7 +706,7 @@ export default function UserDashboard() {
   }
 
   async function saveVehicleFI() {
-    if (!vfiPlate && !vfiMake) { setReportError("Plate or Make is required."); return }
+    if (!vfiVehicle.plate && !vfiVehicle.make) { setReportError("Plate or Make is required."); return }
     setReportSaving(true); setReportError(""); setReportMessage("")
     let photoUrl: string | null = null
     if (vfiPhotoFile) {
@@ -694,9 +724,9 @@ export default function UserDashboard() {
       community_id: vfiCommunity || null,
       officer_name: vfiOfficer || null,
       location: vfiLocation || null,
-      make: vfiMake || null, model: vfiModel || null,
-      color: vfiColor || null, year: vfiYear || null,
-      state: vfiState || null, plate: vfiPlate || null,
+      make: vfiVehicle.make || null, model: vfiVehicle.model || null,
+      color: vfiVehicle.color || null, year: vfiVehicle.year || null,
+      state: vfiVehicle.state || null, plate: vfiVehicle.plate || null,
       descriptors: vfiDescriptors || null,
       reason: vfiReason || null,
       follow_up: vfiFollowUp,
@@ -709,12 +739,110 @@ export default function UserDashboard() {
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
     setReportMessage("✅ Vehicle FI logged.")
-    logActivity("created", "Vehicle FI", "", `Vehicle FI logged — ${vfiPlate || vfiMake} ${vfiDate}`)
-    setVfiLocation(""); setVfiMake(""); setVfiModel(""); setVfiColor(""); setVfiYear("")
-    setVfiState(""); setVfiPlate(""); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
+    logActivity("created", "Vehicle FI", "", `Vehicle FI logged — ${vfiVehicle.plate || vfiVehicle.make} ${vfiDate}`)
+    setVfiLocation(""); setVfiVehicle(EMPTY_VEHICLE); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
     setVfiFollowUp(false); setVfiViolation(false); setVfiViolationNum("")
     setVfiPhotoFile(null); setVfiPhotoPreview("")
     setVfiDate(new Date().toISOString().split("T")[0]); setVfiTime("")
+  }
+
+  // ── PARKING VIOLATION ──
+  // Cross-checks a plate against active BOLOs. bolos.vehicle is free text
+  // (e.g. "Red Honda Civic ABC1234"), so this is a substring match. Watchlist
+  // is person-only (no plate column) and the vehicle registry (#7) doesn't
+  // exist yet — both are intentionally out of scope until that data lands.
+  async function checkPlateBolo(plate: string): Promise<any[]> {
+    const p = plate.trim()
+    if (!p) { setPvBoloHits([]); setPvBoloChecked(false); return [] }
+    const { data } = await supabase
+      .from("bolos")
+      .select("id, name, vehicle, reason")
+      .eq("active", true)
+      .ilike("vehicle", `%${p}%`)
+    const hits = data || []
+    setPvBoloHits(hits)
+    setPvBoloChecked(true)
+    return hits
+  }
+
+  async function saveParkingViolation() {
+    if (!pvVehicle.plate.trim()) { setReportError("License plate is required for a parking violation."); return }
+    setReportSaving(true); setReportError(""); setReportMessage("")
+
+    let photoUrl: string | null = null
+    if (pvPhotoFile) {
+      const ext  = pvPhotoFile.name.split(".").pop() || "jpg"
+      const path = `pv_${Date.now()}.${ext}`
+      const { data: up, error: upErr } = await supabase.storage
+        .from("contact-photos").upload(path, pvPhotoFile, { upsert: false })
+      if (!upErr && up) {
+        const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
+        photoUrl = publicUrl
+      }
+    }
+
+    // Active-BOLO plate cross-check, snapshotted onto the row at submission.
+    const hits = await checkPlateBolo(pvVehicle.plate)
+    const boloMatch = hits.length > 0
+
+    const { error } = await supabase.from("parking_violations").insert({
+      date: pvDate, time: pvTime || null,
+      community_id: pvCommunity || null,
+      officer_name: pvOfficer || null,
+      make: pvVehicle.make || null, model: pvVehicle.model || null,
+      color: pvVehicle.color || null, year: pvVehicle.year || null,
+      state: pvVehicle.state || null, plate: pvVehicle.plate || null,
+      location: pvLocation || null, space: pvSpace || null,
+      violation_type: pvViolationType || null,
+      notes: pvNotes || null, photo_url: photoUrl,
+      tow_requested: pvTowRequested,
+      tow_requested_at: pvTowRequested ? new Date().toISOString() : null,
+      tow_requested_by: pvTowRequested ? (pvOfficer || null) : null,
+      tow_reason:       pvTowRequested ? (pvTowReason || null) : null,
+      bolo_match: boloMatch,
+      created_at: new Date().toISOString(),
+    })
+    setReportSaving(false)
+    if (error) { setReportError(error.message); return }
+
+    // Supervisor alert only on a BOLO hit or a tow request — standard
+    // violations just log. (Chosen default for item 6.)
+    if (boloMatch || pvTowRequested) {
+      const communityName = communities.find(c => c.id === pvCommunity)?.name || "Unknown"
+      const plateLabel    = `${pvVehicle.plate}${pvVehicle.state ? " (" + pvVehicle.state + ")" : ""}`
+      const where         = [pvLocation, pvSpace && `Space ${pvSpace}`].filter(Boolean).join(" · ") || "—"
+      fireAlert({
+        type:         boloMatch ? "parking_bolo_hit" : "parking_tow_requested",
+        severity:     boloMatch ? "critical" : "high",
+        community_id: pvCommunity || null,
+        subject:      `${boloMatch ? "🚨 BOLO VEHICLE — parking violation" : "🚛 Tow requested"} — ${plateLabel} @ ${communityName}`,
+        body:         boloMatch
+          ? `A parking violation was logged on a vehicle matching an active BOLO.\n\nPlate: ${plateLabel}\nViolation: ${pvViolationType}\nBOLO: ${hits.map(h => h.name || h.vehicle).filter(Boolean).join("; ") || "—"}`
+          : `A tow has been requested for a parking violation.\n\nPlate: ${plateLabel}\nViolation: ${pvViolationType}\nReason: ${pvTowReason || "—"}`,
+        payload: {
+          Community: communityName,
+          Date:      pvDate,
+          Time:      pvTime || "—",
+          Plate:     plateLabel,
+          Violation: pvViolationType,
+          Location:  where,
+          Officer:   pvOfficer || "—",
+          Tow:       pvTowRequested ? "yes" : "no",
+          BOLO:      boloMatch ? "MATCH" : "no",
+        },
+      })
+    }
+
+    const note = boloMatch
+      ? " ⚠ BOLO match — supervisor alerted."
+      : pvTowRequested ? " 🚛 Tow requested — supervisor alerted." : ""
+    setReportMessage("✅ Parking violation logged." + note)
+    logActivity("created", "Parking Violation", "", `Parking violation — ${pvVehicle.plate} (${pvViolationType})`)
+
+    setPvVehicle(EMPTY_VEHICLE); setPvLocation(""); setPvSpace(""); setPvNotes("")
+    setPvViolationType(PARKING_VIOLATION_TYPES[0]); setPvTowRequested(false); setPvTowReason("")
+    setPvPhotoFile(null); setPvPhotoPreview(""); setPvBoloHits([]); setPvBoloChecked(false)
+    setPvTime("")
   }
 
   // ── AUDIT ──
@@ -728,10 +856,11 @@ export default function UserDashboard() {
   }
 
   const REPORT_TABLE: Record<string, string> = {
-    "Daily Log":     "officer_daily_logs",
-    "Incident":      "incident_reports",
-    "Field Contact": "contact_history",
-    "Vehicle FI":    "vehicle_fi_logs",
+    "Daily Log":         "officer_daily_logs",
+    "Incident":          "incident_reports",
+    "Field Contact":     "contact_history",
+    "Vehicle FI":        "vehicle_fi_logs",
+    "Parking Violation": "parking_violations",
   }
 
   async function deleteReport(r: any) {
@@ -774,6 +903,10 @@ export default function UserDashboard() {
       "Plate": r.plate || "", "Plate State": r.state || "",
       "Violation Issued": r.violation_issued ? "Yes" : "",
       "Violation #": r.violation_number || "",
+      "Violation Type": r.violation_type || "",
+      "Parking Space": r.space || "",
+      "Tow Requested": r.tow_requested ? "Yes" : "",
+      "BOLO Match": r.bolo_match ? "Yes" : "",
       Reason: r.reason || "",
     }))
     const csv  = Papa.unparse(rows)
@@ -1484,6 +1617,7 @@ export default function UserDashboard() {
             <button className={rTabCls("incident")} onClick={() => setReportTab("incident")}>🚨 Incident Report</button>
             <button className={rTabCls("contact")}  onClick={() => setReportTab("contact")}>📋 Field Contact</button>
             <button className={rTabCls("vfi")}      onClick={() => setReportTab("vfi")}>🚗 Vehicle FI</button>
+            <button className={rTabCls("parking")}  onClick={() => setReportTab("parking")}>🅿️ Parking Violation</button>
             <button className={rTabCls("view")}     onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
           </div>
 
@@ -1675,18 +1809,14 @@ export default function UserDashboard() {
                   </select></div>
                 <div className="sm:col-span-2"><label className={labelCls}>Location</label>
                   <input value={vfiLocation} onChange={e => setVfiLocation(e.target.value)} placeholder="e.g. Building 3 Parking, Entrance Gate" className={inputCls} /></div>
-                <div><label className={labelCls}>Make <span className="text-red-500">*</span></label>
-                  <input value={vfiMake} onChange={e => setVfiMake(e.target.value)} placeholder="e.g. Ford, Toyota" className={inputCls} /></div>
-                <div><label className={labelCls}>Model</label>
-                  <input value={vfiModel} onChange={e => setVfiModel(e.target.value)} placeholder="e.g. F-150, Camry" className={inputCls} /></div>
-                <div><label className={labelCls}>Color</label>
-                  <input value={vfiColor} onChange={e => setVfiColor(e.target.value)} placeholder="e.g. Black, Silver" className={inputCls} /></div>
-                <div><label className={labelCls}>Year</label>
-                  <input value={vfiYear} onChange={e => setVfiYear(e.target.value)} placeholder="e.g. 2019" maxLength={4} className={inputCls} /></div>
-                <div><label className={labelCls}>Tag # (Plate) <span className="text-red-500">*</span></label>
-                  <input value={vfiPlate} onChange={e => setVfiPlate(e.target.value.toUpperCase())} placeholder="ABC1234" className={inputCls} /></div>
-                <div><label className={labelCls}>State</label>
-                  <input value={vfiState} onChange={e => setVfiState(e.target.value.toUpperCase())} placeholder="VA" maxLength={2} className={inputCls} /></div>
+                <VehicleFields
+                  value={vfiVehicle}
+                  onChange={p => setVfiVehicle(v => ({ ...v, ...p }))}
+                  inputCls={inputCls}
+                  labelCls={labelCls}
+                  requireMake
+                  requirePlate
+                />
                 <div className="sm:col-span-2"><label className={labelCls}>Other Descriptors</label>
                   <input value={vfiDescriptors} onChange={e => setVfiDescriptors(e.target.value)}
                     placeholder="e.g. Tinted windows, dents, stickers, body type" className={inputCls} /></div>
@@ -1744,6 +1874,109 @@ export default function UserDashboard() {
             </div>
           )}
 
+          {/* PARKING VIOLATION */}
+          {reportTab === "parking" && (
+            <div className="max-w-2xl">
+              <h3 className="text-lg font-bold mb-4 text-gray-800">Parking Violation</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div><label className={labelCls}>Date</label>
+                  <input type="date" value={pvDate} onChange={e => setPvDate(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Time</label>
+                  <input type="time" value={pvTime} onChange={e => setPvTime(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Officer Name</label>
+                  <input value={pvOfficer} onChange={e => setPvOfficer(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Community</label>
+                  <select value={pvCommunity} onChange={e => setPvCommunity(e.target.value)} className={inputCls}>
+                    {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select></div>
+                <div><label className={labelCls}>Lot / Area</label>
+                  <input value={pvLocation} onChange={e => setPvLocation(e.target.value)} placeholder="e.g. Building 3 Lot, Visitor Row" className={inputCls} /></div>
+                <div><label className={labelCls}>Space / Spot #</label>
+                  <input value={pvSpace} onChange={e => setPvSpace(e.target.value)} placeholder="e.g. 14, A-7, Fire Lane" className={inputCls} /></div>
+                <div className="sm:col-span-2"><label className={labelCls}>Violation Type</label>
+                  <select value={pvViolationType} onChange={e => setPvViolationType(e.target.value)} className={inputCls}>
+                    {PARKING_VIOLATION_TYPES.map(t => <option key={t}>{t}</option>)}
+                  </select></div>
+                {/* Shared vehicle fields */}
+                <VehicleFields
+                  value={pvVehicle}
+                  onChange={p => setPvVehicle(v => ({ ...v, ...p }))}
+                  inputCls={inputCls}
+                  labelCls={labelCls}
+                  requirePlate
+                  onPlateBlur={plate => checkPlateBolo(plate)}
+                />
+              </div>
+
+              {/* BOLO cross-check banner */}
+              {pvBoloChecked && pvBoloHits.length > 0 && (
+                <div className="bg-red-50 border-2 border-red-300 text-red-800 px-4 py-3 rounded-lg mb-4 text-sm">
+                  <div className="font-bold mb-1">🚨 BOLO MATCH — plate {pvVehicle.plate} matches {pvBoloHits.length} active BOLO{pvBoloHits.length > 1 ? "s" : ""}:</div>
+                  <ul className="list-disc ml-5">
+                    {pvBoloHits.map(h => (
+                      <li key={h.id}>{[h.name, h.vehicle, h.reason].filter(Boolean).join(" — ")}</li>
+                    ))}
+                  </ul>
+                  <div className="mt-1 text-xs">Submitting will alert a supervisor.</div>
+                </div>
+              )}
+              {pvBoloChecked && pvBoloHits.length === 0 && pvVehicle.plate.trim() && (
+                <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg mb-4 text-xs">
+                  ✓ No active BOLO match for {pvVehicle.plate}.
+                </div>
+              )}
+
+              <div className="mb-4">
+                <label className={labelCls}>Notes</label>
+                <textarea rows={4} value={pvNotes} onChange={e => setPvNotes(e.target.value)}
+                  placeholder="Details — repeat offender, prior warnings, condition of vehicle..."
+                  className={textareaCls} />
+              </div>
+
+              {/* Tow workflow: manual flag + dispatch log. Per-location auto-rules
+                  and tow-company notification arrive with the location model (#5). */}
+              <div className="mb-4 flex flex-col gap-3">
+                <div className="flex items-center gap-2">
+                  <input type="checkbox" id="pvTow" checked={pvTowRequested} onChange={e => setPvTowRequested(e.target.checked)} className="w-4 h-4 accent-red-700" />
+                  <label htmlFor="pvTow" className="text-sm font-medium text-gray-700">Request tow</label>
+                </div>
+                {pvTowRequested && (
+                  <div className="ml-6 max-w-md">
+                    <label className={labelCls}>Tow Reason</label>
+                    <input value={pvTowReason} onChange={e => setPvTowReason(e.target.value)}
+                      placeholder="e.g. Fire lane, repeat offense, blocking access" className={inputCls} />
+                    <p className="text-xs text-gray-400 mt-1">Logs the dispatch and alerts a supervisor. Automatic tow-company routing comes with per-location tow rules.</p>
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-5">
+                <label className={labelCls}>Vehicle / Violation Photo</label>
+                <div className="flex items-start gap-4">
+                  <div className="w-36 h-28 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
+                    {pvPhotoPreview
+                      ? <img src={pvPhotoPreview} alt="preview" className="w-full h-full object-cover" />
+                      : <span className="text-gray-400 text-xs text-center px-2">No photo</span>}
+                  </div>
+                  <div className="flex-1 pt-1">
+                    <input type="file" accept="image/*"
+                      onChange={e => {
+                        const file = e.target.files?.[0] || null
+                        setPvPhotoFile(file)
+                        setPvPhotoPreview(file ? URL.createObjectURL(file) : "")
+                      }}
+                      className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
+                    <p className="text-xs text-gray-400 mt-1">JPG, PNG accepted</p>
+                  </div>
+                </div>
+              </div>
+              <button onClick={saveParkingViolation} disabled={reportSaving}
+                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                {reportSaving ? "Submitting..." : "Submit Parking Violation"}
+              </button>
+            </div>
+          )}
+
           {/* VIEW REPORTS */}
           {reportTab === "view" && (
             <div>
@@ -1763,28 +1996,33 @@ export default function UserDashboard() {
               {!reportsLoading && pastReports.length === 0 && <div className="text-gray-500 text-sm py-8 text-center">No reports submitted yet.</div>}
               {!reportsLoading && pastReports.map((r, i) => {
                 const badgeCls =
-                  r._type === "Incident"      ? "bg-red-100 text-red-700" :
-                  r._type === "Field Contact" ? "bg-purple-100 text-purple-700" :
-                  r._type === "Vehicle FI"    ? "bg-orange-100 text-orange-700" :
-                                                "bg-blue-100 text-blue-700"
+                  r._type === "Incident"          ? "bg-red-100 text-red-700" :
+                  r._type === "Field Contact"     ? "bg-purple-100 text-purple-700" :
+                  r._type === "Vehicle FI"        ? "bg-orange-100 text-orange-700" :
+                  r._type === "Parking Violation" ? "bg-amber-100 text-amber-800" :
+                                                    "bg-blue-100 text-blue-700"
                 const rowBg =
-                  r._type === "Incident"      ? "bg-red-50 hover:bg-red-100" :
-                  r._type === "Field Contact" ? "bg-purple-50 hover:bg-purple-100" :
-                  r._type === "Vehicle FI"    ? "bg-orange-50 hover:bg-orange-100" :
-                                                "bg-white hover:bg-gray-50"
+                  r._type === "Incident"          ? "bg-red-50 hover:bg-red-100" :
+                  r._type === "Field Contact"     ? "bg-purple-50 hover:bg-purple-100" :
+                  r._type === "Vehicle FI"        ? "bg-orange-50 hover:bg-orange-100" :
+                  r._type === "Parking Violation" ? "bg-amber-50 hover:bg-amber-100" :
+                                                    "bg-white hover:bg-gray-50"
                 const borderCls =
-                  r._type === "Incident"      ? "border-red-200" :
-                  r._type === "Field Contact" ? "border-purple-200" :
-                  r._type === "Vehicle FI"    ? "border-orange-200" :
-                                                "border-gray-200"
+                  r._type === "Incident"          ? "border-red-200" :
+                  r._type === "Field Contact"     ? "border-purple-200" :
+                  r._type === "Vehicle FI"        ? "border-orange-200" :
+                  r._type === "Parking Violation" ? "border-amber-200" :
+                                                    "border-gray-200"
                 const badge =
-                  r._type === "Incident"      ? "🚨 Incident" :
-                  r._type === "Field Contact" ? "👤 Field Contact" :
-                  r._type === "Vehicle FI"    ? "🚗 Vehicle FI" :
-                                                "📝 Daily Log"
+                  r._type === "Incident"          ? "🚨 Incident" :
+                  r._type === "Field Contact"     ? "👤 Field Contact" :
+                  r._type === "Vehicle FI"        ? "🚗 Vehicle FI" :
+                  r._type === "Parking Violation" ? "🅿️ Parking" :
+                                                    "📝 Daily Log"
                 const summary =
-                  r._type === "Field Contact" ? `${r.first_name || ""} ${r.last_name || ""}`.trim() || r.reason || "No name" :
-                  r._type === "Vehicle FI"    ? [r.year, r.color, r.make, r.model, r.plate ? `· ${r.plate}` : ""].filter(Boolean).join(" ") || r.reason || "No vehicle" :
+                  r._type === "Field Contact"     ? `${r.first_name || ""} ${r.last_name || ""}`.trim() || r.reason || "No name" :
+                  r._type === "Vehicle FI"        ? [r.year, r.color, r.make, r.model, r.plate ? `· ${r.plate}` : ""].filter(Boolean).join(" ") || r.reason || "No vehicle" :
+                  r._type === "Parking Violation" ? [r.violation_type, r.plate ? `· ${r.plate}` : ""].filter(Boolean).join(" ") || "Parking violation" :
                   (r.narrative || r.description || r.notes || "No description").slice(0, 80)
                 const followUp = r.follow_up_required || r.follow_up
                 return (
@@ -1870,6 +2108,11 @@ export default function UserDashboard() {
                           {r.state !== undefined && <div><label className={labelCls}>State</label><input value={editFields.state || ""} onChange={e => setEditFields(f => ({ ...f, state: e.target.value }))} className={inputCls} /></div>}
                           {r.descriptors !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Descriptors</label><input value={editFields.descriptors || ""} onChange={e => setEditFields(f => ({ ...f, descriptors: e.target.value }))} className={inputCls} /></div>}
                           {r.violation_number !== undefined && <div><label className={labelCls}>Violation #</label><input value={editFields.violation_number || ""} onChange={e => setEditFields(f => ({ ...f, violation_number: e.target.value }))} className={inputCls} /></div>}
+                          {r.violation_type !== undefined && <div><label className={labelCls}>Violation Type</label>
+                            <select value={editFields.violation_type || ""} onChange={e => setEditFields(f => ({ ...f, violation_type: e.target.value }))} className={inputCls}>
+                              {PARKING_VIOLATION_TYPES.map(t => <option key={t}>{t}</option>)}
+                            </select></div>}
+                          {r.space !== undefined && <div><label className={labelCls}>Space</label><input value={editFields.space || ""} onChange={e => setEditFields(f => ({ ...f, space: e.target.value }))} className={inputCls} /></div>}
                           {/* Long text fields */}
                           {r.narrative !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Patrol Narrative</label>
                             <textarea rows={4} value={editFields.narrative || ""} onChange={e => setEditFields(f => ({ ...f, narrative: e.target.value }))} className={textareaCls} /></div>}
@@ -1906,7 +2149,13 @@ export default function UserDashboard() {
                             {r.plate            && <Field label="Plate"          value={`${r.plate}${r.state ? " (" + r.state + ")" : ""}`} />}
                             {r.descriptors      && <Field label="Descriptors"    value={r.descriptors} />}
                             {r.violation_issued && <Field label="Violation #"    value={r.violation_number || "Issued"} />}
+                            {r.violation_type   && <Field label="Violation Type"  value={r.violation_type} />}
+                            {r.space            && <Field label="Space"           value={r.space} />}
+                            {r.tow_requested    && <Field label="Tow"             value={r.tow_reason ? `Requested — ${r.tow_reason}` : "Requested"} />}
                           </div>
+                          {r.bolo_match && (
+                            <div className="bg-red-50 border border-red-300 text-red-800 text-sm px-4 py-2 rounded-lg font-medium mb-3">🚨 Plate matched an active BOLO at the time this was logged.</div>
+                          )}
                           {(r.narrative || r.description) && (
                             <div className="mb-3">
                               <div className="text-xs font-semibold text-gray-500 mb-1">{r._type === "Incident" ? "Incident Description" : "Patrol Narrative"}</div>
