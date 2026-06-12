@@ -5,17 +5,31 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import { Community } from "@/lib/types"
 import { PostOrders, loadPostOrders, formatLastUpdated } from "@/lib/postOrders"
 
-export default function PostOrdersTab() {
+// When `communityId` is passed, the component is "controlled" — it uses that
+// id and hides its own location selector (the Property Hub provides a shared
+// one). With no prop it keeps its original standalone behavior.
+export default function PostOrdersTab({ communityId: controlledId }: { communityId?: string } = {}) {
+
+  const controlled = controlledId !== undefined
 
   const [communities,     setCommunities]     = useState<Community[]>([])
-  const [communityId,     setCommunityId]     = useState("")
+  const [internalId,      setInternalId]      = useState("")
+  const communityId = controlled ? (controlledId || "") : internalId
   const [orders,          setOrders]          = useState<PostOrders | null>(null)
   const [loading,         setLoading]         = useState(true)
   const [expandedSection, setExpandedSection] = useState<string | null>("Gate Operations")
   const [expandedExample, setExpandedExample] = useState<string | null>(null)
   const [copiedTitle,     setCopiedTitle]     = useState<string | null>(null)
 
-  useEffect(() => { initCommunities() }, [])
+  useEffect(() => {
+    if (controlled) {
+      if (controlledId) { void loadOrders(controlledId) }
+      else { setOrders(null); setLoading(false) }
+    } else {
+      initCommunities()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlledId])
 
   async function initCommunities() {
     const { data } = await supabase.from("communities").select("id, name").order("name")
@@ -26,7 +40,7 @@ export default function PostOrdersTab() {
       : ""
     const initial = data.find(c => c.id === saved) || data[0]
     if (initial) {
-      setCommunityId(initial.id)
+      setInternalId(initial.id)
       void loadOrders(initial.id)
     } else {
       setLoading(false)
@@ -41,7 +55,7 @@ export default function PostOrdersTab() {
   }
 
   function selectCommunity(id: string) {
-    setCommunityId(id)
+    setInternalId(id)
     if (typeof window !== "undefined") {
       const c = communities.find(x => x.id === id)
       localStorage.setItem("asg-current-community-id", id)
@@ -63,18 +77,24 @@ export default function PostOrdersTab() {
   return (
     <div className="py-4">
 
-      {/* Location selector + last-updated pill */}
-      <div className="flex items-center gap-3 mb-6 flex-wrap">
-        <label className="text-sm font-semibold text-gray-700">Location:</label>
-        <select value={communityId} onChange={e => selectCommunity(e.target.value)} className={inputCls}>
-          {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-        </select>
-        {orders && (
-          <span className="ml-auto text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
-            Last updated: {formatLastUpdated(orders.lastUpdated)}
-          </span>
-        )}
-      </div>
+      {/* Location selector (standalone only) + last-updated pill */}
+      {(!controlled || orders) && (
+        <div className="flex items-center gap-3 mb-6 flex-wrap">
+          {!controlled && (
+            <>
+              <label className="text-sm font-semibold text-gray-700">Location:</label>
+              <select value={communityId} onChange={e => selectCommunity(e.target.value)} className={inputCls}>
+                {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </>
+          )}
+          {orders && (
+            <span className="ml-auto text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+              Last updated: {formatLastUpdated(orders.lastUpdated)}
+            </span>
+          )}
+        </div>
+      )}
 
       {/* Loading state */}
       {loading && (

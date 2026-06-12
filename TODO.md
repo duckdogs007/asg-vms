@@ -16,13 +16,15 @@ _(none open)_
 
 ## Features
 
-- **#7 Property Management vehicle registry** — per-location authorized resident/visitor vehicle list; plate lookup feeds Parking Violations (authorized-resident / temp-visitor / unknown). Blocks the registry half of #6.
 - **#8 Multi-location officer assignments** — many-to-many officer ↔ location; dropdown scoping + defaults.
-- **#5 Property Docs hub + locations/location_contacts backbone** — the shared location model the docs filter, tow rules, and registry hang off.
+
+### Property Hub — follow-ons
+- **Plate → registry lookup on Parking/Vehicle FI** — return authorized-resident / temp-visitor / unknown from `registered_vehicles` (the #6 deferred piece; registry now exists).
+- **`property_manager` role** — Hub edit is admin-gated for now; add a dedicated role so property managers (not just admins) can edit Info/Documents/Vehicles.
+- **Report auto-remit routing** — use `community_contacts` (role-typed POCs) to route reports to the right contact by type/jurisdiction (ties into #6).
 
 ### Parking Violations — follow-ons (deferred, from #6)
-- Per-location **automatic tow rules** + tow-company notification (needs #5 location model). Today: manual "Request tow" flag + dispatch log + supervisor alert only.
-- **Plate → vehicle-registry lookup** (authorized-resident / temp-visitor / unknown) once #7 lands.
+- Per-location **automatic tow rules** + tow-company notification (needs per-location tow policy). Today: manual "Request tow" flag + dispatch log + supervisor alert only.
 - **Repeat-offense detection** (plate seen N times → escalate/tow).
 - Watchlist plate cross-check is **not possible** as-is — `watchlist` is person-only (no plate column); only `bolos.vehicle` (free text) is checked.
 
@@ -36,6 +38,7 @@ _(all complete — #11 moved to Done)_
 
 ## Done
 
+- **2026-06-11 — Property Hub (#5 + #7).** Renamed Post Orders → **🏢 Property Hub** at `/vms/property` (old `/vms/post-orders` redirects; nav updated). Location dropdown at top drives four tabs: **Post Orders** (existing `PostOrdersTab`, now accepts a controlled `communityId`), **Community Info** (address/phone/jurisdiction on `communities` + role-typed POCs in new `community_contacts`), **Documents** (PDF/image uploads → new `community-docs` bucket + `community_documents`), and **Vehicles** (new `registered_vehicles`, single table with `kind` resident|visitor — resident: unit/permit#; visitor: sponsor/pass/valid_from-to + expired badge). Migration `2026-06-11_property_hub_schema.sql`. **Access:** authenticated read (officers view all tabs incl. Vehicles read-only); writes admin-gated via `is_admin()`. Follow-ons (plate→registry lookup, `property_manager` role, auto-remit routing) tracked under Features. Typecheck + `next build` clean.
 - **2026-06-11 — BOLO plate cross-check: structured plate + Vehicle FI parity.** BOLOs gained structured **`plate` / `plate_state`** fields (migration `2026-06-11_bolo_plate_fields.sql`; Add/Edit BOLO forms updated, plate shown on BOLO cards). The plate lookup (`lookupBolosByPlate`) now matches on the **normalized** plate (uppercase, alphanumerics only) against `bolos.plate`, falling back to the legacy free-text `vehicle` substring match only for BOLOs with no structured plate. The check is now wired into **both** Parking Violations **and Vehicle FI** (plate-blur banner + submit-time snapshot). Vehicle FI reached full parity: added `vehicle_fi_logs.bolo_match`, fires a critical supervisor alert (`bolo_vehicle_hit`) on a hit, and shows the BOLO-match banner in View Reports. Typecheck + `next build` clean.
 - **2026-06-11 — #6 Parking Violations report type.** New "🅿️ Parking Violation" sub-tab under Officer Reports, as an **independent** report type (`parking_violations` table; migration `2026-06-11_parking_violations.sql`), distinct from the observational Vehicle FI. Fields: date/time/officer/community, shared `<VehicleFields>` (make/model/color/year/plate/state — also retrofitted into Vehicle FI), lot/area, space, **structured violation_type** dropdown (No Permit / Expired Permit / Fire Lane / Handicap / Blocking / Double-Parked / Reserved / Expired Reg / Abandoned / Other), notes, photo (`contact-photos` bucket). **BOLO cross-check** on plate blur + at submit (`bolos.vehicle ILIKE`) with an inline match banner; result snapshotted to `bolo_match`. **Tow**: manual "Request tow" flag + reason → logged with `tow_requested_at/by`. **Alerting**: standard violations just log; a supervisor alert fires only on a BOLO hit (`parking_bolo_hit`, critical) or a tow request (`parking_tow_requested`, high). Wired into View/Edit/CSV/delete via the `_type` pattern. Also surfaced in **/vms Reports & Analytics** as its own "Parking Violations" section (count, tow/BOLO/by-type breakdown, list + CSV, realtime), scoped by community + date range. Deferred follow-ons (registry lookup, auto-tow rules, repeat-offense) tracked under Features. Typecheck + `next build` clean.
 - **2026-06-11 — Admin Users tab: last login / last logout.** Replaced the fuzzy "Last Seen" column (which used `updated_at`, bumped on every token refresh) with true **Last Login** and **Last Logout** columns. Data comes from the existing `admin_login_logout_events()` function (aggregates `auth.audit_log_entries`), now also called by `GET /api/admin/users` and merged per user by email; falls back to GoTrue `last_sign_in_at` for login when no audit event exists. `lastActiveOf` retained for list sorting.
