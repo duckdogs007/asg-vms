@@ -68,11 +68,11 @@ export default function ConfirmLocationPage() {
       localStorage.setItem("asg-current-community-id",   selected)
       if (c) localStorage.setItem("asg-current-community-name", c.name)
 
-      // Everyone lands on the User Dashboard after confirming their post.
-      // The Dashboard is open to all signed-in users (commit 878372e);
-      // admin-only pages stay gated separately. Previously non-admins were
-      // sent to /vms (Check-In) here, which was the #13 routing bug.
-      router.replace("/userdash")
+      // Everyone lands on the Home page after confirming their post.
+      // Home is open to all signed-in users; admin-only pages stay gated
+      // separately. Previously non-admins were sent to /vms (Check-In) here,
+      // which was the #13 routing bug.
+      router.replace("/")
     } catch (err: any) {
       setError(err?.message || "Unexpected error")
       setSaving(false)
