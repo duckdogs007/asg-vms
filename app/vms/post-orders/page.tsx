@@ -1,12 +1,7 @@
-"use client"
+import { redirect } from "next/navigation"
 
-import PostOrdersTab from "@/components/PostOrdersTab"
-
-export default function PostOrdersPage() {
-  return (
-    <div className="p-4 sm:p-5 pb-16">
-      <h2 className="text-2xl font-bold mb-5">Post Orders</h2>
-      <PostOrdersTab />
-    </div>
-  )
+// Post Orders now lives inside the Property Hub. Keep this route as a
+// permanent redirect so old links / bookmarks land in the right place.
+export default function PostOrdersRedirect() {
+  redirect("/vms/property")
 }
