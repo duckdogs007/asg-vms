@@ -8,6 +8,14 @@ _Last updated: June 11, 2026_
 
 ---
 
+## Getting Started (next session)
+- Open a terminal in **`C:\projects\asg-vms`** (the real repo — *not* the OneDrive copy).
+- Run the dev server: **`npm run dev`** → http://localhost:3000
+- Next task: **#8 Multi-location officer assignments** (see Features below).
+- **Deploys are manual:** merging to `master` only builds a Vercel *preview*; promote the latest `master` build to production (`asg-vms.vercel.app`) from the Vercel dashboard, or enable auto-promote for `master` in Git settings.
+
+---
+
 ## Priority / In Progress
 
 _(none open)_
