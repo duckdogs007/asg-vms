@@ -188,6 +188,8 @@ export default function UserDashboard() {
   const [vfiPhotoPreview, setVfiPhotoPreview] = useState("")
   const [vfiBoloHits,     setVfiBoloHits]     = useState<any[]>([])
   const [vfiBoloChecked,  setVfiBoloChecked]  = useState(false)
+  const [vfiRegHits,      setVfiRegHits]      = useState<any[]>([])
+  const [vfiRegChecked,   setVfiRegChecked]   = useState(false)
 
   // Parking violation
   const [pvDate,          setPvDate]          = useState(new Date().toISOString().split("T")[0])
@@ -205,6 +207,8 @@ export default function UserDashboard() {
   const [pvTowReason,     setPvTowReason]     = useState("")
   const [pvBoloHits,      setPvBoloHits]      = useState<any[]>([])
   const [pvBoloChecked,   setPvBoloChecked]   = useState(false)
+  const [pvRegHits,       setPvRegHits]       = useState<any[]>([])
+  const [pvRegChecked,    setPvRegChecked]    = useState(false)
 
   // Incident report
   const [incDate,        setIncDate]        = useState(new Date().toISOString().split("T")[0])
@@ -777,7 +781,7 @@ export default function UserDashboard() {
     setVfiLocation(""); setVfiVehicle(EMPTY_VEHICLE); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
     setVfiFollowUp(false); setVfiViolation(false); setVfiViolationNum("")
     setVfiPhotoFile(null); setVfiPhotoPreview("")
-    setVfiBoloHits([]); setVfiBoloChecked(false)
+    setVfiBoloHits([]); setVfiBoloChecked(false); setVfiRegHits([]); setVfiRegChecked(false)
     setVfiDate(new Date().toISOString().split("T")[0]); setVfiTime("")
   }
 
@@ -791,8 +795,7 @@ export default function UserDashboard() {
   // Looks up active BOLOs matching a plate. Primary match is the structured
   // bolos.plate (normalized exact). Legacy BOLOs with no structured plate fall
   // back to a substring match inside the free-text `vehicle` description.
-  // Watchlist is person-only (no plate) and the vehicle registry (#7) doesn't
-  // exist yet — both remain out of scope until that data lands.
+  // Watchlist is person-only (no plate) and so stays out of scope.
   async function lookupBolosByPlate(plate: string): Promise<any[]> {
     const q = normPlate(plate)
     if (!q) return []
@@ -805,18 +808,71 @@ export default function UserDashboard() {
     )
   }
 
-  // Per-form blur handlers that drive each form's match banner.
+  // Looks up a plate in the Property Hub vehicle registry for a community,
+  // returning matching resident/visitor records (normalized plate match).
+  async function lookupRegisteredVehicle(communityId: string, plate: string): Promise<any[]> {
+    const q = normPlate(plate)
+    if (!q || !communityId) return []
+    const { data } = await supabase
+      .from("registered_vehicles")
+      .select("id, kind, plate, plate_state, resident_name, unit, permit_number, sponsor_resident, visitor_pass, valid_from, valid_to")
+      .eq("community_id", communityId)
+    return (data || []).filter(v => normPlate(v.plate || "") === q)
+  }
+
+  // Classifies registry hits into an officer-facing status:
+  // authorized resident / authorized (or expired) visitor / unregistered.
+  function registryStatus(hits: any[]): { level: "resident" | "visitor" | "expired" | "unknown"; label: string } {
+    if (!hits.length) return { level: "unknown", label: "Unregistered — not in the resident/visitor registry." }
+    const today = new Date().toISOString().slice(0, 10)
+    const resident = hits.find(h => h.kind === "resident")
+    if (resident) {
+      return { level: "resident", label: `Authorized resident — ${[resident.resident_name, resident.unit && `Unit ${resident.unit}`, resident.permit_number && `Permit ${resident.permit_number}`].filter(Boolean).join(" · ") || "registered"}.` }
+    }
+    const visitor = hits.find(h => h.kind === "visitor")
+    if (visitor) {
+      const expired = visitor.valid_to && visitor.valid_to < today
+      const detail  = [visitor.sponsor_resident && `sponsor ${visitor.sponsor_resident}`, visitor.visitor_pass && `pass ${visitor.visitor_pass}`, visitor.valid_to && `valid to ${visitor.valid_to}`].filter(Boolean).join(" · ")
+      return expired
+        ? { level: "expired", label: `Visitor pass EXPIRED — ${detail || "no longer valid"}.` }
+        : { level: "visitor",  label: `Authorized visitor — ${detail || "registered"}.` }
+    }
+    return { level: "unknown", label: "Unregistered — not in the resident/visitor registry." }
+  }
+
+  // Per-form blur handlers — run the BOLO and registry checks together and
+  // drive each form's banners. Registry lookup is scoped to the form's community.
   async function pvCheckPlate(plate: string): Promise<any[]> {
-    if (!plate.trim()) { setPvBoloHits([]); setPvBoloChecked(false); return [] }
-    const hits = await lookupBolosByPlate(plate)
+    if (!plate.trim()) { setPvBoloHits([]); setPvBoloChecked(false); setPvRegHits([]); setPvRegChecked(false); return [] }
+    const [hits, reg] = await Promise.all([lookupBolosByPlate(plate), lookupRegisteredVehicle(pvCommunity, plate)])
     setPvBoloHits(hits); setPvBoloChecked(true)
+    setPvRegHits(reg);   setPvRegChecked(true)
     return hits
   }
   async function vfiCheckPlate(plate: string): Promise<any[]> {
-    if (!plate.trim()) { setVfiBoloHits([]); setVfiBoloChecked(false); return [] }
-    const hits = await lookupBolosByPlate(plate)
+    if (!plate.trim()) { setVfiBoloHits([]); setVfiBoloChecked(false); setVfiRegHits([]); setVfiRegChecked(false); return [] }
+    const [hits, reg] = await Promise.all([lookupBolosByPlate(plate), lookupRegisteredVehicle(vfiCommunity, plate)])
     setVfiBoloHits(hits); setVfiBoloChecked(true)
+    setVfiRegHits(reg);   setVfiRegChecked(true)
     return hits
+  }
+
+  // Officer-facing registry status banner (authorized resident / visitor /
+  // unregistered) shown under the plate fields on the Parking + Vehicle FI forms.
+  function registryBanner(checked: boolean, hits: any[], plate: string) {
+    if (!checked || !plate.trim()) return null
+    const s = registryStatus(hits)
+    const cls =
+      s.level === "resident" ? "bg-green-50 border-green-200 text-green-800" :
+      s.level === "visitor"  ? "bg-blue-50  border-blue-200  text-blue-800"  :
+      s.level === "expired"  ? "bg-amber-50 border-amber-300 text-amber-900" :
+                               "bg-gray-50  border-gray-200  text-gray-600"
+    const icon = s.level === "expired" ? "⚠️" : s.level === "unknown" ? "❔" : "✅"
+    return (
+      <div className={`border px-4 py-2 rounded-lg mb-4 text-sm ${cls}`}>
+        {icon} <span className="font-semibold">Registry:</span> {s.label}
+      </div>
+    )
   }
 
   // ── PARKING VIOLATION ──
@@ -896,7 +952,7 @@ export default function UserDashboard() {
 
     setPvVehicle(EMPTY_VEHICLE); setPvLocation(""); setPvSpace(""); setPvNotes("")
     setPvViolationType(PARKING_VIOLATION_TYPES[0]); setPvTowRequested(false); setPvTowReason("")
-    setPvPhotoFile(null); setPvPhotoPreview(""); setPvBoloHits([]); setPvBoloChecked(false)
+    setPvPhotoFile(null); setPvPhotoPreview(""); setPvBoloHits([]); setPvBoloChecked(false); setPvRegHits([]); setPvRegChecked(false)
     setPvTime("")
   }
 
@@ -1903,6 +1959,7 @@ export default function UserDashboard() {
                   ✓ No active BOLO match for {vfiVehicle.plate}.
                 </div>
               )}
+              {registryBanner(vfiRegChecked, vfiRegHits, vfiVehicle.plate)}
               <div className="mb-4">
                 <label className={labelCls}>Notes</label>
                 <textarea rows={4} value={vfiNotes} onChange={e => setVfiNotes(e.target.value)}
@@ -2004,6 +2061,7 @@ export default function UserDashboard() {
                   ✓ No active BOLO match for {pvVehicle.plate}.
                 </div>
               )}
+              {registryBanner(pvRegChecked, pvRegHits, pvVehicle.plate)}
 
               <div className="mb-4">
                 <label className={labelCls}>Notes</label>
