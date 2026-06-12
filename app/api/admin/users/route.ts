@@ -49,16 +49,29 @@ export async function GET() {
   const { data: communities } = await admin.from("communities").select("id, name")
   const commName = new Map((communities || []).map(c => [c.id as string, c.name as string]))
 
+  // True last login / last logout per user, aggregated from auth.audit_log_entries
+  // by the admin_login_logout_events() SECURITY DEFINER function (the auth schema
+  // isn't reachable via PostgREST). Keyed by email (lowercased).
+  const { data: events } = await admin.rpc("admin_login_logout_events")
+  type EventRow = { email: string; last_login: string | null; last_logout: string | null }
+  const eventMap = new Map(
+    ((events || []) as EventRow[]).map(e => [(e.email || "").toLowerCase(), e])
+  )
+
   // updated_at is bumped by GoTrue on every session/token refresh, so it
   // reflects real activity. last_sign_in_at only moves on fresh sign-in.
   const users = (data.users || []).map(u => {
-    const a = assignMap.get(u.id)
+    const a  = assignMap.get(u.id)
+    const ev = eventMap.get((u.email || "").toLowerCase())
     return {
       id:                  u.id,
       email:               u.email,
       created_at:          u.created_at,
       last_sign_in_at:     u.last_sign_in_at,
       updated_at:          u.updated_at,
+      // Prefer the audit-log login event; fall back to GoTrue's last_sign_in_at.
+      last_login:          ev?.last_login || u.last_sign_in_at || null,
+      last_logout:         ev?.last_logout || null,
       email_confirmed_at:  u.email_confirmed_at,
       banned_until:        (u as any).banned_until || null,
       user_metadata:       u.user_metadata || {},

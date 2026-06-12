@@ -25,6 +25,8 @@ interface UserRow {
   created_at:         string
   last_sign_in_at:    string | null
   updated_at:         string | null
+  last_login:         string | null
+  last_logout:        string | null
   email_confirmed_at: string | null
   is_admin?:          boolean
   community_id?:      string | null
@@ -33,12 +35,19 @@ interface UserRow {
 }
 
 // updated_at is bumped on every token refresh, last_sign_in_at only on
-// fresh sign-in — take whichever is newer.
+// fresh sign-in — take whichever is newer. Used for sorting the user list
+// by recency of activity.
 const lastActiveOf = (u: { updated_at?: string | null; last_sign_in_at?: string | null }) => {
   const a = u.updated_at || ""
   const b = u.last_sign_in_at || ""
   return a > b ? a : b
 }
+
+// Compact "Jun 11, 3:42 PM" / "never" timestamp cell for login activity.
+const fmtStamp = (ts: string | null | undefined) =>
+  ts
+    ? new Date(ts).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    : null
 
 export default function AdminSystemPage() {
 
@@ -565,7 +574,8 @@ export default function AdminSystemPage() {
                   <th className="px-3 py-2 text-left">Location</th>
                   <th className="px-3 py-2 text-left">Confirmed</th>
                   <th className="px-3 py-2 text-left">Created</th>
-                  <th className="px-3 py-2 text-left">Last Seen</th>
+                  <th className="px-3 py-2 text-left">Last Login</th>
+                  <th className="px-3 py-2 text-left">Last Logout</th>
                 </tr>
               </thead>
               <tbody>
@@ -599,12 +609,10 @@ export default function AdminSystemPage() {
                       {new Date(u.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     </td>
                     <td className="px-3 py-2 text-gray-600 text-xs">
-                      {(() => {
-                        const ts = lastActiveOf(u)
-                        return ts
-                          ? new Date(ts).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
-                          : <span className="text-gray-400">never</span>
-                      })()}
+                      {fmtStamp(u.last_login) || <span className="text-gray-400">never</span>}
+                    </td>
+                    <td className="px-3 py-2 text-gray-600 text-xs">
+                      {fmtStamp(u.last_logout) || <span className="text-gray-400">—</span>}
                     </td>
                   </tr>
                 ))}
