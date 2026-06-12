@@ -130,6 +130,10 @@ export default function ReportsPage() {
   const [priorTotal,     setPriorTotal]     = useState<number | null>(null)
 
   const [stats, setStats] = useState<Stats>(EMPTY_STATS)
+  // Parking violations for the selected community + date range (filtered by the
+  // violation `date`). Surfaced as its own section so officer-enforcement data
+  // shows up in platform reporting, not just the Officer Reports tab.
+  const [parking, setParking] = useState<any[]>([])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -175,6 +179,10 @@ export default function ReportsPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "visitor_logs",
         filter: `community_id=eq.${community}` }, () => {
         loadData()
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "parking_violations",
+        filter: `community_id=eq.${community}` }, () => {
+        loadData()
       }).subscribe()
     return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -193,6 +201,14 @@ export default function ReportsPage() {
     const logs = data || []
     setVisits(logs)
     computeStats(logs)
+
+    // Parking violations in range (by violation date), newest first.
+    const { data: pv } = await supabase
+      .from("parking_violations").select("*")
+      .eq("community_id", community)
+      .gte("date", dateFrom).lte("date", dateTo)
+      .order("date", { ascending: false })
+    setParking(pv || [])
 
     // Fire-and-forget: prior period count for comparison delta.
     const prior = priorRange(dateFrom, dateTo)
@@ -318,6 +334,29 @@ export default function ReportsPage() {
     const a    = document.createElement("a")
     a.href = url
     a.download = `entry-log-${dateFrom}-to-${dateTo}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportParkingCSV() {
+    const header = ["Date", "Time", "Plate", "State", "Violation Type", "Lot/Area", "Space", "Make", "Model", "Color", "Year", "Officer", "Tow", "BOLO Match", "Notes"]
+    const rows = parking.map(p => [
+      p.date || "", p.time || "",
+      p.plate || "", p.state || "",
+      p.violation_type || "", p.location || "", p.space || "",
+      p.make || "", p.model || "", p.color || "", p.year || "",
+      p.officer_name || "",
+      p.tow_requested ? "Yes" : "", p.bolo_match ? "Yes" : "",
+      p.notes || "",
+    ])
+    const csv = [header, ...rows]
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a")
+    a.href = url
+    a.download = `parking-violations-${dateFrom}-to-${dateTo}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -671,6 +710,68 @@ export default function ReportsPage() {
           </Section>
         </>
       )}
+
+      {/* ── PARKING VIOLATIONS ── (own gate so it shows even with no visitor entries) */}
+      {community && !loading && parking.length > 0 && (() => {
+        const byType = parking.reduce((m: Record<string, number>, p) => {
+          const k = p.violation_type || "Other"; m[k] = (m[k] || 0) + 1; return m
+        }, {})
+        const towCount  = parking.filter(p => p.tow_requested).length
+        const boloCount = parking.filter(p => p.bolo_match).length
+        return (
+          <Section label={`Parking Violations (${parking.length})`}>
+            <div className="flex justify-end mb-3">
+              <button onClick={exportParkingCSV}
+                className="px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700 border-none cursor-pointer">
+                ⬇ Export Parking CSV
+              </button>
+            </div>
+
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <StatCard title="Violations"   value={parking.length} accent="orange" sub={`${dayCount}d range`} />
+              <StatCard title="Tows Requested" value={towCount}     accent="red"    sub="manual dispatch" />
+              <StatCard title="BOLO Matches" value={boloCount}      accent="red"    sub="plate hit active BOLO" />
+              <StatCard title="Top Type"     value={Object.entries(byType).sort((a,b)=>b[1]-a[1])[0]?.[0] || "—"} accent="amber"
+                sub={`${Object.keys(byType).length} type${Object.keys(byType).length === 1 ? "" : "s"}`} />
+            </div>
+
+            {/* By-type chips */}
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([t, c]) => (
+                <span key={t} className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-full">
+                  {t} · {c}
+                </span>
+              ))}
+            </div>
+
+            {/* Violation list */}
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {parking.map((p, i) => (
+                <div key={p.id} className={`flex items-center gap-4 px-4 py-3 ${i < parking.length - 1 ? "border-b border-gray-100" : ""}`}>
+                  <div className="font-mono font-semibold text-gray-800 w-28 flex-shrink-0">
+                    {p.plate || "—"}{p.state ? ` (${p.state})` : ""}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold text-gray-800 truncate">{p.violation_type || "—"}</div>
+                    <div className="text-xs text-gray-500 truncate">
+                      {[p.location, p.space && `Space ${p.space}`, [p.year, p.color, p.make, p.model].filter(Boolean).join(" ")].filter(Boolean).join(" · ") || "—"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-shrink-0">
+                    {p.bolo_match    && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">BOLO</span>}
+                    {p.tow_requested && <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-bold rounded-full">🚛 Tow</span>}
+                  </div>
+                  <div className="text-right text-xs text-gray-400 w-28 flex-shrink-0">
+                    <div>{p.date}{p.time ? ` · ${p.time}` : ""}</div>
+                    <div className="truncate">{p.officer_name || "—"}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </Section>
+        )
+      })()}
     </main>
   )
 }
@@ -695,6 +796,7 @@ function StatCard({ title, value, accent, sub }: {
     emerald: "bg-emerald-50 border-emerald-200 text-emerald-800",
     green:   "bg-green-50   border-green-200   text-green-800",
     orange:  "bg-orange-50  border-orange-200  text-orange-800",
+    amber:   "bg-amber-50   border-amber-200   text-amber-800",
     teal:    "bg-teal-50    border-teal-200    text-teal-800",
     gray:    "bg-gray-50    border-gray-200    text-gray-800",
     red:     "bg-red-50     border-red-200     text-red-800",
