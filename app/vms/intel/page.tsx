@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
 import { maskSSN } from "@/lib/format"
+import { SignedImage } from "@/components/SignedImage"
 
 function fmtDate(ts: string) {
   const s = ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z"
@@ -506,7 +507,7 @@ export default function IntelPage() {
 
           <div className="w-48 h-56 bg-gray-800 rounded-lg mb-3 overflow-hidden flex items-center justify-center">
             {photoUrl ? (
-              <img src={photoUrl} alt="Visitor photo" className="w-full h-full object-cover" onError={() => setPhotoUrl("")} />
+              <SignedImage src={photoUrl} bucket="photos" alt="Visitor photo" className="w-full h-full object-cover" ttl={3600} />
             ) : (
               <span className="text-gray-500 text-xs">No photo</span>
             )}
@@ -775,7 +776,7 @@ export default function IntelPage() {
                 <div key={c.id} className="border border-gray-200 rounded-lg px-4 py-3 mb-3 bg-white">
                   <div className="flex gap-3">
                     {c.photo_url && (
-                      <img src={c.photo_url} alt="contact" className="w-16 h-20 object-cover rounded-md flex-shrink-0 border border-gray-200" />
+                      <SignedImage src={c.photo_url} bucket="contact-photos" alt="contact" className="w-16 h-20 object-cover rounded-md flex-shrink-0 border border-gray-200" />
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex justify-between items-start mb-1">

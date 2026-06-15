@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import { SignedLink } from "@/components/SignedImage"
 import Papa from "papaparse"
 
 // St Luke is the default location, but the dropdown lists all communities so
@@ -378,7 +379,7 @@ export default function GateChecklist({
                               <td className="px-2 py-1">
                                 {g.notes || "—"}
                                 {Array.isArray(g.photo_urls) && g.photo_urls.map((u: string, k: number) => (
-                                  <a key={k} href={u} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline ml-1">📷</a>
+                                  <SignedLink key={k} href={u} bucket="photos" className="text-blue-600 hover:underline ml-1">📷</SignedLink>
                                 ))}
                               </td>
                             </tr>
@@ -389,7 +390,7 @@ export default function GateChecklist({
                       {Array.isArray(rec.general_photo_urls) && rec.general_photo_urls.length > 0 && (
                         <div className="mt-1 flex gap-2">
                           {rec.general_photo_urls.map((u: string, k: number) => (
-                            <a key={k} href={u} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">📷 Photo {k + 1}</a>
+                            <SignedLink key={k} href={u} bucket="photos" className="text-xs text-blue-600 hover:underline">📷 Photo {k + 1}</SignedLink>
                           ))}
                         </div>
                       )}

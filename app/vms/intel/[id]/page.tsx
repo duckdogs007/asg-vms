@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
+import { SignedImage } from "@/components/SignedImage"
 
 interface PersonRow extends WatchlistEntry {
   photo_url?: string | null
@@ -223,7 +224,7 @@ export default function ProfilePage({ params }: any) {
         <div className="w-36 flex-shrink-0 text-center">
           <div className="w-32 h-40 bg-gray-100 border border-gray-200 rounded-md overflow-hidden flex items-center justify-center mx-auto">
             {person.photo_url
-              ? <img src={person.photo_url} alt="" className="w-full h-full object-cover" />
+              ? <SignedImage src={person.photo_url} bucket="photos" alt="" className="w-full h-full object-cover" />
               : <span className="text-xs text-gray-400">No photo</span>}
           </div>
           <input

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog } from "@/lib/types"
 import { ADMIN_EMAILS } from "@/lib/admin"
+import { displayPlate, isNoPlate } from "@/components/VehicleFields"
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
@@ -134,6 +135,11 @@ export default function ReportsPage() {
   // violation `date`). Surfaced as its own section so officer-enforcement data
   // shows up in platform reporting, not just the Officer Reports tab.
   const [parking, setParking] = useState<any[]>([])
+  // Registered-vehicle database (resident + visitor) for the selected community.
+  // Registry is current-state, not date-ranged — it loads per community only.
+  const [registry,   setRegistry]   = useState<any[]>([])
+  const [regSearch,  setRegSearch]  = useState("")
+  const [regKind,    setRegKind]    = useState<"all" | "resident" | "visitor">("all")
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -183,6 +189,10 @@ export default function ReportsPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "parking_violations",
         filter: `community_id=eq.${community}` }, () => {
         loadData()
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "registered_vehicles",
+        filter: `community_id=eq.${community}` }, () => {
+        loadData()
       }).subscribe()
     return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -209,6 +219,14 @@ export default function ReportsPage() {
       .gte("date", dateFrom).lte("date", dateTo)
       .order("date", { ascending: false })
     setParking(pv || [])
+
+    // Registered vehicles for this community (resident + visitor). Not date-
+    // ranged — this is the current registry, surfaced for officer lookup.
+    const { data: rv } = await supabase
+      .from("registered_vehicles").select("*")
+      .eq("community_id", community)
+      .order("kind", { ascending: true }).order("plate", { ascending: true })
+    setRegistry(rv || [])
 
     // Fire-and-forget: prior period count for comparison delta.
     const prior = priorRange(dateFrom, dateTo)
@@ -342,7 +360,7 @@ export default function ReportsPage() {
     const header = ["Date", "Time", "Plate", "State", "Violation Type", "Lot/Area", "Space", "Make", "Model", "Color", "Year", "Officer", "Tow", "BOLO Match", "Notes"]
     const rows = parking.map(p => [
       p.date || "", p.time || "",
-      p.plate || "", p.state || "",
+      displayPlate(p.plate), isNoPlate(p.plate || "") ? "" : (p.state || ""),
       p.violation_type || "", p.location || "", p.space || "",
       p.make || "", p.model || "", p.color || "", p.year || "",
       p.officer_name || "",
@@ -357,6 +375,37 @@ export default function ReportsPage() {
     const a    = document.createElement("a")
     a.href = url
     a.download = `parking-violations-${dateFrom}-to-${dateTo}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  // A visitor registration is expired when its pass end date has passed.
+  // Resident registrations don't expire.
+  function regExpired(v: any): boolean {
+    return v.kind === "visitor" && !!v.valid_to && v.valid_to < todayStr()
+  }
+
+  function exportRegistryCSV() {
+    const header = ["Kind", "Plate", "State", "Make", "Model", "Color", "Year",
+      "Resident/Sponsor", "Unit", "Permit/Pass #", "Valid From", "Valid To", "Status"]
+    const rows = filteredRegistry.map(v => [
+      v.kind || "",
+      displayPlate(v.plate), isNoPlate(v.plate || "") ? "" : (v.plate_state || ""),
+      v.make || "", v.model || "", v.color || "", v.year || "",
+      v.kind === "visitor" ? (v.sponsor_resident || "") : (v.resident_name || ""),
+      v.unit || "",
+      v.kind === "visitor" ? (v.visitor_pass || "") : (v.permit_number || ""),
+      v.valid_from || "", v.valid_to || "",
+      regExpired(v) ? "EXPIRED" : "Active",
+    ])
+    const csv = [header, ...rows]
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a")
+    a.href = url
+    a.download = `vehicle-registry-${(communityName || "community").replace(/\s+/g, "-").toLowerCase()}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -378,6 +427,16 @@ export default function ReportsPage() {
             || (v.resident_name || "").toLowerCase().includes(q)
       })
     : visits
+
+  // Registry filtered by kind toggle + free-text search (plate or any name field).
+  const filteredRegistry = registry.filter(v => {
+    if (regKind !== "all" && v.kind !== regKind) return false
+    const q = regSearch.trim().toLowerCase()
+    if (!q) return true
+    return [v.plate, v.resident_name, v.sponsor_resident, v.unit, v.permit_number,
+            v.visitor_pass, v.make, v.model, v.color]
+      .some(f => (f || "").toString().toLowerCase().includes(q))
+  })
 
   function applyPreset(p: DatePreset) {
     setDateFrom(p.from())
@@ -750,7 +809,7 @@ export default function ReportsPage() {
               {parking.map((p, i) => (
                 <div key={p.id} className={`flex items-center gap-4 px-4 py-3 ${i < parking.length - 1 ? "border-b border-gray-100" : ""}`}>
                   <div className="font-mono font-semibold text-gray-800 w-28 flex-shrink-0">
-                    {p.plate || "—"}{p.state ? ` (${p.state})` : ""}
+                    {displayPlate(p.plate) || "—"}{p.state && !isNoPlate(p.plate || "") ? ` (${p.state})` : ""}
                   </div>
                   <div className="flex-1 min-w-0">
                     <div className="text-sm font-semibold text-gray-800 truncate">{p.violation_type || "—"}</div>
@@ -768,6 +827,97 @@ export default function ReportsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </Section>
+        )
+      })()}
+
+      {/* ── VEHICLE & VISITOR REGISTRY ── (own gate; current registry, not date-ranged) */}
+      {community && !loading && registry.length > 0 && (() => {
+        const residents = registry.filter(v => v.kind === "resident").length
+        const visitors  = registry.filter(v => v.kind === "visitor").length
+        const expired   = registry.filter(regExpired).length
+        return (
+          <Section label={`Vehicle & Visitor Registry (${registry.length})`}>
+            <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+              <div className="flex gap-1.5">
+                {(["all", "resident", "visitor"] as const).map(k => (
+                  <button key={k} onClick={() => setRegKind(k)}
+                    className={`px-3 py-1.5 text-xs font-semibold rounded-lg border cursor-pointer ${
+                      regKind === k ? "bg-blue-800 text-white border-blue-800" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"}`}>
+                    {k === "all" ? "All" : k === "resident" ? "Residents" : "Visitors"}
+                  </button>
+                ))}
+              </div>
+              <div className="flex items-center gap-2">
+                <input value={regSearch} onChange={e => setRegSearch(e.target.value)}
+                  placeholder="Search plate or name…"
+                  className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 w-56" />
+                <button onClick={exportRegistryCSV}
+                  className="px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700 border-none cursor-pointer whitespace-nowrap">
+                  ⬇ Export CSV
+                </button>
+              </div>
+            </div>
+
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <StatCard title="Registered"  value={registry.length} accent="blue"    sub={communityName || "this community"} />
+              <StatCard title="Residents"   value={residents}       accent="emerald" sub="permitted vehicles" />
+              <StatCard title="Visitors"    value={visitors}        accent="violet"  sub="passes on file" />
+              <StatCard title="Expired"     value={expired}         accent="red"     sub="visitor pass lapsed" />
+            </div>
+
+            {/* Registry table */}
+            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                    <th className="px-4 py-2 font-semibold">Plate</th>
+                    <th className="px-4 py-2 font-semibold">Vehicle</th>
+                    <th className="px-4 py-2 font-semibold">Kind</th>
+                    <th className="px-4 py-2 font-semibold">Resident / Sponsor</th>
+                    <th className="px-4 py-2 font-semibold">Permit / Pass</th>
+                    <th className="px-4 py-2 font-semibold">Validity</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRegistry.length === 0 && (
+                    <tr><td colSpan={6} className="px-4 py-6 text-center text-gray-400 text-sm">No vehicles match your filter.</td></tr>
+                  )}
+                  {filteredRegistry.map((v, i) => {
+                    const exp = regExpired(v)
+                    return (
+                      <tr key={v.id} className={i < filteredRegistry.length - 1 ? "border-b border-gray-100" : ""}>
+                        <td className="px-4 py-2.5 font-mono font-semibold text-gray-800 whitespace-nowrap">
+                          {displayPlate(v.plate) || "—"}{v.plate_state && !isNoPlate(v.plate || "") ? ` (${v.plate_state})` : ""}
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-600">{[v.year, v.color, v.make, v.model].filter(Boolean).join(" ") || "—"}</td>
+                        <td className="px-4 py-2.5">
+                          <span className={`px-2 py-0.5 text-xs font-bold rounded-full ${v.kind === "visitor" ? "bg-violet-100 text-violet-700" : "bg-emerald-100 text-emerald-700"}`}>
+                            {v.kind === "visitor" ? "Visitor" : "Resident"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-700">
+                          {(v.kind === "visitor" ? v.sponsor_resident : v.resident_name) || "—"}
+                          {v.unit ? <span className="text-gray-400"> · Unit {v.unit}</span> : null}
+                        </td>
+                        <td className="px-4 py-2.5 text-gray-600">{(v.kind === "visitor" ? v.visitor_pass : v.permit_number) || "—"}</td>
+                        <td className="px-4 py-2.5 whitespace-nowrap">
+                          {v.kind === "visitor"
+                            ? (v.valid_to
+                                ? <span className={exp ? "text-red-700 font-semibold" : "text-gray-600"}>
+                                    {v.valid_from ? `${v.valid_from} → ` : "→ "}{v.valid_to}
+                                    {exp && <span className="ml-1.5 px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold">EXPIRED</span>}
+                                  </span>
+                                : <span className="text-gray-400">—</span>)
+                            : <span className="text-gray-400">—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
             </div>
           </Section>
         )

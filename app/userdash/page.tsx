@@ -10,7 +10,8 @@ import { fireAlert } from "@/lib/alerts"
 import { maskSSN } from "@/lib/format"
 import { checkIsAdmin } from "@/lib/admin"
 import GateChecklist from "./GateChecklist"
-import { VehicleFields, EMPTY_VEHICLE, type VehicleInfo } from "@/components/VehicleFields"
+import { VehicleFields, EMPTY_VEHICLE, isNoPlate, displayPlate, type VehicleInfo } from "@/components/VehicleFields"
+import { SignedImage, SignedLink } from "@/components/SignedImage"
 
 // Structured parking-violation categories. A real enum (not a free-text flag)
 // so reporting, per-location tow rules, and auto-remit routing can key off it.
@@ -347,7 +348,7 @@ export default function UserDashboard() {
     const { data: { user } } = await supabase.auth.getUser()
     if (user?.email) {
       const name = user.email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, ch => ch.toUpperCase())
-      setDailyOfficer(name); setIncOfficer(name); setPdOfficer(name); setBoloAddedBy(name); setVfiOfficer(name)
+      setDailyOfficer(name); setIncOfficer(name); setPdOfficer(name); setBoloAddedBy(name); setVfiOfficer(name); setPvOfficer(name)
       setOfficerName(name)
     }
   }
@@ -755,7 +756,8 @@ export default function UserDashboard() {
   // Per-form blur handlers — run the BOLO and registry checks together and
   // drive each form's banners. Registry lookup is scoped to the form's community.
   async function pvCheckPlate(plate: string): Promise<any[]> {
-    if (!plate.trim()) { setPvBoloHits([]); setPvBoloChecked(false); setPvRegHits([]); setPvRegChecked(false); return [] }
+    // No-plate / not-displayed vehicles have nothing to look up.
+    if (!plate.trim() || isNoPlate(plate)) { setPvBoloHits([]); setPvBoloChecked(false); setPvRegHits([]); setPvRegChecked(false); return [] }
     const [hits, reg] = await Promise.all([lookupBolosByPlate(plate), lookupRegisteredVehicle(pvCommunity, plate)])
     setPvBoloHits(hits); setPvBoloChecked(true)
     setPvRegHits(reg);   setPvRegChecked(true)
@@ -772,7 +774,7 @@ export default function UserDashboard() {
   // Officer-facing registry status banner (authorized resident / visitor /
   // unregistered) shown under the plate fields on the Parking + Vehicle FI forms.
   function registryBanner(checked: boolean, hits: any[], plate: string) {
-    if (!checked || !plate.trim()) return null
+    if (!checked || !plate.trim() || isNoPlate(plate)) return null
     const s = registryStatus(hits)
     const cls =
       s.level === "resident" ? "bg-green-50 border-green-200 text-green-800" :
@@ -782,7 +784,13 @@ export default function UserDashboard() {
     const icon = s.level === "expired" ? "⚠️" : s.level === "unknown" ? "❔" : "✅"
     return (
       <div className={`border px-4 py-2 rounded-lg mb-4 text-sm ${cls}`}>
-        {icon} <span className="font-semibold">Registry:</span> {s.label}
+        {icon} <span className="font-semibold">Registry:</span>{" "}
+        {s.level === "expired" && (
+          <span className="inline-block align-middle mr-1 px-2 py-0.5 rounded-full bg-red-600 text-white text-xs font-bold tracking-wide">
+            EXPIRED
+          </span>
+        )}
+        {s.label}
       </div>
     )
   }
@@ -805,7 +813,8 @@ export default function UserDashboard() {
     }
 
     // Active-BOLO plate cross-check, snapshotted onto the row at submission.
-    const hits = await lookupBolosByPlate(pvVehicle.plate)
+    // Skipped for no-plate / not-displayed vehicles (nothing to match on).
+    const hits = isNoPlate(pvVehicle.plate) ? [] : await lookupBolosByPlate(pvVehicle.plate)
     const boloMatch = hits.length > 0
 
     const { error } = await supabase.from("parking_violations").insert({
@@ -923,7 +932,7 @@ export default function UserDashboard() {
       Weather: r.weather || "",
       "Vehicle Make": r.make || "", "Vehicle Model": r.model || "",
       "Vehicle Color": r.color || "", "Vehicle Year": r.year || "",
-      "Plate": r.plate || "", "Plate State": r.state || "",
+      "Plate": displayPlate(r.plate), "Plate State": isNoPlate(r.plate || "") ? "" : (r.state || ""),
       "Violation Issued": r.violation_issued ? "Yes" : "",
       "Violation #": r.violation_number || "",
       "Violation Type": r.violation_type || "",
@@ -1450,7 +1459,7 @@ export default function UserDashboard() {
                 <div className="flex justify-between items-start">
                   <div className="flex items-start gap-3">
                     {p.photo_url && (
-                      <img src={p.photo_url} alt="" className="w-16 h-20 object-cover rounded-lg flex-shrink-0 border border-red-200" />
+                      <SignedImage src={p.photo_url} bucket="photos" alt="" className="w-16 h-20 object-cover rounded-lg flex-shrink-0 border border-red-200" />
                     )}
                     <div>
                       <div className="font-bold text-gray-900">
@@ -1471,13 +1480,13 @@ export default function UserDashboard() {
                           {p.ban_sheet_urls.map((url: string, i: number) => {
                             const isImg = /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(url)
                             return isImg ? (
-                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" title={`Ban sheet ${i + 1}`}>
-                                <img src={url} alt={`Ban sheet ${i + 1}`} className="w-10 h-12 object-cover rounded border border-gray-300 hover:border-red-400" />
-                              </a>
+                              <SignedLink key={i} href={url} bucket="photos" title={`Ban sheet ${i + 1}`}>
+                                <SignedImage src={url} bucket="photos" alt={`Ban sheet ${i + 1}`} className="w-10 h-12 object-cover rounded border border-gray-300 hover:border-red-400" />
+                              </SignedLink>
                             ) : (
-                              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-xs text-blue-600 hover:underline">
+                              <SignedLink key={i} href={url} bucket="photos" className="text-xs text-blue-600 hover:underline">
                                 📄 Page {i + 1}
-                              </a>
+                              </SignedLink>
                             )
                           })}
                         </div>
@@ -1819,12 +1828,13 @@ export default function UserDashboard() {
                   inputCls={inputCls}
                   labelCls={labelCls}
                   requirePlate
+                  allowNoPlate
                   onPlateBlur={plate => pvCheckPlate(plate)}
                 />
               </div>
 
               {/* BOLO cross-check banner */}
-              {pvBoloChecked && pvBoloHits.length > 0 && (
+              {pvBoloChecked && pvBoloHits.length > 0 && !isNoPlate(pvVehicle.plate) && (
                 <div className="bg-red-50 border-2 border-red-300 text-red-800 px-4 py-3 rounded-lg mb-4 text-sm">
                   <div className="font-bold mb-1">🚨 BOLO MATCH — plate {pvVehicle.plate} matches {pvBoloHits.length} active BOLO{pvBoloHits.length > 1 ? "s" : ""}:</div>
                   <ul className="list-disc ml-5">
@@ -1835,7 +1845,7 @@ export default function UserDashboard() {
                   <div className="mt-1 text-xs">Submitting will alert a supervisor.</div>
                 </div>
               )}
-              {pvBoloChecked && pvBoloHits.length === 0 && pvVehicle.plate.trim() && (
+              {pvBoloChecked && pvBoloHits.length === 0 && pvVehicle.plate.trim() && !isNoPlate(pvVehicle.plate) && (
                 <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg mb-4 text-xs">
                   ✓ No active BOLO match for {pvVehicle.plate}.
                 </div>
@@ -1937,8 +1947,8 @@ export default function UserDashboard() {
                                                     "📝 Daily Log"
                 const summary =
                   r._type === "Field Contact"     ? `${r.first_name || ""} ${r.last_name || ""}`.trim() || r.reason || "No name" :
-                  r._type === "Vehicle FI"        ? [r.year, r.color, r.make, r.model, r.plate ? `· ${r.plate}` : ""].filter(Boolean).join(" ") || r.reason || "No vehicle" :
-                  r._type === "Parking Violation" ? [r.violation_type, r.plate ? `· ${r.plate}` : ""].filter(Boolean).join(" ") || "Parking violation" :
+                  r._type === "Vehicle FI"        ? [r.year, r.color, r.make, r.model, r.plate ? `· ${displayPlate(r.plate)}` : ""].filter(Boolean).join(" ") || r.reason || "No vehicle" :
+                  r._type === "Parking Violation" ? [r.violation_type, r.plate ? `· ${displayPlate(r.plate)}` : ""].filter(Boolean).join(" ") || "Parking violation" :
                   (r.narrative || r.description || r.notes || "No description").slice(0, 80)
                 const followUp = r.follow_up_required || r.follow_up
                 return (
@@ -2062,7 +2072,7 @@ export default function UserDashboard() {
                             {r.model            && <Field label="Model"          value={r.model} />}
                             {r.color            && <Field label="Color"          value={r.color} />}
                             {r.year             && <Field label="Year"           value={r.year} />}
-                            {r.plate            && <Field label="Plate"          value={`${r.plate}${r.state ? " (" + r.state + ")" : ""}`} />}
+                            {r.plate            && <Field label="Plate"          value={`${displayPlate(r.plate)}${r.state && !isNoPlate(r.plate) ? " (" + r.state + ")" : ""}`} />}
                             {r.descriptors      && <Field label="Descriptors"    value={r.descriptors} />}
                             {r.violation_issued && <Field label="Violation #"    value={r.violation_number || "Issued"} />}
                             {r.violation_type   && <Field label="Violation Type"  value={r.violation_type} />}
@@ -2093,7 +2103,7 @@ export default function UserDashboard() {
                           {r.photo_url && (
                             <div className="mb-3">
                               <div className="text-xs font-semibold text-gray-500 mb-2">Photo</div>
-                              <img src={r.photo_url} alt="report photo" className="max-h-48 rounded-lg border border-gray-200 object-cover" />
+                              <SignedImage src={r.photo_url} bucket="contact-photos" alt="report photo" className="max-h-48 rounded-lg border border-gray-200 object-cover" />
                             </div>
                           )}
                           {(r.follow_up_required || r.follow_up) && (
@@ -2353,7 +2363,7 @@ export default function UserDashboard() {
                       <input value={editBoloAddedBy} onChange={e => setEditBoloAddedBy(e.target.value)} className={inputCls} /></div>
                     {b.photo_url && (
                       <div className="sm:col-span-2 flex items-center gap-3">
-                        <img src={b.photo_url} alt="" className="w-16 h-20 object-cover rounded border border-gray-300" />
+                        <SignedImage src={b.photo_url} bucket="contact-photos" alt="" className="w-16 h-20 object-cover rounded border border-gray-300" />
                         <span className="text-xs text-gray-500">Photo replacement coming soon — current photo unchanged on save.</span>
                       </div>
                     )}
@@ -2373,7 +2383,7 @@ export default function UserDashboard() {
                 /* DISPLAY MODE */
                 <div className="flex gap-4">
                   {b.photo_url && (
-                    <img src={b.photo_url} alt="BOLO subject" className="w-20 h-24 object-cover rounded-lg flex-shrink-0 border border-red-200" />
+                    <SignedImage src={b.photo_url} bucket="contact-photos" alt="BOLO subject" className="w-20 h-24 object-cover rounded-lg flex-shrink-0 border border-red-200" />
                   )}
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-1">
