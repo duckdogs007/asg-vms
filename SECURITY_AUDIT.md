@@ -1,8 +1,10 @@
 # VMS Security Audit — #16
 
-**Date:** 2026-06-15
+**Date:** 2026-06-15 (remediation completed 2026-06-17)
 **Project:** ASG-VMS (Supabase `xmomsoobriehgrnppewa`, Postgres 17, us-east-1)
 **Scope:** RLS coverage, policy correctness, role gating, storage buckets, anon/API exposure, Supabase advisors.
+
+> **Status (2026-06-17): fully remediated for the current plan.** All DB hardening + the storage privacy migration are applied to prod, and the app (prod commit `bb5ef6f`) serves signed URLs. The only open advisor item is leaked-password protection, which **requires a Supabase Pro plan** and is therefore deferred until upgrade.
 
 ---
 
@@ -13,10 +15,10 @@
 | RLS enabled on all public tables | ✅ 33/33 enabled; no table with RLS-but-zero-policies (no accidental deny-all or wide-open) |
 | Anon (unauthenticated) row access | ✅ Blocked — every SELECT/INSERT/UPDATE policy requires `auth.role() = 'authenticated'` |
 | `is_admin()` / role plumbing | ✅ Correct — `SECURITY DEFINER`, `search_path` pinned, reads `admin_users` by `auth.uid()` |
-| **Storage buckets** | ⚠️ **HIGH — all 3 buckets are public + listable; they hold PII (watchlist photos, ban sheets, ID/contact photos, community docs)** |
-| Audit log / admin-table read gating | ⚠️ MEDIUM — readable by any signed-in user at the DB layer (UI restricts, DB doesn't) |
-| Function hardening | ⚠️ LOW — one trigger fn with mutable `search_path`; one event-trigger fn executable via RPC |
-| Auth config | ⚠️ LOW — leaked-password protection (HaveIBeenPwned) disabled |
+| **Storage buckets** | ✅ **RESOLVED (2026-06-17)** — was HIGH (public + listable PII); now private + authenticated-only read, app serves signed URLs. Advisor listing warnings cleared. |
+| Audit log / admin-table read gating | ✅ RESOLVED — admin-only read on `audit_logs` + `admin_users` |
+| Function hardening | ✅ RESOLVED — `search_path` pinned on `check_watchlist_match`; `EXECUTE` revoked on `rls_auto_enable` |
+| Auth config | ⚠️ DEFERRED — leaked-password protection (HaveIBeenPwned) requires a **Supabase Pro plan**; not available on Free |
 
 The database authorization model is fundamentally sound: RLS is universally enabled, anon is shut out, and writes to sensitive/config tables (`watchlist`, `bolos`, `communities`, `admin_users`, `registered_vehicles`, `user_assignments`, …) are gated to admins via `is_admin()`. The material exposure is **storage**, not the tables.
 
@@ -57,8 +59,8 @@ Advisor ref: https://supabase.com/docs/guides/database/database-linter?lint=0025
 
 **Remediation:** `check_watchlist_match` search_path + `rls_auto_enable` revoke applied in the hardening migration.
 
-### 4. LOW — Auth: leaked-password protection disabled
-Enable HaveIBeenPwned check in **Dashboard → Authentication → Policies** (config toggle, not SQL).
+### 4. LOW — Auth: leaked-password protection disabled (DEFERRED — Pro plan required)
+The HaveIBeenPwned check lives in **Dashboard → Authentication → Policies**, but it is a **Supabase Pro-plan feature** — not available on the current Free plan, so it can't be enabled today. Revisit on upgrade.
 Ref: https://supabase.com/docs/guides/auth/password-security
 
 ### 5. Notes (no action — by design)
@@ -74,14 +76,13 @@ Ref: https://supabase.com/docs/guides/auth/password-security
 - Pin `search_path` on `check_watchlist_match()`.
 - Revoke `EXECUTE` on `rls_auto_enable()` from `anon`/`authenticated`.
 
-**Storage fix — code landed, migration gated on deploy (Finding 1):**
-- App now mints signed URLs instead of public URLs: `lib/storage.ts` (`parseStored` / `createSignedUrlFor`) + `components/SignedImage.tsx` (`SignedImage` / `SignedLink` / `useSignedUrl`, 1-hour TTL). All ~10 render sites across userdash, GateChecklist, intel, intel/[id], property converted. Upload code is untouched — stored public-style URLs are treated as locators and re-signed on demand.
+**Storage fix — APPLIED to prod 2026-06-17 (Finding 1):**
+- App mints signed URLs instead of public URLs: `lib/storage.ts` (`parseStored` / `createSignedUrlFor`) + `components/SignedImage.tsx` (`SignedImage` / `SignedLink` / `useSignedUrl`, 1-hour TTL). All ~10 render sites across userdash, GateChecklist, intel, intel/[id], property converted. Upload code is untouched — stored public-style URLs are treated as locators and re-signed on demand.
 - Alert emails (`/api/bolos/notify`, `/api/watchlist/notify`) mint a **30-day** signed URL server-side (`EMAIL_SIGNED_TTL`).
-- `migrations/2026-06-15_storage_private_buckets.sql` flips the 3 buckets to private, drops the broad public-read + anon-upload policies, and adds authenticated-only read.
-- ⚠️ **Deploy ordering:** this migration breaks the *currently deployed* prod app's images (old code uses public URLs). **Apply it only AFTER the new code is promoted to prod.** Sequence: merge → promote prod → run the storage migration → re-run the security advisor (the 3 `public_bucket_allows_listing` warns should clear).
+- `migrations/2026-06-15_storage_private_buckets.sql` flipped the 3 buckets to private, dropped the broad public-read + anon-upload policies, and added authenticated-only read. **Run order honored:** code merged + promoted to prod (`bb5ef6f`) first, then the migration — so live images never broke. Post-run advisor re-check: the 3 `public_bucket_allows_listing` warnings are gone.
 - Known minor side effect: photo URLs embedded in **CSV/PDF exports** (gate checklist) now point at private objects, so they require an authenticated session to open — acceptable (they were public PII before).
 
-**Still pending (manual, non-code):**
-- Enable leaked-password protection (Finding 4) — Dashboard → Authentication → Policies.
+**Deferred (plan-gated, non-code):**
+- Leaked-password protection (Finding 4) — **requires a Supabase Pro plan** (not available on Free), so it can't be enabled today. Revisit on upgrade; the advisor's `auth_leaked_password_protection` lint will persist until then.
 
-**Remaining advisor lints after the hardening migration:** 3× `public_bucket_allows_listing` (clear once the storage migration runs post-deploy), 2× benign `SECURITY DEFINER` (`is_admin`, `set_my_assignment` — intentional, see Finding 3), 1× leaked-password toggle.
+**Remaining advisor lints (all known/accepted):** 2× benign `SECURITY DEFINER` (`is_admin`, `set_my_assignment` — intentional, see Finding 3) + 1× leaked-password (Pro-gated, above). The storage listing warnings have cleared.
