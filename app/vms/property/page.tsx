@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import { checkIsAdmin } from "@/lib/admin"
 import PostOrdersTab from "@/components/PostOrdersTab"
 import RentRollTab from "@/components/RentRollTab"
+import { SignedLink } from "@/components/SignedImage"
 
 interface Community {
   id: string; name: string
@@ -304,7 +305,7 @@ export default function PropertyHubPage() {
               <div key={d.id} className="flex items-center gap-3 px-4 py-3 border-b border-gray-100 last:border-b-0">
                 <span className="text-xl">{d.file_url.toLowerCase().endsWith(".pdf") ? "📄" : "🖼️"}</span>
                 <div className="flex-1 min-w-0">
-                  <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="font-semibold text-blue-700 hover:text-blue-900 truncate block">{d.title || "Untitled"}</a>
+                  <SignedLink href={d.file_url} bucket="community-docs" className="font-semibold text-blue-700 hover:text-blue-900 truncate block">{d.title || "Untitled"}</SignedLink>
                   <div className="text-xs text-gray-500">{d.doc_type || "—"} · {new Date(d.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
                 </div>
                 {isAdmin && <button className={btnDanger} onClick={() => deleteDoc(d.id)}>Delete</button>}

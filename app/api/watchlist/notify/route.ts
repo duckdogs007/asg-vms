@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { sendEmail, buildWatchlistEmailHtml, logEmailDelivery } from "@/lib/email"
+import { createSignedUrlFor, EMAIL_SIGNED_TTL } from "@/lib/storage"
 
 // POST /api/watchlist/notify  body: { id: string, event?: "added" | "updated" | "manual" }
 //
@@ -55,6 +56,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, sent: 0, note: "no active recipients" })
   }
 
+  // Buckets are private (#16) — mint a long-lived signed URL so the inline
+  // email image renders for ~30 days, then expires.
+  const photoUrl = w.photo_url
+    ? await createSignedUrlFor(supabase, w.photo_url, "photos", EMAIL_SIGNED_TTL)
+    : null
+
   const headline = `${w.first_name || ""} ${w.last_name || ""}`.trim() || "Watchlist Entry"
   const verb     = event === "added" ? "Added" : event === "updated" ? "Updated" : "Notice"
   const subject  = `🚨 Watchlist ${verb} — ${headline}${communityName ? ` · ${communityName}` : ""}`
@@ -71,7 +78,7 @@ export async function POST(req: Request) {
     banned_by:    w.banned_by,
     ban_date:     w.ban_date,
     firearm_flag: w.firearm_flag,
-    photo_url:    w.photo_url,
+    photo_url:    photoUrl,
     event,
   })
 

@@ -43,7 +43,6 @@ export default function LoginPage() {
 
         <div className="text-2xl font-bold text-blue-800 leading-tight">American Security Group</div>
         <div className="text-[11px] text-gray-500 uppercase tracking-widest mt-1 mb-3">Integrated Property Solutions</div>
-        <h2 className="text-base font-semibold text-gray-900 mb-1">Visitor Management System</h2>
         <p className="text-sm text-gray-500 mb-6">Sign in to continue</p>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-3">

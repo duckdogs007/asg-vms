@@ -150,10 +150,10 @@ export default function TopNav() {
             <Link href="/"            className={navLinkCls}>Home</Link>
             <Link href="/vms"         className={navLinkCls}>VMS</Link>
             <Link href="/alerts"      className={navLinkCls}>Alerts</Link>
+            <Link href="/vms/property"    className={navLinkCls}>Property Hub</Link>
             <Link href="/userdash"     className={navLinkCls}>User Dashboard</Link>
             <Link href="/vms/intel"       className={navLinkCls}>Intel Terminal</Link>
             <Link href="/vms/reports"     className={navLinkCls}>Reports</Link>
-            <Link href="/vms/property"    className={navLinkCls}>Property Hub</Link>
             {isAdmin && <Link href="/admin/system" className={navLinkCls}>Admin Dashboard</Link>}
           </div>
         </div>
@@ -254,10 +254,10 @@ export default function TopNav() {
             <Link href="/"            className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
             <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
             <Link href="/alerts"      className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alerts</Link>
+            <Link href="/vms/property" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏢 Property Hub</Link>
             <Link href="/userdash"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>
             <Link href="/vms/intel"       className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
             <Link href="/vms/reports"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
-            <Link href="/vms/property" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏢 Property Hub</Link>
             {isAdmin && <Link href="/admin/system" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ Admin Dashboard</Link>}
             <div className="border-t border-gray-100 mt-1 pt-1.5 pb-1.5 px-4 text-xs text-gray-400">{currentTime}</div>
           </div>

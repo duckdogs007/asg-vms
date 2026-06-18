@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { Community, Unit, Resident } from "@/lib/types"
 import CadTicker from "@/components/CadTicker"
+import BoloTicker from "@/components/BoloTicker"
 import { fireAlert } from "@/lib/alerts"
 
 type MatchStatus = "none" | "verify" | "confirmed" | "cleared"
@@ -326,9 +327,9 @@ export default function VMSPage() {
               </select>
             </div>
             <div>
-              <label className={labelCls}>Unit</label>
+              <label className={labelCls}>Destination</label>
               <select value={unitId} onChange={(e) => loadResidents(e.target.value)} className={inputCls}>
-                <option value="">Select Unit</option>
+                <option value="">Select Destination</option>
                 {units.map(u => (
                   <option key={u.id} value={u.unit_number.trim()}>{u.unit_number.trim()}</option>
                 ))}
@@ -533,6 +534,7 @@ export default function VMSPage() {
         </div>
       </div>
 
+      <BoloTicker communityId={communityId} />
       <CadTicker />
     </div>
   )

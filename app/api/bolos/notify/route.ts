@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { sendEmail, buildBoloEmailHtml, logEmailDelivery } from "@/lib/email"
+import { createSignedUrlFor, EMAIL_SIGNED_TTL } from "@/lib/storage"
 
 // POST /api/bolos/notify  body: { id: string }
 //
@@ -52,6 +53,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, sent: 0, note: "no active recipients" })
   }
 
+  // Buckets are private (#16) — mint a long-lived signed URL for the inline
+  // email image (~30 days, then expires). BOLO photos live in contact-photos.
+  const photoUrl = b.photo_url
+    ? await createSignedUrlFor(supabase, b.photo_url, "contact-photos", EMAIL_SIGNED_TTL)
+    : null
+
   const headline = b.name || (b.description ? b.description.slice(0, 60) : "New BOLO")
   const subject  = `🔍 BOLO — ${headline}${communityName ? ` · ${communityName}` : ""}`
   const html = buildBoloEmailHtml({
@@ -61,7 +68,7 @@ export async function POST(req: Request) {
     vehicle:     b.vehicle,
     community:   communityName || null,
     added_by:    b.added_by,
-    photo_url:   b.photo_url,
+    photo_url:   photoUrl,
   })
 
   const result = await sendEmail({ to: recipients, subject, html, reply_to: user.email || undefined })
