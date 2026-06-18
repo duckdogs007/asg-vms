@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import { ADMIN_EMAILS } from "@/lib/admin"
 
 interface AlertRow {
   id:           string
@@ -45,10 +46,20 @@ const SEVERITY_BADGE: Record<string, string> = {
   medium:   "bg-yellow-700 text-white",
 }
 
+// Acknowledged alerts older than this (by sent_at) are eligible for bulk cleanup.
+const CLEANUP_DAYS = 30
+
+function normTs(ts: string): string {
+  return ts.endsWith("Z") || /[+-]\d\d:?\d\d$/.test(ts) ? ts : ts + "Z"
+}
+
+function tsMs(ts: string | null): number {
+  return ts ? new Date(normTs(ts)).getTime() : 0
+}
+
 function fmt(ts: string | null): string {
   if (!ts) return "—"
-  const t = ts.endsWith("Z") || /[+-]\d\d:?\d\d$/.test(ts) ? ts : ts + "Z"
-  return new Date(t).toLocaleString("en-US", {
+  return new Date(normTs(ts)).toLocaleString("en-US", {
     month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
   })
 }
@@ -60,10 +71,12 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(true)
   const [filter,  setFilter]  = useState<"open" | "all" | "watchlist" | "incident" | "sos">("open")
   const [userEmail, setUserEmail] = useState("")
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUserEmail(user?.email || "")
+      setIsAdmin(ADMIN_EMAILS.includes(user?.email || ""))
     })
     loadAll()
     const t = setInterval(loadAll, 30000)
@@ -97,6 +110,28 @@ export default function AlertsPage() {
     loadAll()
   }
 
+  // Admin-only: delete a single alert. RLS (admin_delete_alerts) enforces the
+  // gate server-side; the UI is hidden for non-admins as a courtesy.
+  async function deleteAlert(a: AlertRow) {
+    if (!confirm("Delete this alert? This cannot be undone.")) return
+    const { error } = await supabase.from("alerts").delete().eq("id", a.id)
+    if (error) { alert("Delete failed: " + error.message); return }
+    loadAll()
+  }
+
+  // Admin-only: bulk-delete acknowledged alerts older than `days` (cleanup of
+  // old, handled alerts). Never touches open/unacked alerts.
+  const ackedOldCount = alerts.filter(a => a.ack_at && tsMs(a.sent_at) < Date.now() - CLEANUP_DAYS * 86400000).length
+  async function deleteAckedOld() {
+    if (!ackedOldCount) return
+    if (!confirm(`Delete ${ackedOldCount} acknowledged alert${ackedOldCount === 1 ? "" : "s"} older than ${CLEANUP_DAYS} days? This cannot be undone.`)) return
+    const cutoff = new Date(Date.now() - CLEANUP_DAYS * 86400000).toISOString()
+    const { error } = await supabase.from("alerts").delete()
+      .not("ack_at", "is", null).lt("sent_at", cutoff)
+    if (error) { alert("Cleanup failed: " + error.message); return }
+    loadAll()
+  }
+
   const filtered = alerts.filter(a => {
     if (filter === "open")      return !a.ack_at && a.status === "sent"
     if (filter === "watchlist") return a.type === "watchlist_hit"
@@ -114,13 +149,25 @@ export default function AlertsPage() {
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <h1 className="text-2xl font-bold">🔔 Alerts & Notify</h1>
-        <button
-          onClick={loadAll}
-          disabled={loading}
-          className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-sm rounded-md border-none cursor-pointer disabled:opacity-50"
-        >
-          {loading ? "Loading…" : "↻ Refresh"}
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={deleteAckedOld}
+              disabled={loading || ackedOldCount === 0}
+              title={`Delete acknowledged alerts older than ${CLEANUP_DAYS} days`}
+              className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-sm rounded-md border-none cursor-pointer disabled:opacity-40"
+            >
+              🗑 Clear old ({ackedOldCount})
+            </button>
+          )}
+          <button
+            onClick={loadAll}
+            disabled={loading}
+            className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-sm rounded-md border-none cursor-pointer disabled:opacity-50"
+          >
+            {loading ? "Loading…" : "↻ Refresh"}
+          </button>
+        </div>
       </div>
 
       {/* STATS */}
@@ -211,14 +258,25 @@ export default function AlertsPage() {
                       <> · acked by <span className="font-semibold text-gray-700">{a.ack_by || "—"}</span> at <span className="font-mono">{fmt(a.ack_at)}</span></>
                     )}
                   </div>
-                  {!a.ack_at && a.status === "sent" && (
-                    <button
-                      onClick={() => ack(a)}
-                      className="px-3 py-1 bg-green-700 hover:bg-green-800 text-white text-xs font-semibold rounded border-none cursor-pointer"
-                    >
-                      ✓ Acknowledge
-                    </button>
-                  )}
+                  <div className="flex items-center gap-2">
+                    {!a.ack_at && a.status === "sent" && (
+                      <button
+                        onClick={() => ack(a)}
+                        className="px-3 py-1 bg-green-700 hover:bg-green-800 text-white text-xs font-semibold rounded border-none cursor-pointer"
+                      >
+                        ✓ Acknowledge
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => deleteAlert(a)}
+                        title="Delete alert (admin)"
+                        className="px-3 py-1 bg-gray-200 hover:bg-red-600 hover:text-white text-gray-700 text-xs font-semibold rounded border-none cursor-pointer"
+                      >
+                        🗑 Delete
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {a.error && (
