@@ -208,6 +208,7 @@ export default function UserDashboard() {
   const [incAction,      setIncAction]      = useState("")
   const [incFollowUp,    setIncFollowUp]    = useState(false)
   const [incOfficer,     setIncOfficer]     = useState("")
+  const [incPhotoFiles,  setIncPhotoFiles]  = useState<File[]>([])
 
   // Passdown
   const [passdowns,       setPassdowns]       = useState<any[]>([])
@@ -558,11 +559,26 @@ export default function UserDashboard() {
   async function saveIncidentReport() {
     if (!incDescription) { setReportError("Incident description is required."); return }
     setReportSaving(true); setReportError(""); setReportMessage("")
+
+    // Upload any attached photos to the contact-photos bucket (multi-image).
+    const photoUrls: string[] = []
+    for (const f of incPhotoFiles) {
+      const ext  = f.name.split(".").pop() || "jpg"
+      const path = `inc_${Date.now()}_${photoUrls.length}.${ext}`
+      const { data: up, error: upErr } = await supabase.storage
+        .from("contact-photos").upload(path, f, { upsert: false })
+      if (!upErr && up) {
+        const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
+        photoUrls.push(publicUrl)
+      }
+    }
+
     const { error } = await supabase.from("incident_reports").insert({
       date: incDate, time: incTime, community_id: incCommunity,
       location: incLocation, incident_type: incType,
       persons_involved: incPersons, description: incDescription,
       action_taken: incAction, follow_up_required: incFollowUp,
+      photo_urls: photoUrls.length ? photoUrls : null,
       officer_name: incOfficer, created_at: new Date().toISOString()
     })
     setReportSaving(false)
@@ -589,7 +605,7 @@ export default function UserDashboard() {
         },
       })
     }
-    setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLocation(""); setIncFollowUp(false)
+    setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLocation(""); setIncFollowUp(false); setIncPhotoFiles([])
     logActivity("created", "Incident", "", `Incident report submitted — ${incDate}`)
   }
 
@@ -1610,6 +1626,22 @@ export default function UserDashboard() {
                 <textarea rows={3} value={incAction} onChange={e => setIncAction(e.target.value)}
                   placeholder="Steps taken to resolve the incident..." className={textareaCls} />
               </div>
+              <div className="mb-4">
+                <label className={labelCls}>Photos</label>
+                <input type="file" accept="image/*" multiple
+                  onChange={e => setIncPhotoFiles(Array.from(e.target.files || []))}
+                  className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-700 file:text-white hover:file:bg-red-800 cursor-pointer" />
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG. Multiple photos allowed.</p>
+                {incPhotoFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {incPhotoFiles.map((f, i) => (
+                      <div key={i} className="w-20 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-300">
+                        <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
               <div className="mb-5 flex items-center gap-2">
                 <input type="checkbox" id="followup" checked={incFollowUp} onChange={e => setIncFollowUp(e.target.checked)} className="w-4 h-4 accent-blue-700" />
                 <label htmlFor="followup" className="text-sm font-medium text-gray-700">Follow-up required</label>
@@ -2104,6 +2136,18 @@ export default function UserDashboard() {
                             <div className="mb-3">
                               <div className="text-xs font-semibold text-gray-500 mb-2">Photo</div>
                               <SignedImage src={r.photo_url} bucket="contact-photos" alt="report photo" className="max-h-48 rounded-lg border border-gray-200 object-cover" />
+                            </div>
+                          )}
+                          {Array.isArray(r.photo_urls) && r.photo_urls.length > 0 && (
+                            <div className="mb-3">
+                              <div className="text-xs font-semibold text-gray-500 mb-2">Photos ({r.photo_urls.length})</div>
+                              <div className="flex flex-wrap gap-2">
+                                {r.photo_urls.map((u: string, i: number) => (
+                                  <SignedLink key={i} href={u} bucket="contact-photos" title={`Photo ${i + 1}`}>
+                                    <SignedImage src={u} bucket="contact-photos" alt={`Photo ${i + 1}`} className="w-24 h-24 rounded-lg border border-gray-200 object-cover" />
+                                  </SignedLink>
+                                ))}
+                              </div>
                             </div>
                           )}
                           {(r.follow_up_required || r.follow_up) && (

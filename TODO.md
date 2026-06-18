@@ -2,7 +2,7 @@
 
 **App:** https://asg-vms.vercel.app/
 **Stack:** Next.js / TypeScript / Supabase / Vercel
-_Last updated: June 15, 2026_
+_Last updated: June 17, 2026_
 
 > Shared task list for Claude.ai and Claude Code. Keep this file in the repo root so both environments reference the same source of truth.
 
@@ -11,7 +11,7 @@ _Last updated: June 15, 2026_
 ## Getting Started (next session)
 - Open a terminal in **`C:\projects\asg-vms`** (the real repo — *not* the OneDrive copy).
 - Run the dev server: **`npm run dev`** → http://localhost:3000
-- Next task: _(none open)_. _Pending deploy step: run `migrations/2026-06-15_storage_private_buckets.sql` AFTER promoting prod (#16), then re-run the security advisor; enable leaked-password protection (Auth toggle)._
+- Next task: **#19 DL scanning** (the remaining new item) or the **#22 free-text Destination** follow-on. _Pending deploy step: run `migrations/2026-06-15_storage_private_buckets.sql` AFTER promoting prod (#16), then re-run the security advisor; enable leaked-password protection (Auth toggle)._
 - **Deploys are manual:** merging to `master` only builds a Vercel *preview*; promote the latest `master` build to production (`asg-vms.vercel.app`) from the Vercel dashboard, or enable auto-promote for `master` in Git settings.
 
 ---
@@ -35,6 +35,12 @@ _(none open)_
 - **Repeat-offense detection** (plate seen N times → escalate/tow).
 - Watchlist plate cross-check is **not possible** as-is — `watchlist` is person-only (no plate column); only `bolos.vehicle` (free text) is checked.
 
+### New (added June 17, from Claude.ai side)
+
+- **#19 Visitor Check-In — driver's-license scanning (handheld)** — let officers scan a DL with a wireless **keyboard-wedge** barcode scanner to auto-fill the check-in form. US licenses carry a **PDF417** barcode encoding AAMVA data; the wedge "types" the raw string into a focused scan-target field. Build: scan-target field, AAMVA parser (name/address/DOB/license#/exp — use an npm parser), map onto the form, recommend a PDF417 + Bluetooth wedge model. **Compliance:** some states restrict what may be *stored* vs displayed — confirm before persisting (ties into #16). Phone-camera scanning deferred (needs a commercial SDK).
+
+#22 follow-on (deferred): the field is relabeled "Destination" but is still a unit dropdown — make it accept free-text (plain address) / person / department for non-residential sites without breaking the unit→resident lookup.
+
 ---
 
 ## Engineering
@@ -45,6 +51,11 @@ _(all complete — #11 moved to Done)_
 
 ## Done
 
+- **2026-06-17 — #23 Tab reorder.** Moved **Property Hub** to sit immediately left of **User Dashboard** in `components/TopNav.tsx` (both desktop and mobile menus). New order: Home · VMS · Alerts · Property Hub · User Dashboard · Intel Terminal · Reports · (Admin). Nav-only.
+- **2026-06-17 — #22 Visitor Check-In "Unit" → "Destination" (relabel).** Renamed the field label + placeholder on `/vms` ("Unit" → "Destination", "Select Unit" → "Select Destination"). Still a unit dropdown driving the resident lookup — free-text/person/department support deferred (tracked under Features).
+- **2026-06-17 — #21 "Patrol" location added.** Inserted a `Patrol` row into `communities` (`migrations/2026-06-17_patrol_community.sql`, applied to prod, idempotent). Now appears in every location dropdown for roving officers. How Patrol-logged reports are scoped (general vs. tagged to current community) is left to the #8 multi-location work.
+- **2026-06-17 — #20 Active BOLO ticker.** New `components/BoloTicker.tsx` — scrolling marquee of active BOLOs on the Visitor Check-In page (`/vms`), pinned at `bottom: 32px` directly above the Henrico CAD ticker. Scoped to the checked-in community (plus location-agnostic BOLOs), realtime-subscribed to `bolos` + 2-min safety re-poll, red theme + live count, hidden when none. Reuses the shared `ticker-scroll` animation.
+- **2026-06-17 — #18 Incident Report photos.** Added a multi-image **Photos** upload box to the Incident Report form (`app/userdash/page.tsx`) with thumbnail previews. Photos upload to the `contact-photos` bucket; URLs stored in new `incident_reports.photo_urls text[]` (`migrations/2026-06-17_incident_photos.sql`, applied to prod). View Reports detail renders them as signed-URL thumbnails linking to the full image (consistent with the #16 private-bucket flow). Per-photo captions deferred (no existing form has them). Typecheck + `next build` clean.
 - **2026-06-15 — #17 Login screen — removed "Visitor Management System" tagline.** Dropped the `<h2>` subtitle from `app/login/page.tsx`; brand block (American Security Group / Integrated Property Solutions) + "Sign in to continue" remain. Typecheck + `next build` clean.
 - **2026-06-15 — #16 Storage hardening (private buckets + signed URLs).** Closed the HIGH finding from the audit. App no longer uses public URLs: new `lib/storage.ts` (`parseStored`/`createSignedUrlFor`) + `components/SignedImage.tsx` (`SignedImage`/`SignedLink`/`useSignedUrl`, 1h TTL) re-sign stored locators on demand; ~10 render sites converted (userdash watchlist/ban-sheets/report/BOLO photos, GateChecklist photo links, intel contact photo + preview, intel/[id] person photo, property doc links). Upload code untouched (stored public-style URLs reused as locators). Alert emails (`/api/bolos/notify`, `/api/watchlist/notify`) mint 30-day signed URLs server-side. `migrations/2026-06-15_storage_private_buckets.sql` makes the 3 buckets private + authenticated-only read + drops the anon-upload policy. ⚠️ **NOT yet applied — apply AFTER promoting the new code to prod** (it breaks the live app's images until the signed-URL code ships), then re-run the security advisor. Typecheck + `next build` clean. _Remaining manual: enable leaked-password protection (Auth dashboard toggle)._
 - **2026-06-15 — #16 Security audit (DB layer).** Audited RLS, policies, role gating, storage, anon exposure, and Supabase advisors against the live project (`xmomsoobriehgrnppewa`). **Sound baseline:** RLS enabled on all 33 public tables (no deny-all/wide-open gaps), anon blocked everywhere (every policy requires `auth.role()='authenticated'`), writes to sensitive/config tables admin-gated via a correctly-pinned `is_admin()`. Full report → `SECURITY_AUDIT.md`. **Applied** non-breaking hardening (`migrations/2026-06-15_security_audit_hardening.sql`, NOT yet run on prod — awaiting go-ahead): admin-only SELECT on `audit_logs` (read only happens in the admin screen) and `admin_users` (stops admin enumeration; `checkIsAdmin` self-query still works), pinned `search_path` on `check_watchlist_match()`, revoked RPC `EXECUTE` on `rls_auto_enable()`. **HIGH finding held for a coordinated change:** all 3 storage buckets are public + listable and hold PII (watchlist photos, ban sheets, ID/contact photos, community docs) → make private + move 12 `getPublicUrl` sites to `createSignedUrl` (tracked under Features #16-remaining). Also: enable leaked-password protection (Auth toggle).
