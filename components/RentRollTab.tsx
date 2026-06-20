@@ -84,23 +84,89 @@ export default function RentRollTab({
     } catch (e: any) { setImportError("Could not read file: " + e.message) }
   }
 
+  // Archive-on-change (item 27): the rent roll overwrites the HOH on turnover, so
+  // before replacing residents we snapshot the prior tenancy of any unit whose HOH
+  // changed into tenancy_history. This preserves the occupancy timeline that powers
+  // the unit-activity move-in/eviction markers and back-dated HOH attribution.
+  const HOH_RELS = new Set(["primary resident", "hoh", "head", "head of household"])
+  const isHohRel = (rel?: string | null) => HOH_RELS.has((rel || "").trim().toLowerCase())
+  const hohOf = (members: any[]) =>
+    (members.find(m => isHohRel(m.relationship))?.name || "").trim().toLowerCase()
+
+  const groupByUnit = (arr: any[]) => {
+    const m = new Map<string, any[]>()
+    for (const r of arr) {
+      const u = (r.unit_number || "").trim()
+      if (!m.has(u)) m.set(u, [])
+      m.get(u)!.push(r)
+    }
+    return m
+  }
+
   async function confirmImport() {
     if (!communityId) { setImportError("No location selected."); return }
-    setImportLoading(true); setImportError("")
+    setImportLoading(true); setImportError(""); setImportStatus("")
+
+    // 1) Load the CURRENT residents for this community (fresh, paginated).
+    let current: any[] = []
+    for (let page = 0; ; page++) {
+      const { data, error } = await supabase.from("residents").select("*")
+        .eq("community_id", communityId).range(page * 1000, (page + 1) * 1000 - 1)
+      if (error) { setImportError("Load current failed: " + error.message); setImportLoading(false); return }
+      if (!data || data.length === 0) break
+      current = current.concat(data)
+      if (data.length < 1000) break
+    }
+
+    // 2) Diff per unit; archive the prior household wherever the HOH changed (turnover).
+    const today      = new Date().toISOString().split("T")[0]
+    const curByUnit  = groupByUnit(current)
+    const incByUnit  = groupByUnit(importPreview)
+    const toArchive: any[] = []
+    for (const [unit, curMembers] of curByUnit) {
+      const incMembers = incByUnit.get(unit) || []
+      if (hohOf(curMembers) === hohOf(incMembers)) continue   // same HOH → not a turnover
+      for (const m of curMembers) {
+        if (!m.name) continue                                  // skip vacant placeholders
+        toArchive.push({
+          resident_id: m.id, community_id: communityId, unit_number: unit,
+          name: m.name, relationship: m.relationship, is_hoh: isHohRel(m.relationship),
+          move_in: m.move_in, lease_from: m.lease_from, lease_to: m.lease_to ?? null,
+          move_out: m.move_out ?? today,   // actual move-out isn't in the file → import date
+          archived_reason: "rent_roll_import",
+        })
+      }
+    }
+
+    // 3) Archive prior tenancies BEFORE overwriting.
+    for (let i = 0; i < toArchive.length; i += 200) {
+      const { error } = await supabase.from("tenancy_history").insert(toArchive.slice(i, i + 200))
+      if (error) { setImportError("Archive failed: " + error.message); setImportLoading(false); return }
+    }
+
+    // 4) Replace residents with the incoming roll, setting lifecycle fields.
     const { error: delErr } = await supabase.from("residents").delete().eq("community_id", communityId)
     if (delErr) { setImportError("Delete failed: " + delErr.message); setImportLoading(false); return }
-    const rows = importPreview.map(r => ({ ...r, community_id: communityId }))
+    const rows = importPreview.map(r => ({
+      ...r, community_id: communityId,
+      is_hoh: isHohRel(r.relationship), status: "active",
+    }))
     for (let i = 0; i < rows.length; i += 200) {
       const { error } = await supabase.from("residents").insert(rows.slice(i, i + 200))
       if (error) { setImportError("Insert failed: " + error.message); setImportLoading(false); return }
     }
+
+    // 5) Units (unchanged).
     await supabase.from("units").delete().eq("community_id", communityId)
     const uniqueUnits = importUnits.map(u => ({ unit_number: u.trim(), community_id: communityId }))
     for (let i = 0; i < uniqueUnits.length; i += 200) {
       await supabase.from("units").insert(uniqueUnits.slice(i, i + 200))
     }
+
     setImportLoading(false)
-    setImportStatus(`✅ ${rows.length} residents across ${uniqueUnits.length} units imported.`)
+    const archivedUnits = new Set(toArchive.map(a => a.unit_number)).size
+    setImportStatus(`✅ ${rows.length} residents across ${uniqueUnits.length} units imported.` +
+      (archivedUnits ? ` ${archivedUnits} prior tenanc${archivedUnits === 1 ? "y" : "ies"} archived to history.` : ""))
     setImportPreview([]); setShowImport(false)
     loadRentRoll()
   }
@@ -132,7 +198,7 @@ export default function RentRollTab({
           <h3 className="font-bold text-gray-800 mb-1">Import Rent Roll (.xlsx from Yardi)</h3>
           <p className="text-sm text-gray-600 mb-3">
             Importing to <strong>{communityName || "the selected location"}</strong>.
-            <span className="text-orange-600"> ⚠ Replaces all existing residents/units for this location.</span>
+            <span className="text-orange-600"> ⚠ Replaces the current residents/units; any unit whose Head of Household changed is archived to tenancy history first.</span>
           </p>
           <label className={labelCls}>Select File</label>
           <input type="file" accept=".xlsx,.xls,.csv"
