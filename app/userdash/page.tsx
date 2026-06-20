@@ -9,6 +9,8 @@ import Papa from "papaparse"
 import { fireAlert } from "@/lib/alerts"
 import { maskSSN } from "@/lib/format"
 import { checkIsAdmin } from "@/lib/admin"
+import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/LocationField"
+import { buildHohSnapshot, EMPTY_SNAPSHOT } from "@/lib/hohSnapshot"
 import GateChecklist from "./GateChecklist"
 import { VehicleFields, EMPTY_VEHICLE, isNoPlate, displayPlate, type VehicleInfo } from "@/components/VehicleFields"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
@@ -163,7 +165,7 @@ export default function UserDashboard() {
   const [vfiTime,         setVfiTime]         = useState("")
   const [vfiCommunity,    setVfiCommunity]    = useState("")
   const [vfiOfficer,      setVfiOfficer]      = useState("")
-  const [vfiLocation,     setVfiLocation]     = useState("")
+  const [vfiLoc,          setVfiLoc]          = useState<LocationValue>(EMPTY_LOCATION)
   const [vfiVehicle,      setVfiVehicle]      = useState<VehicleInfo>(EMPTY_VEHICLE)
   const [vfiDescriptors,  setVfiDescriptors]  = useState("")
   const [vfiReason,       setVfiReason]       = useState("")
@@ -184,7 +186,7 @@ export default function UserDashboard() {
   const [pvCommunity,     setPvCommunity]     = useState("")
   const [pvOfficer,       setPvOfficer]       = useState("")
   const [pvVehicle,       setPvVehicle]       = useState<VehicleInfo>(EMPTY_VEHICLE)
-  const [pvLocation,      setPvLocation]      = useState("")
+  const [pvLoc,           setPvLoc]           = useState<LocationValue>(EMPTY_LOCATION)
   const [pvSpace,         setPvSpace]         = useState("")
   const [pvViolationType, setPvViolationType] = useState<string>(PARKING_VIOLATION_TYPES[0])
   const [pvNotes,         setPvNotes]         = useState("")
@@ -201,7 +203,7 @@ export default function UserDashboard() {
   const [incDate,        setIncDate]        = useState(new Date().toISOString().split("T")[0])
   const [incTime,        setIncTime]        = useState("")
   const [incCommunity,   setIncCommunity]   = useState("")
-  const [incLocation,    setIncLocation]    = useState("")
+  const [incLoc,         setIncLoc]         = useState<LocationValue>(EMPTY_LOCATION)
   const [incType,        setIncType]        = useState("Disturbance")
   const [incPersons,     setIncPersons]     = useState("")
   const [incDescription, setIncDescription] = useState("")
@@ -573,9 +575,18 @@ export default function UserDashboard() {
       }
     }
 
+    // Freeze the HOH/household for the unit as of the incident date (items 26/27).
+    const incSnap = incLoc.location_type === "unit"
+      ? await buildHohSnapshot(incCommunity, incLoc.unit_number, incDate)
+      : EMPTY_SNAPSHOT
+
     const { error } = await supabase.from("incident_reports").insert({
       date: incDate, time: incTime, community_id: incCommunity,
-      location: incLocation, incident_type: incType,
+      location: incLoc.location || null, incident_type: incType,
+      location_type: incLoc.location_type,
+      building: incLoc.building, apartment: incLoc.apartment, common_area: incLoc.common_area,
+      hoh_name: incSnap.hoh_name, hoh_resident_id: incSnap.hoh_resident_id,
+      household_snapshot: incSnap.household_snapshot,
       persons_involved: incPersons, description: incDescription,
       action_taken: incAction, follow_up_required: incFollowUp,
       photo_urls: photoUrls.length ? photoUrls : null,
@@ -596,7 +607,7 @@ export default function UserDashboard() {
           Community:    communityName,
           Date:         incDate,
           Time:         incTime,
-          Location:     incLocation || "—",
+          Location:     incLoc.location || "—",
           Type:         incType,
           Officer:      incOfficer || "—",
           Persons:      incPersons || "—",
@@ -605,7 +616,7 @@ export default function UserDashboard() {
         },
       })
     }
-    setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLocation(""); setIncFollowUp(false); setIncPhotoFiles([])
+    setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLoc(EMPTY_LOCATION); setIncFollowUp(false); setIncPhotoFiles([])
     logActivity("created", "Incident", "", `Incident report submitted — ${incDate}`)
   }
 
@@ -662,11 +673,19 @@ export default function UserDashboard() {
     const hits = await lookupBolosByPlate(vfiVehicle.plate)
     const boloMatch = hits.length > 0
 
+    const vfiSnap = vfiLoc.location_type === "unit"
+      ? await buildHohSnapshot(vfiCommunity, vfiLoc.unit_number, vfiDate)
+      : EMPTY_SNAPSHOT
+
     const { error } = await supabase.from("vehicle_fi_logs").insert({
       date: vfiDate, time: vfiTime || null,
       community_id: vfiCommunity || null,
       officer_name: vfiOfficer || null,
-      location: vfiLocation || null,
+      location: vfiLoc.location || null,
+      location_type: vfiLoc.location_type,
+      building: vfiLoc.building, apartment: vfiLoc.apartment, common_area: vfiLoc.common_area,
+      hoh_name: vfiSnap.hoh_name, hoh_resident_id: vfiSnap.hoh_resident_id,
+      household_snapshot: vfiSnap.household_snapshot,
       make: vfiVehicle.make || null, model: vfiVehicle.model || null,
       color: vfiVehicle.color || null, year: vfiVehicle.year || null,
       state: vfiVehicle.state || null, plate: vfiVehicle.plate || null,
@@ -707,7 +726,7 @@ export default function UserDashboard() {
 
     setReportMessage("✅ Vehicle FI logged." + (boloMatch ? " ⚠ BOLO match — supervisor alerted." : ""))
     logActivity("created", "Vehicle FI", "", `Vehicle FI logged — ${vfiVehicle.plate || vfiVehicle.make} ${vfiDate}`)
-    setVfiLocation(""); setVfiVehicle(EMPTY_VEHICLE); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
+    setVfiLoc(EMPTY_LOCATION); setVfiVehicle(EMPTY_VEHICLE); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
     setVfiFollowUp(false); setVfiViolation(false); setVfiViolationNum("")
     setVfiPhotoFile(null); setVfiPhotoPreview("")
     setVfiBoloHits([]); setVfiBoloChecked(false); setVfiRegHits([]); setVfiRegChecked(false)
@@ -833,6 +852,10 @@ export default function UserDashboard() {
     const hits = isNoPlate(pvVehicle.plate) ? [] : await lookupBolosByPlate(pvVehicle.plate)
     const boloMatch = hits.length > 0
 
+    const pvSnap = pvLoc.location_type === "unit"
+      ? await buildHohSnapshot(pvCommunity, pvLoc.unit_number, pvDate)
+      : EMPTY_SNAPSHOT
+
     const { error } = await supabase.from("parking_violations").insert({
       date: pvDate, time: pvTime || null,
       community_id: pvCommunity || null,
@@ -840,7 +863,11 @@ export default function UserDashboard() {
       make: pvVehicle.make || null, model: pvVehicle.model || null,
       color: pvVehicle.color || null, year: pvVehicle.year || null,
       state: pvVehicle.state || null, plate: pvVehicle.plate || null,
-      location: pvLocation || null, space: pvSpace || null,
+      location: pvLoc.location || null, space: pvSpace || null,
+      location_type: pvLoc.location_type,
+      building: pvLoc.building, apartment: pvLoc.apartment, common_area: pvLoc.common_area,
+      hoh_name: pvSnap.hoh_name, hoh_resident_id: pvSnap.hoh_resident_id,
+      household_snapshot: pvSnap.household_snapshot,
       violation_type: pvViolationType || null,
       notes: pvNotes || null, photo_url: photoUrl,
       tow_requested: pvTowRequested,
@@ -858,7 +885,7 @@ export default function UserDashboard() {
     if (boloMatch || pvTowRequested) {
       const communityName = communities.find(c => c.id === pvCommunity)?.name || "Unknown"
       const plateLabel    = `${pvVehicle.plate}${pvVehicle.state ? " (" + pvVehicle.state + ")" : ""}`
-      const where         = [pvLocation, pvSpace && `Space ${pvSpace}`].filter(Boolean).join(" · ") || "—"
+      const where         = [pvLoc.location, pvSpace && `Space ${pvSpace}`].filter(Boolean).join(" · ") || "—"
       fireAlert({
         type:         boloMatch ? "parking_bolo_hit" : "parking_tow_requested",
         severity:     boloMatch ? "critical" : "high",
@@ -887,7 +914,7 @@ export default function UserDashboard() {
     setReportMessage("✅ Parking violation logged." + note)
     logActivity("created", "Parking Violation", "", `Parking violation — ${pvVehicle.plate} (${pvViolationType})`)
 
-    setPvVehicle(EMPTY_VEHICLE); setPvLocation(""); setPvSpace(""); setPvNotes("")
+    setPvVehicle(EMPTY_VEHICLE); setPvLoc(EMPTY_LOCATION); setPvSpace(""); setPvNotes("")
     setPvViolationType(PARKING_VIOLATION_TYPES[0]); setPvTowRequested(false); setPvTowReason("")
     setPvPhotoFile(null); setPvPhotoPreview(""); setPvBoloHits([]); setPvBoloChecked(false); setPvRegHits([]); setPvRegChecked(false)
     setPvTime("")
@@ -1595,11 +1622,11 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={incOfficer} onChange={e => setIncOfficer(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Location</label>
-                  <select value={incCommunity} onChange={e => setIncCommunity(e.target.value)} className={inputCls}>
+                  <select value={incCommunity} onChange={e => { setIncCommunity(e.target.value); setIncLoc(EMPTY_LOCATION) }} className={inputCls}>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select></div>
                 <div><label className={labelCls}>Location / Unit</label>
-                  <input value={incLocation} onChange={e => setIncLocation(e.target.value)} placeholder="e.g. Unit 204, Parking Lot" className={inputCls} /></div>
+                  <LocationField communityId={incCommunity} value={incLoc} onChange={setIncLoc} inputCls={inputCls} /></div>
                 <div><label className={labelCls}>Incident Type</label>
                   <select value={incType} onChange={e => setIncType(e.target.value)} className={inputCls}>
                     <option>Disturbance</option><option>Trespassing</option><option>Theft</option>
@@ -1740,11 +1767,11 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={vfiOfficer} onChange={e => setVfiOfficer(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Location</label>
-                  <select value={vfiCommunity} onChange={e => setVfiCommunity(e.target.value)} className={inputCls}>
+                  <select value={vfiCommunity} onChange={e => { setVfiCommunity(e.target.value); setVfiLoc(EMPTY_LOCATION) }} className={inputCls}>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select></div>
-                <div className="sm:col-span-2"><label className={labelCls}>Location</label>
-                  <input value={vfiLocation} onChange={e => setVfiLocation(e.target.value)} placeholder="e.g. Building 3 Parking, Entrance Gate" className={inputCls} /></div>
+                <div className="sm:col-span-2"><label className={labelCls}>Location / Unit</label>
+                  <LocationField communityId={vfiCommunity} value={vfiLoc} onChange={setVfiLoc} inputCls={inputCls} /></div>
                 <VehicleFields
                   value={vfiVehicle}
                   onChange={p => setVfiVehicle(v => ({ ...v, ...p }))}
@@ -1842,11 +1869,11 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={pvOfficer} onChange={e => setPvOfficer(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Community</label>
-                  <select value={pvCommunity} onChange={e => setPvCommunity(e.target.value)} className={inputCls}>
+                  <select value={pvCommunity} onChange={e => { setPvCommunity(e.target.value); setPvLoc(EMPTY_LOCATION) }} className={inputCls}>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select></div>
-                <div><label className={labelCls}>Lot / Area</label>
-                  <input value={pvLocation} onChange={e => setPvLocation(e.target.value)} placeholder="e.g. Building 3 Lot, Visitor Row" className={inputCls} /></div>
+                <div><label className={labelCls}>Lot / Area / Unit</label>
+                  <LocationField communityId={pvCommunity} value={pvLoc} onChange={setPvLoc} inputCls={inputCls} /></div>
                 <div><label className={labelCls}>Space / Spot #</label>
                   <input value={pvSpace} onChange={e => setPvSpace(e.target.value)} placeholder="e.g. 14, A-7, Fire Lane" className={inputCls} /></div>
                 <div className="sm:col-span-2"><label className={labelCls}>Violation Type</label>

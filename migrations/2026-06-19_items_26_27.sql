@@ -149,7 +149,7 @@ as $$
   from public.residents r
   where r.community_id = p_community_id
     and r.unit_number  = p_unit_number
-    and coalesce(r.is_hoh, lower(coalesce(r.relationship,'')) in ('hoh','head','head of household'))
+    and coalesce(r.is_hoh, lower(coalesce(r.relationship,'')) in ('hoh','head','head of household','primary resident'))
     and (r.move_in  is null or r.move_in  <= p_as_of)
     and (r.move_out is null or r.move_out >= p_as_of)
   order by r.move_in desc nulls last
