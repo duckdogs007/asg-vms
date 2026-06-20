@@ -8,7 +8,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 //
 // Uses Google Gemini (free tier) via the REST API — no SDK dependency. Set
 // GEMINI_API_KEY in the environment (free key from https://aistudio.google.com).
-// GEMINI_MODEL optionally overrides the model (default gemini-2.0-flash).
+// GEMINI_MODEL optionally overrides the model (default gemini-2.5-flash).
 // The model receives incident PII (names, locations) — mind that when reviewing.
 export const runtime = "nodejs"
 
@@ -78,7 +78,7 @@ export async function POST(req: Request) {
     `Officer's notes / current draft:\n${notes}\n\n` +
     `Task: ${MODE_TASK[mode]}`
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash"
+  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash"
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
 
   try {
