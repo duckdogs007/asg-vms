@@ -214,6 +214,8 @@ export default function UserDashboard() {
   const [incFollowUp,    setIncFollowUp]    = useState(false)
   const [incOfficer,     setIncOfficer]     = useState("")
   const [incPhotoFiles,  setIncPhotoFiles]  = useState<File[]>([])
+  const [aiBusy,         setAiBusy]         = useState<string | null>(null)  // which narrative action is running
+  const [aiError,        setAiError]        = useState("")
   // Linked reference numbers (item 25) — same incident across Reliant / HPD / ASG systems
   const [incReliantNo,   setIncReliantNo]   = useState("")
   const [incHpdNo,       setIncHpdNo]       = useState("")
@@ -566,6 +568,38 @@ export default function UserDashboard() {
     setReportMessage("✅ Daily log submitted.")
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather("")
     logActivity("created", "Daily Log", "", `Daily log submitted — ${dailyDate}`)
+  }
+
+  // AI narrative assist (item 28) — sends the incident's structured fields + the
+  // current description to /api/ai/narrative and replaces the description with the
+  // cleaned, professional write-up. Officer reviews/edits before submitting.
+  async function callAiNarrative(mode: "draft" | "tighten" | "formal") {
+    if (!incDescription.trim()) { setAiError("Add some notes in the description first."); return }
+    setAiBusy(mode); setAiError("")
+    try {
+      const res = await fetch("/api/ai/narrative", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          mode,
+          notes: incDescription,
+          fields: {
+            incident_type: incType,
+            location: incLoc.location,
+            building: incLoc.building, apartment: incLoc.apartment,
+            persons_involved: incPersons, action_taken: incAction,
+            date: incDate, time: incTime,
+          },
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`)
+      if (data.text) setIncDescription(data.text)
+    } catch (e: any) {
+      setAiError(e?.message || "AI assist failed.")
+    } finally {
+      setAiBusy(null)
+    }
   }
 
   async function saveIncidentReport() {
@@ -1709,9 +1743,28 @@ export default function UserDashboard() {
                   placeholder="Names, descriptions of involved parties" className={inputCls} />
               </div>
               <div className="mb-4">
-                <label className={labelCls}>Incident Description <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                  <label className={labelCls + " mb-0"}>Incident Description <span className="text-red-500">*</span></label>
+                  <div className="flex items-center gap-1.5">
+                    <button type="button" onClick={() => callAiNarrative("draft")} disabled={!!aiBusy}
+                      title="Turn your notes into a full narrative"
+                      className="px-2.5 py-1 bg-violet-700 text-white text-xs font-semibold rounded-md hover:bg-violet-800 border-none cursor-pointer disabled:opacity-50">
+                      {aiBusy === "draft" ? "✨ Writing…" : "✨ AI Draft"}
+                    </button>
+                    <button type="button" onClick={() => callAiNarrative("tighten")} disabled={!!aiBusy}
+                      className="px-2.5 py-1 bg-violet-100 text-violet-800 text-xs font-semibold rounded-md hover:bg-violet-200 border-none cursor-pointer disabled:opacity-50">
+                      {aiBusy === "tighten" ? "…" : "Tighten"}
+                    </button>
+                    <button type="button" onClick={() => callAiNarrative("formal")} disabled={!!aiBusy}
+                      className="px-2.5 py-1 bg-violet-100 text-violet-800 text-xs font-semibold rounded-md hover:bg-violet-200 border-none cursor-pointer disabled:opacity-50">
+                      {aiBusy === "formal" ? "…" : "More formal"}
+                    </button>
+                  </div>
+                </div>
                 <textarea rows={5} value={incDescription} onChange={e => setIncDescription(e.target.value)}
-                  placeholder="Detailed description of the incident..." className={textareaCls} />
+                  placeholder="Jot down rough notes, then ✨ AI Draft to expand them into a full narrative — or write it yourself." className={textareaCls} />
+                {aiError && <div className="text-xs text-red-600 mt-1">{aiError}</div>}
+                <p className="text-[11px] text-gray-400 mt-1">AI assist is a drafting aid — review and edit before submitting. You are responsible for the final report.</p>
               </div>
               <div className="mb-4">
                 <label className={labelCls}>Action Taken</label>
