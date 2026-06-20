@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import { checkIsAdmin } from "@/lib/admin"
 import PostOrdersTab from "@/components/PostOrdersTab"
 import RentRollTab from "@/components/RentRollTab"
+import UnitActivityTab from "@/components/UnitActivityTab"
 import { SignedLink } from "@/components/SignedImage"
 
 interface Community {
@@ -24,7 +25,7 @@ interface Vehicle  {
   notes: string | null
 }
 
-type Tab = "post-orders" | "info" | "documents" | "vehicles" | "rentroll"
+type Tab = "post-orders" | "info" | "documents" | "vehicles" | "rentroll" | "history"
 const DOC_TYPES = ["Lease", "House Rules", "Property Map", "Floor Plan", "Other"]
 
 const inputCls    = "w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
@@ -209,15 +210,19 @@ export default function PropertyHubPage() {
         <button className={tabCls("documents")}   onClick={() => setTab("documents")}>📁 Documents</button>
         <button className={tabCls("vehicles")}    onClick={() => setTab("vehicles")}>🚗 Vehicles</button>
         <button className={tabCls("rentroll")}    onClick={() => setTab("rentroll")}>🏠 Rent Roll</button>
+        <button className={tabCls("history")}     onClick={() => setTab("history")}>🗂️ Unit History</button>
       </div>
 
       {msg && <div className="mb-4 text-sm px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">{msg}</div>}
-      {!isAdmin && tab !== "post-orders" && (
+      {!isAdmin && tab !== "post-orders" && tab !== "history" && (
         <div className="mb-4 text-xs text-gray-500">View-only — contact an admin to make changes.</div>
       )}
 
       {/* POST ORDERS */}
       {tab === "post-orders" && <PostOrdersTab communityId={communityId} />}
+
+      {/* UNIT ACTIVITY HISTORY */}
+      {tab === "history" && <UnitActivityTab />}
 
       {/* RENT ROLL */}
       {tab === "rentroll" && <RentRollTab communityId={communityId} communityName={community?.name} isAdmin={isAdmin} />}
