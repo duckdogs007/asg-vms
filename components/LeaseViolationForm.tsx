@@ -110,6 +110,7 @@ export default function LeaseViolationForm({
   const [locationValue, setLocationValue] = useState<LocationValue>(EMPTY_LOCATION)
   const [eventDate, setEventDate] = useState<string>(today())
   const [description, setDescription] = useState("")
+  const [files, setFiles] = useState<File[]>([])  // document attachments (LVL letter, evidence)
 
   // Violation-stage fields (both modes)
   const [category, setCategory] = useState<ViolationCategory>("security_community")
@@ -231,6 +232,24 @@ export default function LeaseViolationForm({
     setLvlPostedDate(today())
     setHohAck(false)
     setOffenders([emptyOffender()])
+    setFiles([])
+  }
+
+  // Upload attached docs (PDF/images) to the private community-docs bucket and
+  // return locator URLs (re-signed on read via SignedLink).
+  async function uploadAttachments(): Promise<string[]> {
+    const urls: string[] = []
+    for (const f of files) {
+      const safe = f.name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 60)
+      const path = `lvl_${Date.now()}_${urls.length}_${safe}`
+      const { data: up, error: upErr } = await supabase.storage.from("community-docs").upload(path, f, { upsert: false })
+      if (upErr) throw upErr
+      if (up) {
+        const { data: { publicUrl } } = supabase.storage.from("community-docs").getPublicUrl(up.path)
+        urls.push(publicUrl)
+      }
+    }
+    return urls
   }
 
   async function insertOffenders(reportId: string) {
@@ -266,9 +285,17 @@ export default function LeaseViolationForm({
     setSaving(true)
     try {
       const ackAt = hohAck ? new Date().toISOString() : null
+      const newAttachments = files.length ? await uploadAttachments() : []
 
       if (existingRecord) {
         // Mode A — issue the violation stage onto the existing incident.
+        // Append any new attachments to whatever the record already has.
+        let attachmentUpdate: { attachment_urls?: string[] } = {}
+        if (newAttachments.length) {
+          const { data: cur } = await supabase
+            .from("incident_reports").select("attachment_urls").eq("id", existingRecord.id).single()
+          attachmentUpdate.attachment_urls = [ ...(((cur as any)?.attachment_urls) || []), ...newAttachments ]
+        }
         const { error: updErr } = await supabase
           .from("incident_reports")
           .update({
@@ -281,6 +308,7 @@ export default function LeaseViolationForm({
             hoh_ack: hohAck,
             hoh_ack_at: ackAt,
             issued_by: issuedBy.trim() || null,
+            ...attachmentUpdate,
             // record_source intentionally left as-is.
           })
           .eq("id", existingRecord.id)
@@ -322,6 +350,7 @@ export default function LeaseViolationForm({
           hoh_name: isUnit ? snapshot.hoh_name : null,
           hoh_resident_id: isUnit ? snapshot.hoh_resident_id : null,
           household_snapshot: isUnit ? snapshot.household_snapshot : null,
+          attachment_urls: newAttachments.length ? newAttachments : null,
           created_at: new Date().toISOString(),
         }
 
@@ -544,6 +573,24 @@ export default function LeaseViolationForm({
             />
             HOH delivery acknowledged
           </label>
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className={labelCls}>Attachments <span className="text-gray-400 font-normal">(LVL letter, evidence — PDF or images)</span></label>
+          <input
+            type="file"
+            accept=".pdf,image/*"
+            multiple
+            onChange={(e) => setFiles(Array.from(e.target.files || []))}
+            className="text-sm text-gray-600 w-full file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer"
+          />
+          {files.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 mt-2">
+              {files.map((f, i) => (
+                <span key={i} className="px-2 py-0.5 bg-gray-100 border border-gray-200 rounded text-xs text-gray-600">📎 {f.name}</span>
+              ))}
+            </div>
+          )}
         </div>
       </div>
 
