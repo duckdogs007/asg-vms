@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
-import Anthropic from "@anthropic-ai/sdk"
 
 // POST /api/ai/narrative
 // AI assist for the Incident Report narrative (item 28). Auth-required. Takes the
 // report's structured fields + the officer's rough notes / current draft and returns
-// a cleaned, professional third-person narrative. The model never sees credentials;
-// it does receive incident PII (names, locations) — mind that when reviewing.
+// a cleaned, professional third-person narrative.
+//
+// Uses Google Gemini (free tier) via the REST API — no SDK dependency. Set
+// GEMINI_API_KEY in the environment (free key from https://aistudio.google.com).
+// GEMINI_MODEL optionally overrides the model (default gemini-2.0-flash).
+// The model receives incident PII (names, locations) — mind that when reviewing.
 export const runtime = "nodejs"
 
 type Body = {
@@ -40,10 +43,10 @@ export async function POST(req: Request) {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
 
-  const apiKey = process.env.ANTHROPIC_API_KEY
+  const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
     return NextResponse.json(
-      { error: "AI assist isn't configured yet — set ANTHROPIC_API_KEY in the environment." },
+      { error: "AI assist isn't configured yet — set GEMINI_API_KEY in the environment." },
       { status: 503 },
     )
   }
@@ -62,30 +65,45 @@ export async function POST(req: Request) {
     f.action_taken && `Action taken: ${f.action_taken}`,
   ].filter(Boolean).join("\n") || "(no structured details provided)"
 
-  const system =
+  const instructions =
     "You help a licensed security officer write the narrative section of an incident report. " +
     "Write in clear, professional, factual third person, past tense. Use only the facts given in the " +
     "structured details and the officer's notes — never invent names, times, outcomes, or events. " +
     "Do not add legal conclusions or opinions. Keep it concise and readable. " +
     "Output ONLY the finished narrative text — no preamble, headings, labels, bullet points, or commentary."
 
-  const userContent =
+  const prompt =
+    `${instructions}\n\n` +
     `Structured details:\n${details}\n\n` +
     `Officer's notes / current draft:\n${notes}\n\n` +
     `Task: ${MODE_TASK[mode]}`
 
+  const model = process.env.GEMINI_MODEL || "gemini-2.0-flash"
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
+
   try {
-    const client = new Anthropic({ apiKey })
-    const msg = await client.messages.create({
-      model: "claude-opus-4-8",
-      max_tokens: 1500,
-      output_config: { effort: "low" },
-      system,
-      messages: [{ role: "user", content: userContent }],
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        generationConfig: { temperature: 0.4, maxOutputTokens: 1500 },
+      }),
     })
-    const text = msg.content
-      .filter((b): b is Anthropic.TextBlock => b.type === "text")
-      .map(b => b.text)
+
+    const data: any = await res.json().catch(() => null)
+    if (!res.ok) {
+      const msg = data?.error?.message || `AI request failed (${res.status}).`
+      return NextResponse.json({ error: msg }, { status: 502 })
+    }
+
+    const blocked = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason === "SAFETY"
+    if (blocked) {
+      return NextResponse.json({ error: "The AI declined to process this content. Edit the notes and try again." }, { status: 422 })
+    }
+
+    const text: string = (data?.candidates?.[0]?.content?.parts || [])
+      .map((p: any) => p?.text || "")
       .join("")
       .trim()
     if (!text) return NextResponse.json({ error: "The model returned an empty response." }, { status: 502 })
