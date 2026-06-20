@@ -219,6 +219,11 @@ export default function UserDashboard() {
   const [incReliantNo,   setIncReliantNo]   = useState("")
   const [incHpdNo,       setIncHpdNo]       = useState("")
   const [incAsgNo,       setIncAsgNo]       = useState("")
+  // "Was Reliant (SOC) notified?" compliance check — required only for communities
+  // flagged requires_reliant_notification (St Luke today).
+  const [incReliantNotified,   setIncReliantNotified]   = useState<boolean | null>(null)
+  const [incReliantNotifiedAt, setIncReliantNotifiedAt] = useState("")
+  const [incReliantNotReason,  setIncReliantNotReason]  = useState("")
 
   // Passdown
   const [passdowns,       setPassdowns]       = useState<any[]>([])
@@ -571,6 +576,12 @@ export default function UserDashboard() {
 
   async function saveIncidentReport() {
     if (!incDescription) { setReportError("Incident description is required."); return }
+    // Reliant-notification compliance gate (per-community flag; St Luke today).
+    const requiresReliant = !!communities.find(c => c.id === incCommunity)?.requires_reliant_notification
+    if (requiresReliant) {
+      if (incReliantNotified === null) { setReportError("Please confirm whether Reliant (SOC) was notified of this incident."); return }
+      if (incReliantNotified === false && !incReliantNotReason.trim()) { setReportError("Reliant was not notified — please give a brief reason."); return }
+    }
     setReportSaving(true); setReportError(""); setReportMessage("")
 
     // Upload any attached photos to the contact-photos bucket (multi-image).
@@ -614,6 +625,9 @@ export default function UserDashboard() {
       hoh_name: incSnap.hoh_name, hoh_resident_id: incSnap.hoh_resident_id,
       household_snapshot: incSnap.household_snapshot,
       reliant_case_no: incReliantNo || null, hpd_report_no: incHpdNo || null, asg_report_no: incAsgNo || null,
+      reliant_notified: requiresReliant ? incReliantNotified : null,
+      reliant_notified_at: (requiresReliant && incReliantNotified && incReliantNotifiedAt) ? new Date(incReliantNotifiedAt).toISOString() : null,
+      reliant_not_notified_reason: (requiresReliant && incReliantNotified === false) ? (incReliantNotReason.trim() || null) : null,
       persons_involved: incPersons, description: incDescription,
       action_taken: incAction, follow_up_required: incFollowUp,
       photo_urls: photoUrls.length ? photoUrls : null,
@@ -645,6 +659,7 @@ export default function UserDashboard() {
     }
     setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLoc(EMPTY_LOCATION); setIncFollowUp(false); setIncPhotoFiles([])
     setIncReliantNo(""); setIncHpdNo(""); setIncAsgNo("")
+    setIncReliantNotified(null); setIncReliantNotifiedAt(""); setIncReliantNotReason("")
     logActivity("created", "Incident", "", `Incident report submitted — ${incDate}`)
   }
 
@@ -1751,6 +1766,35 @@ export default function UserDashboard() {
                   <input value={incAsgNo} onChange={e => setIncAsgNo(e.target.value)} placeholder="ASG report #" className={inputCls} />
                 </div>
               </div>
+              {communities.find(c => c.id === incCommunity)?.requires_reliant_notification && (
+                <div className="mb-4 border border-amber-300 bg-amber-50 rounded-lg p-4">
+                  <label className={labelCls}>Was Reliant (SOC) notified? <span className="text-red-500">*</span></label>
+                  <div className="flex items-center gap-4 mb-2">
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 cursor-pointer">
+                      <input type="radio" name="reliantNotified" checked={incReliantNotified === true}
+                        onChange={() => setIncReliantNotified(true)} className="w-4 h-4 accent-green-700" /> Yes
+                    </label>
+                    <label className="flex items-center gap-1.5 text-sm font-medium text-gray-700 cursor-pointer">
+                      <input type="radio" name="reliantNotified" checked={incReliantNotified === false}
+                        onChange={() => setIncReliantNotified(false)} className="w-4 h-4 accent-red-700" /> No
+                    </label>
+                  </div>
+                  {incReliantNotified === true && (
+                    <div>
+                      <label className={labelCls}>Notification time <span className="text-gray-400 font-normal">(optional)</span></label>
+                      <input type="datetime-local" value={incReliantNotifiedAt} onChange={e => setIncReliantNotifiedAt(e.target.value)} className={inputCls} />
+                      <p className="text-[11px] text-gray-500 mt-1">Tip: also fill the <span className="font-medium">Reliant case #</span> above when you have it.</p>
+                    </div>
+                  )}
+                  {incReliantNotified === false && (
+                    <div>
+                      <label className={labelCls}>Reason not notified <span className="text-red-500">*</span></label>
+                      <textarea rows={2} value={incReliantNotReason} onChange={e => setIncReliantNotReason(e.target.value)}
+                        placeholder="Why was Reliant/SOC not notified?" className={textareaCls} />
+                    </div>
+                  )}
+                </div>
+              )}
               <div className="mb-5 flex items-center gap-2">
                 <input type="checkbox" id="followup" checked={incFollowUp} onChange={e => setIncFollowUp(e.target.checked)} className="w-4 h-4 accent-blue-700" />
                 <label htmlFor="followup" className="text-sm font-medium text-gray-700">Follow-up required</label>
@@ -2243,6 +2287,8 @@ export default function UserDashboard() {
                             {r.reliant_case_no  && <Field label="Reliant #"      value={r.reliant_case_no} />}
                             {r.hpd_report_no    && <Field label="HPD #"          value={r.hpd_report_no} />}
                             {r.asg_report_no    && <Field label="ASG #"          value={r.asg_report_no} />}
+                            {r.reliant_notified != null && <Field label="Reliant Notified" value={r.reliant_notified ? `Yes${r.reliant_notified_at ? " · " + new Date(r.reliant_notified_at).toLocaleString() : ""}` : "No"} />}
+                            {r.reliant_not_notified_reason && <Field label="Reliant — reason" value={r.reliant_not_notified_reason} />}
                             {r.persons_involved && <Field label="Persons"        value={r.persons_involved} />}
                             {r.first_name       && <Field label="Subject"        value={`${r.first_name} ${r.last_name}`} />}
                             {r.dob              && <Field label="DOB"            value={r.dob} />}
