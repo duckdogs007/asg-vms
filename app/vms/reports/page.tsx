@@ -135,6 +135,10 @@ export default function ReportsPage() {
   // violation `date`). Surfaced as its own section so officer-enforcement data
   // shows up in platform reporting, not just the Officer Reports tab.
   const [parking, setParking] = useState<any[]>([])
+  // Lease violations (incident_reports where lvl_issued = true) for the selected
+  // community + date range. Each row gets an `_offenders` array attached from
+  // violation_offenders so ban-match data renders inline.
+  const [leaseViols, setLeaseViols] = useState<any[]>([])
   // Registered-vehicle database (resident + visitor) for the selected community.
   // Registry is current-state, not date-ranged — it loads per community only.
   const [registry,   setRegistry]   = useState<any[]>([])
@@ -193,6 +197,10 @@ export default function ReportsPage() {
       .on("postgres_changes", { event: "*", schema: "public", table: "registered_vehicles",
         filter: `community_id=eq.${community}` }, () => {
         loadData()
+      })
+      .on("postgres_changes", { event: "*", schema: "public", table: "incident_reports",
+        filter: `community_id=eq.${community}` }, () => {
+        loadData()
       }).subscribe()
     return () => { supabase.removeChannel(channel) }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -219,6 +227,28 @@ export default function ReportsPage() {
       .gte("date", dateFrom).lte("date", dateTo)
       .order("date", { ascending: false })
     setParking(pv || [])
+
+    // Lease violations in range (incident_reports with lvl_issued), newest first.
+    // Pull their offenders in one batched query and attach to each row.
+    const { data: lv } = await supabase
+      .from("incident_reports").select("*")
+      .eq("community_id", community)
+      .eq("lvl_issued", true)
+      .gte("date", dateFrom).lte("date", dateTo)
+      .order("date", { ascending: false })
+    const lvRows = lv || []
+    const lvIds  = lvRows.map(r => r.id)
+    let offenders: any[] = []
+    if (lvIds.length > 0) {
+      const { data: vo } = await supabase
+        .from("violation_offenders").select("*")
+        .in("report_id", lvIds)
+      offenders = vo || []
+    }
+    const offByReport = offenders.reduce((m: Record<string, any[]>, o) => {
+      (m[o.report_id] = m[o.report_id] || []).push(o); return m
+    }, {})
+    setLeaseViols(lvRows.map(r => ({ ...r, _offenders: offByReport[r.id] || [] })))
 
     // Registered vehicles for this community (resident + visitor). Not date-
     // ranged — this is the current registry, surfaced for officer lookup.
@@ -375,6 +405,35 @@ export default function ReportsPage() {
     const a    = document.createElement("a")
     a.href = url
     a.download = `parking-violations-${dateFrom}-to-${dateTo}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function exportLeaseViolationsCSV() {
+    const header = ["Date", "Bldg", "Apt", "HOH", "Category", "Type", "Notice Level",
+      "Distribution", "LVL Posted", "HOH Ack", "Source", "Reliant #", "HPD #", "ASG #",
+      "Offenders", "Ban Hits", "Issued By"]
+    const rows = leaseViols.map(v => {
+      const offs = v._offenders || []
+      return [
+        v.date || "", v.building || "", v.apartment || "", v.hoh_name || "",
+        v.violation_category || "", v.violation_type || "", v.notice_level || "",
+        v.distribution_method || "", v.lvl_posted_date || "",
+        v.hoh_ack ? "Yes" : "", v.record_source || "",
+        v.reliant_case_no || "", v.hpd_report_no || "", v.asg_report_no || "",
+        offs.map((o: any) => o.name).filter(Boolean).join("; "),
+        offs.filter((o: any) => o.ban_match).map((o: any) => o.name).filter(Boolean).join("; "),
+        v.issued_by || "",
+      ]
+    })
+    const csv = [header, ...rows]
+      .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
+      .join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a")
+    a.href = url
+    a.download = `lease-violations-${dateFrom}-to-${dateTo}.csv`
     a.click()
     URL.revokeObjectURL(url)
   }
@@ -827,6 +886,81 @@ export default function ReportsPage() {
                   </div>
                 </div>
               ))}
+            </div>
+          </Section>
+        )
+      })()}
+
+      {/* ── LEASE VIOLATIONS ── (own gate; incident_reports with lvl_issued) */}
+      {community && !loading && leaseViols.length > 0 && (() => {
+        const byType = leaseViols.reduce((m: Record<string, number>, v) => {
+          const k = v.violation_type || "Other"; m[k] = (m[k] || 0) + 1; return m
+        }, {})
+        const leaseComplianceCount = leaseViols.filter(v => v.violation_category === "lease_compliance").length
+        const securityCount        = leaseViols.filter(v => v.violation_category === "security_community").length
+        const banHits = leaseViols.filter(v => (v._offenders || []).some((o: any) => o.ban_match)).length
+        return (
+          <Section label={`Lease Violations (${leaseViols.length})`}>
+            <div className="flex justify-end mb-3">
+              <button onClick={exportLeaseViolationsCSV}
+                className="px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700 border-none cursor-pointer">
+                ⬇ Export Lease Violations CSV
+              </button>
+            </div>
+
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+              <StatCard title="Violations"       value={leaseViols.length}     accent="amber"  sub={`${dayCount}d range`} />
+              <StatCard title="Lease Compliance"  value={leaseComplianceCount} accent="red"    sub="lease/compliance issues" />
+              <StatCard title="Security/Community" value={securityCount}       accent="orange" sub="security & community" />
+              <StatCard title="Ban Hits"          value={banHits}             accent="red"    sub="offender matched ban list" />
+            </div>
+
+            {/* By-type chips */}
+            <div className="flex flex-wrap gap-1.5 mb-4">
+              {Object.entries(byType).sort((a,b)=>b[1]-a[1]).map(([t, c]) => (
+                <span key={t} className="px-2.5 py-1 bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold rounded-full">
+                  {t} · {c}
+                </span>
+              ))}
+            </div>
+
+            {/* Violation list */}
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {leaseViols.map((v, i) => {
+                const offs    = v._offenders || []
+                const hasBan  = offs.some((o: any) => o.ban_match)
+                const offNames = offs.map((o: any) => o.name).filter(Boolean).join(", ")
+                const unit = [v.building, v.apartment].filter(Boolean).join(" / ") || "—"
+                return (
+                  <div key={v.id} className={`flex items-center gap-4 px-4 py-3 ${i < leaseViols.length - 1 ? "border-b border-gray-100" : ""}`}>
+                    <div className="font-mono font-semibold text-gray-800 w-28 flex-shrink-0 truncate">
+                      {unit}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-gray-800 truncate">
+                        {v.violation_type || "—"}{v.notice_level ? ` · ${v.notice_level}` : ""}
+                      </div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {[v.hoh_name, v.violation_category].filter(Boolean).join(" · ") || "—"}
+                      </div>
+                      {offNames && (
+                        <div className="text-xs text-gray-400 truncate mt-0.5">{offNames}</div>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                      {hasBan && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">⛔ Ban</span>}
+                      {v.record_source && v.record_source !== "officer" && (
+                        <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-bold rounded-full capitalize">{v.record_source}</span>
+                      )}
+                    </div>
+                    <div className="text-right text-xs text-gray-400 w-28 flex-shrink-0">
+                      <div>{v.date}{v.time ? ` · ${v.time}` : ""}</div>
+                      <div className="truncate">{v.issued_by || "—"}</div>
+                    </div>
+                  </div>
+                )
+              })}
             </div>
           </Section>
         )

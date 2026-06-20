@@ -105,102 +105,23 @@ export default function RentRollTab({
     } catch (e: any) { setImportError("Could not read file: " + e.message) }
   }
 
-  // Archive-on-change (item 27): the rent roll overwrites the HOH on turnover, so
-  // before replacing residents we snapshot the prior tenancy of any unit whose HOH
-  // changed into tenancy_history. This preserves the occupancy timeline that powers
-  // the unit-activity move-in/eviction markers and back-dated HOH attribution.
-  const HOH_RELS = new Set(["primary resident", "hoh", "head", "head of household"])
-  const isHohRel = (rel?: string | null) => HOH_RELS.has((rel || "").trim().toLowerCase())
-  const hohOf = (members: any[]) =>
-    (members.find(m => isHohRel(m.relationship))?.name || "").trim().toLowerCase()
-
-  const groupByUnit = (arr: any[]) => {
-    const m = new Map<string, any[]>()
-    for (const r of arr) {
-      const u = (r.unit_number || "").trim()
-      if (!m.has(u)) m.set(u, [])
-      m.get(u)!.push(r)
-    }
-    return m
-  }
-
+  // Atomic import via the import_rent_roll RPC (item 27): the whole swap — archive
+  // changed-HOH tenancies into tenancy_history, replace residents, rebuild units —
+  // runs in ONE transaction server-side, so a mid-import failure can never leave a
+  // partial roll. The server also enforces the admin gate and the data-loss guard
+  // (aborts if incoming residents < 50% of the live roll).
   async function confirmImport() {
     if (!communityId) { setImportError("No location selected."); return }
     setImportLoading(true); setImportError(""); setImportStatus("")
-
-    // 1) Load the CURRENT residents for this community (fresh, paginated).
-    let current: any[] = []
-    for (let page = 0; ; page++) {
-      const { data, error } = await supabase.from("residents").select("*")
-        .eq("community_id", communityId).range(page * 1000, (page + 1) * 1000 - 1)
-      if (error) { setImportError("Load current failed: " + error.message); setImportLoading(false); return }
-      if (!data || data.length === 0) break
-      current = current.concat(data)
-      if (data.length < 1000) break
-    }
-
-    // Safety guard: never let a truncated/wrong file wipe a populated roll. If the
-    // incoming named-resident count collapses vs. what's live, abort BEFORE deleting.
-    const curNamed = current.filter(r => r.name).length
-    const incNamed = importPreview.filter(r => r.name).length
-    if (curNamed > 0 && incNamed < curNamed * 0.5) {
-      setImportError(`Aborted to protect existing data: the file has ${incNamed} resident(s) but this location currently has ${curNamed}. That large drop looks wrong — re-check the export. Nothing was changed.`)
-      setImportLoading(false); return
-    }
-
-    // 2) Diff per unit; archive the prior household wherever the HOH changed (turnover).
-    const today      = new Date().toISOString().split("T")[0]
-    const curByUnit  = groupByUnit(current)
-    const incByUnit  = groupByUnit(importPreview)
-    const toArchive: any[] = []
-    for (const [unit, curMembers] of curByUnit) {
-      const incMembers = incByUnit.get(unit) || []
-      if (hohOf(curMembers) === hohOf(incMembers)) continue   // same HOH → not a turnover
-      // The prior tenants' true move-out isn't in the roll (it's blank while active),
-      // and Lease To must NOT be used as move-out (tenants renew). The incoming HOH's
-      // move-in is the actual turnover boundary; fall back to the import date.
-      const turnoverDate = incMembers.find(x => isHohRel(x.relationship))?.move_in || today
-      for (const m of curMembers) {
-        if (!m.name) continue                                  // skip vacant placeholders
-        toArchive.push({
-          resident_id: m.id, community_id: communityId, unit_number: unit,
-          name: m.name, relationship: m.relationship, is_hoh: isHohRel(m.relationship),
-          move_in: m.move_in, lease_from: m.lease_from, lease_to: m.lease_to ?? null,
-          move_out: m.move_out ?? turnoverDate,
-          archived_reason: "rent_roll_import",
-        })
-      }
-    }
-
-    // 3) Archive prior tenancies BEFORE overwriting.
-    for (let i = 0; i < toArchive.length; i += 200) {
-      const { error } = await supabase.from("tenancy_history").insert(toArchive.slice(i, i + 200))
-      if (error) { setImportError("Archive failed: " + error.message); setImportLoading(false); return }
-    }
-
-    // 4) Replace residents with the incoming roll, setting lifecycle fields.
-    const { error: delErr } = await supabase.from("residents").delete().eq("community_id", communityId)
-    if (delErr) { setImportError("Delete failed: " + delErr.message); setImportLoading(false); return }
-    const rows = importPreview.map(r => ({
-      ...r, community_id: communityId,
-      is_hoh: isHohRel(r.relationship), status: "active",
-    }))
-    for (let i = 0; i < rows.length; i += 200) {
-      const { error } = await supabase.from("residents").insert(rows.slice(i, i + 200))
-      if (error) { setImportError("Insert failed: " + error.message); setImportLoading(false); return }
-    }
-
-    // 5) Units (unchanged).
-    await supabase.from("units").delete().eq("community_id", communityId)
-    const uniqueUnits = importUnits.map(u => ({ unit_number: u.trim(), community_id: communityId }))
-    for (let i = 0; i < uniqueUnits.length; i += 200) {
-      await supabase.from("units").insert(uniqueUnits.slice(i, i + 200))
-    }
-
+    const { data, error } = await supabase.rpc("import_rent_roll", {
+      p_community_id: communityId,
+      p_rows: importPreview,
+    })
     setImportLoading(false)
-    const archivedUnits = new Set(toArchive.map(a => a.unit_number)).size
-    setImportStatus(`✅ ${rows.length} residents across ${uniqueUnits.length} units imported.` +
-      (archivedUnits ? ` ${archivedUnits} prior tenanc${archivedUnits === 1 ? "y" : "ies"} archived to history.` : ""))
+    if (error) { setImportError(error.message); return }
+    const res = (data || {}) as { imported?: number; units?: number; archived_units?: number }
+    setImportStatus(`✅ ${res.imported ?? 0} residents across ${res.units ?? 0} units imported.` +
+      (res.archived_units ? ` ${res.archived_units} prior tenanc${res.archived_units === 1 ? "y" : "ies"} archived to history.` : ""))
     setImportPreview([]); setShowImport(false)
     loadRentRoll()
   }
