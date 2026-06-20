@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import LeaseViolationForm from "@/components/LeaseViolationForm"
+import { SignedLink } from "@/components/SignedImage"
 
 // Property Hub "Lease Violations" tab: issue a violation (admin/supervisor) and
 // review the violations on file for the hub's selected community. Scoped to the
@@ -88,6 +89,14 @@ export default function LeaseViolationsTab({
                     {r.violation_type || "—"}{r.notice_level ? ` · ${r.notice_level}` : ""}
                   </div>
                   <div className="text-xs text-gray-500 truncate">{sub || "—"}</div>
+                  {(r.attachment_urls || []).length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {(r.attachment_urls as string[]).map((u, i) => (
+                        <SignedLink key={i} href={u} bucket="community-docs"
+                          className="text-xs text-blue-700 hover:text-blue-900 font-medium">📎 Attachment {i + 1}</SignedLink>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {ban && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">⛔ Ban</span>}
