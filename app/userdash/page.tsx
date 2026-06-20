@@ -11,6 +11,7 @@ import { maskSSN } from "@/lib/format"
 import { checkIsAdmin } from "@/lib/admin"
 import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/LocationField"
 import { buildHohSnapshot, EMPTY_SNAPSHOT } from "@/lib/hohSnapshot"
+import LeaseViolationForm from "@/components/LeaseViolationForm"
 import GateChecklist from "./GateChecklist"
 import { VehicleFields, EMPTY_VEHICLE, isNoPlate, displayPlate, type VehicleInfo } from "@/components/VehicleFields"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
@@ -71,7 +72,7 @@ interface OfficerOnDuty {
   off_duty_at:  string | null
   is_online:    boolean
 }
-type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "view"
+type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "violation" | "view"
 
 export default function UserDashboard() {
 
@@ -126,6 +127,8 @@ export default function UserDashboard() {
   const [reportMessage, setReportMessage] = useState("")
   const [reportError,   setReportError]   = useState("")
   const [pastReports,   setPastReports]   = useState<any[]>([])
+  const [rptSearch,     setRptSearch]     = useState("")
+  const [violationForId,setViolationForId]= useState<string | null>(null)
   const [reportsLoading,setReportsLoading]= useState(false)
   const [expandedReport,setExpandedReport]= useState<number | null>(null)
   const [editingReport, setEditingReport] = useState<number | null>(null)
@@ -211,6 +214,10 @@ export default function UserDashboard() {
   const [incFollowUp,    setIncFollowUp]    = useState(false)
   const [incOfficer,     setIncOfficer]     = useState("")
   const [incPhotoFiles,  setIncPhotoFiles]  = useState<File[]>([])
+  // Linked reference numbers (item 25) — same incident across Reliant / HPD / ASG systems
+  const [incReliantNo,   setIncReliantNo]   = useState("")
+  const [incHpdNo,       setIncHpdNo]       = useState("")
+  const [incAsgNo,       setIncAsgNo]       = useState("")
 
   // Passdown
   const [passdowns,       setPassdowns]       = useState<any[]>([])
@@ -575,6 +582,21 @@ export default function UserDashboard() {
       }
     }
 
+    // De-dup guard (item 25): the same incident can arrive from multiple systems.
+    // If a linked ref # already exists on another record, confirm before double-entering.
+    const dupOrs: string[] = []
+    if (incReliantNo.trim()) dupOrs.push(`reliant_case_no.eq.${incReliantNo.trim()}`)
+    if (incHpdNo.trim())     dupOrs.push(`hpd_report_no.eq.${incHpdNo.trim()}`)
+    if (incAsgNo.trim())     dupOrs.push(`asg_report_no.eq.${incAsgNo.trim()}`)
+    if (dupOrs.length) {
+      const { data: dupes } = await supabase.from("incident_reports")
+        .select("id").or(dupOrs.join(",")).limit(1)
+      if (dupes && dupes.length && !window.confirm(
+        "A report with one of these reference numbers already exists. Create this as a separate record anyway?")) {
+        setReportSaving(false); return
+      }
+    }
+
     // Freeze the HOH/household for the unit as of the incident date (items 26/27).
     const incSnap = incLoc.location_type === "unit"
       ? await buildHohSnapshot(incCommunity, incLoc.unit_number, incDate)
@@ -587,6 +609,7 @@ export default function UserDashboard() {
       building: incLoc.building, apartment: incLoc.apartment, common_area: incLoc.common_area,
       hoh_name: incSnap.hoh_name, hoh_resident_id: incSnap.hoh_resident_id,
       household_snapshot: incSnap.household_snapshot,
+      reliant_case_no: incReliantNo || null, hpd_report_no: incHpdNo || null, asg_report_no: incAsgNo || null,
       persons_involved: incPersons, description: incDescription,
       action_taken: incAction, follow_up_required: incFollowUp,
       photo_urls: photoUrls.length ? photoUrls : null,
@@ -617,6 +640,7 @@ export default function UserDashboard() {
       })
     }
     setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLoc(EMPTY_LOCATION); setIncFollowUp(false); setIncPhotoFiles([])
+    setIncReliantNo(""); setIncHpdNo(""); setIncAsgNo("")
     logActivity("created", "Incident", "", `Incident report submitted — ${incDate}`)
   }
 
@@ -967,6 +991,8 @@ export default function UserDashboard() {
       Type: r._type, Date: r.date, Time: r.time || "",
       Officer: r.officer_name || r.officer || "", Shift: r.shift || "",
       "Incident Type": r.incident_type || "", Location: r.location || "",
+      "Building": r.building || "", "Apartment": r.apartment || "", "HOH": r.hoh_name || "",
+      "Reliant #": r.reliant_case_no || "", "HPD #": r.hpd_report_no || "", "ASG #": r.asg_report_no || "",
       "Persons Involved": r.persons_involved || "",
       "Subject Name": r.first_name ? `${r.first_name} ${r.last_name}` : "",
       Narrative: r.narrative || r.description || r.notes || "",
@@ -1158,6 +1184,17 @@ export default function UserDashboard() {
     : passdowns
 
   const displayedBolos = boloShowAll ? bolos : bolos.filter(b => b.active)
+
+  // View Reports text search — across type, location/unit, HOH, people, officer, and linked ref #s.
+  const displayedReports = (() => {
+    const q = rptSearch.trim().toLowerCase()
+    if (!q) return pastReports
+    return pastReports.filter(r => [
+      r._type, r.incident_type, r.violation_type, r.location, r.building, r.apartment,
+      r.hoh_name, r.persons_involved, r.first_name, r.last_name, r.officer_name, r.officer,
+      r.reliant_case_no, r.hpd_report_no, r.asg_report_no, r.plate, r.notes, r.description, r.narrative,
+    ].filter(Boolean).join(" ").toLowerCase().includes(q))
+  })()
   const activeBoloCount = bolos.filter(b => b.active).length
 
   const getCommunityName = (id: string) => communities.find(c => c.id === id)?.name || ""
@@ -1565,6 +1602,7 @@ export default function UserDashboard() {
             <button className={rTabCls("contact")}  onClick={() => setReportTab("contact")}>📋 Field Contact</button>
             <button className={rTabCls("vfi")}      onClick={() => setReportTab("vfi")}>🚗 Vehicle FI</button>
             <button className={rTabCls("parking")}  onClick={() => setReportTab("parking")}>🅿️ Parking Violation</button>
+            <button className={rTabCls("violation")} onClick={() => setReportTab("violation")}>⚖️ Lease Violation</button>
             <button className={rTabCls("view")}     onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
           </div>
 
@@ -1668,6 +1706,14 @@ export default function UserDashboard() {
                     ))}
                   </div>
                 )}
+              </div>
+              <div className="mb-4">
+                <label className={labelCls}>Linked Reference #s <span className="text-gray-400 font-normal">(optional — ties this record across systems)</span></label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <input value={incReliantNo} onChange={e => setIncReliantNo(e.target.value)} placeholder="Reliant case #" className={inputCls} />
+                  <input value={incHpdNo} onChange={e => setIncHpdNo(e.target.value)} placeholder="HPD report #" className={inputCls} />
+                  <input value={incAsgNo} onChange={e => setIncAsgNo(e.target.value)} placeholder="ASG report #" className={inputCls} />
+                </div>
               </div>
               <div className="mb-5 flex items-center gap-2">
                 <input type="checkbox" id="followup" checked={incFollowUp} onChange={e => setIncFollowUp(e.target.checked)} className="w-4 h-4 accent-blue-700" />
@@ -1962,11 +2008,25 @@ export default function UserDashboard() {
             </div>
           )}
 
+          {/* LEASE VIOLATION (standalone — community violation or management-issued late rent) */}
+          {reportTab === "violation" && (
+            <div className="max-w-2xl">
+              <h3 className="text-lg font-bold mb-1 text-gray-800">Issue Lease Violation</h3>
+              <p className="text-xs text-gray-500 mb-4">Standalone violation with no prior incident (e.g. trash/noise, or a management-issued late-rent notice). To attach a violation to an existing incident, use <span className="font-medium">View Reports → Issue Lease Violation</span>.</p>
+              <LeaseViolationForm
+                communities={communities}
+                defaultCommunityId={incCommunity || communityId}
+                isAdmin={isAdmin}
+                onSaved={() => { setReportMessage("✅ Lease violation issued."); loadPastReports() }}
+              />
+            </div>
+          )}
+
           {/* VIEW REPORTS */}
           {reportTab === "view" && (
             <div>
               {pastReports.length > 0 && (
-                <div className="flex gap-2 mb-5">
+                <div className="flex flex-wrap gap-2 mb-5 items-center">
                   <button onClick={exportCSV}
                     className="px-4 py-2 bg-green-700 text-white text-xs font-semibold rounded-lg hover:bg-green-800 border-none cursor-pointer">
                     ⬇ Export CSV
@@ -1975,11 +2035,15 @@ export default function UserDashboard() {
                     className="px-4 py-2 bg-gray-700 text-white text-xs font-semibold rounded-lg hover:bg-gray-800 border-none cursor-pointer">
                     🖨 Print / PDF
                   </button>
+                  <input value={rptSearch} onChange={e => setRptSearch(e.target.value)}
+                    placeholder="Search type, unit, HOH, name, Reliant/HPD/ASG #…"
+                    className="flex-1 min-w-[220px] px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
                 </div>
               )}
               {reportsLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading reports...</div>}
               {!reportsLoading && pastReports.length === 0 && <div className="text-gray-500 text-sm py-8 text-center">No reports submitted yet.</div>}
-              {!reportsLoading && pastReports.map((r, i) => {
+              {!reportsLoading && pastReports.length > 0 && displayedReports.length === 0 && <div className="text-gray-500 text-sm py-8 text-center">No reports match “{rptSearch}”.</div>}
+              {!reportsLoading && displayedReports.map((r, i) => {
                 const badgeCls =
                   r._type === "Incident"          ? "bg-red-100 text-red-700" :
                   r._type === "Field Contact"     ? "bg-purple-100 text-purple-700" :
@@ -2057,9 +2121,27 @@ export default function UserDashboard() {
                               className="px-4 py-1.5 bg-red-700 text-white text-xs font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
                               🗑 Delete
                             </button>
+                            {isAdmin && r._type === "Incident" && (
+                              <button onClick={() => setViolationForId(violationForId === r.id ? null : r.id)}
+                                className="px-4 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 border-none cursor-pointer">
+                                ⚖️ {r.lvl_issued ? "Edit Violation" : "Issue Violation"}
+                              </button>
+                            )}
                           </>
                         )}
                       </div>
+
+                      {violationForId === r.id && (
+                        <div className="mb-4 border border-amber-300 bg-amber-50 rounded-lg p-4">
+                          <LeaseViolationForm
+                            communities={communities}
+                            defaultCommunityId={r.community_id || communityId}
+                            existingRecord={{ id: r.id, community_id: r.community_id, building: r.building, apartment: r.apartment, hoh_name: r.hoh_name, location: r.location }}
+                            isAdmin={isAdmin}
+                            onSaved={() => { setViolationForId(null); loadPastReports() }}
+                          />
+                        </div>
+                      )}
 
                       {editingReport === i ? (
                         /* ── EDIT MODE ── */
@@ -2082,6 +2164,12 @@ export default function UserDashboard() {
                             <input value={editFields.incident_type || ""} onChange={e => setEditFields(f => ({ ...f, incident_type: e.target.value }))} className={inputCls} /></div>}
                           {r.persons_involved !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Persons Involved</label>
                             <input value={editFields.persons_involved || ""} onChange={e => setEditFields(f => ({ ...f, persons_involved: e.target.value }))} className={inputCls} /></div>}
+                          {r.reliant_case_no !== undefined && <div><label className={labelCls}>Reliant case #</label>
+                            <input value={editFields.reliant_case_no || ""} onChange={e => setEditFields(f => ({ ...f, reliant_case_no: e.target.value }))} className={inputCls} /></div>}
+                          {r.hpd_report_no !== undefined && <div><label className={labelCls}>HPD report #</label>
+                            <input value={editFields.hpd_report_no || ""} onChange={e => setEditFields(f => ({ ...f, hpd_report_no: e.target.value }))} className={inputCls} /></div>}
+                          {r.asg_report_no !== undefined && <div><label className={labelCls}>ASG report #</label>
+                            <input value={editFields.asg_report_no || ""} onChange={e => setEditFields(f => ({ ...f, asg_report_no: e.target.value }))} className={inputCls} /></div>}
                           {r.reason !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Reason</label>
                             <input value={editFields.reason || ""} onChange={e => setEditFields(f => ({ ...f, reason: e.target.value }))} className={inputCls} /></div>}
                           {/* Vehicle FI edit fields */}
@@ -2119,6 +2207,11 @@ export default function UserDashboard() {
                             {r.weather          && <Field label="Weather"        value={r.weather} />}
                             {r.incident_type    && <Field label="Incident Type"  value={r.incident_type} />}
                             {r.location         && <Field label="Location"       value={r.location} />}
+                            {(r.building || r.apartment) && <Field label="Bldg / Apt" value={[r.building, r.apartment].filter(Boolean).join(" / ")} />}
+                            {r.hoh_name         && <Field label="HOH"            value={r.hoh_name} />}
+                            {r.reliant_case_no  && <Field label="Reliant #"      value={r.reliant_case_no} />}
+                            {r.hpd_report_no    && <Field label="HPD #"          value={r.hpd_report_no} />}
+                            {r.asg_report_no    && <Field label="ASG #"          value={r.asg_report_no} />}
                             {r.persons_involved && <Field label="Persons"        value={r.persons_involved} />}
                             {r.first_name       && <Field label="Subject"        value={`${r.first_name} ${r.last_name}`} />}
                             {r.dob              && <Field label="DOB"            value={r.dob} />}
@@ -2137,7 +2230,17 @@ export default function UserDashboard() {
                             {r.violation_type   && <Field label="Violation Type"  value={r.violation_type} />}
                             {r.space            && <Field label="Space"           value={r.space} />}
                             {r.tow_requested    && <Field label="Tow"             value={r.tow_reason ? `Requested — ${r.tow_reason}` : "Requested"} />}
+                            {r.lvl_issued       && <Field label="Violation Type"  value={r.violation_type || "—"} />}
+                            {r.lvl_issued       && <Field label="Category"        value={r.violation_category === "lease_compliance" ? "Lease compliance" : "Security / community"} />}
+                            {r.lvl_issued && r.notice_level        && <Field label="Notice Level"   value={r.notice_level} />}
+                            {r.lvl_issued && r.distribution_method && <Field label="Distribution"   value={r.distribution_method} />}
+                            {r.lvl_issued && r.lvl_posted_date     && <Field label="LVL Posted"     value={r.lvl_posted_date} />}
+                            {r.lvl_issued && r.issued_by           && <Field label="Issued By"      value={r.issued_by} />}
+                            {r.record_source && r.record_source !== "officer" && <Field label="Source" value={r.record_source} />}
                           </div>
+                          {r.lvl_issued && (
+                            <div className="bg-amber-50 border border-amber-300 text-amber-900 text-sm px-4 py-2 rounded-lg font-medium mb-3">⚖️ Lease violation issued{r.hoh_ack ? " · HOH delivery acknowledged" : ""}.</div>
+                          )}
                           {r.bolo_match && (
                             <div className="bg-red-50 border border-red-300 text-red-800 text-sm px-4 py-2 rounded-lg font-medium mb-3">🚨 Plate matched an active BOLO at the time this was logged.</div>
                           )}

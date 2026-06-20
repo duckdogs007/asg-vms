@@ -50,9 +50,22 @@ export default function RentRollTab({
     setLoading(false)
   }
 
-  function excelDateToISO(serial: any): string | null {
-    if (!serial || typeof serial !== "number") return null
-    return new Date((serial - 25569) * 86400 * 1000).toISOString().split("T")[0]
+  // Robust date cell -> ISO. Handles Excel serial numbers (.xlsx) AND
+  // "M/D/YYYY" strings (.csv export), returning null for blanks/unparseable.
+  function toISODate(v: any): string | null {
+    if (v == null || v === "") return null
+    if (typeof v === "number") {
+      return new Date((v - 25569) * 86400 * 1000).toISOString().split("T")[0]
+    }
+    const s = String(v).trim()
+    if (!s) return null
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+    if (m) {
+      const yr = m[3].length === 2 ? "20" + m[3] : m[3]
+      return `${yr}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`
+    }
+    const t = Date.parse(s)
+    return isNaN(t) ? null : new Date(t).toISOString().split("T")[0]
   }
 
   async function handleImportFileSelect(file: File) {
@@ -66,16 +79,24 @@ export default function RentRollTab({
       const residents: any[] = []
       const allUnits = new Set<string>()
       let currentUnit: string | null = null
+      // Yardi columns: 3=Name 4=Relationship 7=Move In 8=Lease From 9=Lease To 10=Move Out.
+      // NB: Lease To is a renewable lease-term end — NOT a move-out date.
+      const dates = (row: any[]) => ({
+        move_in:    toISODate(row[7]),
+        lease_from: toISODate(row[8]),
+        lease_to:   toISODate(row[9]),
+        move_out:   toISODate(row[10]),
+      })
       for (const row of rows) {
         const col0 = row[0]
         if (!col0 && !row[3]) continue
         if (typeof col0 === "string" && col0.startsWith("   ")) {
           currentUnit = col0.trim()
           allUnits.add(currentUnit)
-          if (row[3]) residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: excelDateToISO(row[7]) })
-          else residents.push({ unit_number: currentUnit, name: null, relationship: null, move_in: null })
+          if (row[3]) residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), ...dates(row) })
+          else residents.push({ unit_number: currentUnit, name: null, relationship: null, move_in: null, lease_from: null, lease_to: null, move_out: null })
         } else if (!col0 && row[3] && currentUnit) {
-          residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: null })
+          residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), ...dates(row) })
         }
       }
       if (!residents.length) { setImportError("No resident data found."); return }
@@ -84,23 +105,23 @@ export default function RentRollTab({
     } catch (e: any) { setImportError("Could not read file: " + e.message) }
   }
 
+  // Atomic import via the import_rent_roll RPC (item 27): the whole swap — archive
+  // changed-HOH tenancies into tenancy_history, replace residents, rebuild units —
+  // runs in ONE transaction server-side, so a mid-import failure can never leave a
+  // partial roll. The server also enforces the admin gate and the data-loss guard
+  // (aborts if incoming residents < 50% of the live roll).
   async function confirmImport() {
     if (!communityId) { setImportError("No location selected."); return }
-    setImportLoading(true); setImportError("")
-    const { error: delErr } = await supabase.from("residents").delete().eq("community_id", communityId)
-    if (delErr) { setImportError("Delete failed: " + delErr.message); setImportLoading(false); return }
-    const rows = importPreview.map(r => ({ ...r, community_id: communityId }))
-    for (let i = 0; i < rows.length; i += 200) {
-      const { error } = await supabase.from("residents").insert(rows.slice(i, i + 200))
-      if (error) { setImportError("Insert failed: " + error.message); setImportLoading(false); return }
-    }
-    await supabase.from("units").delete().eq("community_id", communityId)
-    const uniqueUnits = importUnits.map(u => ({ unit_number: u.trim(), community_id: communityId }))
-    for (let i = 0; i < uniqueUnits.length; i += 200) {
-      await supabase.from("units").insert(uniqueUnits.slice(i, i + 200))
-    }
+    setImportLoading(true); setImportError(""); setImportStatus("")
+    const { data, error } = await supabase.rpc("import_rent_roll", {
+      p_community_id: communityId,
+      p_rows: importPreview,
+    })
     setImportLoading(false)
-    setImportStatus(`✅ ${rows.length} residents across ${uniqueUnits.length} units imported.`)
+    if (error) { setImportError(error.message); return }
+    const res = (data || {}) as { imported?: number; units?: number; archived_units?: number }
+    setImportStatus(`✅ ${res.imported ?? 0} residents across ${res.units ?? 0} units imported.` +
+      (res.archived_units ? ` ${res.archived_units} prior tenanc${res.archived_units === 1 ? "y" : "ies"} archived to history.` : ""))
     setImportPreview([]); setShowImport(false)
     loadRentRoll()
   }
@@ -132,7 +153,7 @@ export default function RentRollTab({
           <h3 className="font-bold text-gray-800 mb-1">Import Rent Roll (.xlsx from Yardi)</h3>
           <p className="text-sm text-gray-600 mb-3">
             Importing to <strong>{communityName || "the selected location"}</strong>.
-            <span className="text-orange-600"> ⚠ Replaces all existing residents/units for this location.</span>
+            <span className="text-orange-600"> ⚠ Replaces the current residents/units; any unit whose Head of Household changed is archived to tenancy history first.</span>
           </p>
           <label className={labelCls}>Select File</label>
           <input type="file" accept=".xlsx,.xls,.csv"
