@@ -50,9 +50,22 @@ export default function RentRollTab({
     setLoading(false)
   }
 
-  function excelDateToISO(serial: any): string | null {
-    if (!serial || typeof serial !== "number") return null
-    return new Date((serial - 25569) * 86400 * 1000).toISOString().split("T")[0]
+  // Robust date cell -> ISO. Handles Excel serial numbers (.xlsx) AND
+  // "M/D/YYYY" strings (.csv export), returning null for blanks/unparseable.
+  function toISODate(v: any): string | null {
+    if (v == null || v === "") return null
+    if (typeof v === "number") {
+      return new Date((v - 25569) * 86400 * 1000).toISOString().split("T")[0]
+    }
+    const s = String(v).trim()
+    if (!s) return null
+    const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/)
+    if (m) {
+      const yr = m[3].length === 2 ? "20" + m[3] : m[3]
+      return `${yr}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`
+    }
+    const t = Date.parse(s)
+    return isNaN(t) ? null : new Date(t).toISOString().split("T")[0]
   }
 
   async function handleImportFileSelect(file: File) {
@@ -66,16 +79,24 @@ export default function RentRollTab({
       const residents: any[] = []
       const allUnits = new Set<string>()
       let currentUnit: string | null = null
+      // Yardi columns: 3=Name 4=Relationship 7=Move In 8=Lease From 9=Lease To 10=Move Out.
+      // NB: Lease To is a renewable lease-term end — NOT a move-out date.
+      const dates = (row: any[]) => ({
+        move_in:    toISODate(row[7]),
+        lease_from: toISODate(row[8]),
+        lease_to:   toISODate(row[9]),
+        move_out:   toISODate(row[10]),
+      })
       for (const row of rows) {
         const col0 = row[0]
         if (!col0 && !row[3]) continue
         if (typeof col0 === "string" && col0.startsWith("   ")) {
           currentUnit = col0.trim()
           allUnits.add(currentUnit)
-          if (row[3]) residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: excelDateToISO(row[7]) })
-          else residents.push({ unit_number: currentUnit, name: null, relationship: null, move_in: null })
+          if (row[3]) residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), ...dates(row) })
+          else residents.push({ unit_number: currentUnit, name: null, relationship: null, move_in: null, lease_from: null, lease_to: null, move_out: null })
         } else if (!col0 && row[3] && currentUnit) {
-          residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), move_in: null })
+          residents.push({ unit_number: currentUnit, name: String(row[3]), relationship: String(row[4] || ""), ...dates(row) })
         }
       }
       if (!residents.length) { setImportError("No resident data found."); return }
@@ -118,6 +139,15 @@ export default function RentRollTab({
       if (data.length < 1000) break
     }
 
+    // Safety guard: never let a truncated/wrong file wipe a populated roll. If the
+    // incoming named-resident count collapses vs. what's live, abort BEFORE deleting.
+    const curNamed = current.filter(r => r.name).length
+    const incNamed = importPreview.filter(r => r.name).length
+    if (curNamed > 0 && incNamed < curNamed * 0.5) {
+      setImportError(`Aborted to protect existing data: the file has ${incNamed} resident(s) but this location currently has ${curNamed}. That large drop looks wrong — re-check the export. Nothing was changed.`)
+      setImportLoading(false); return
+    }
+
     // 2) Diff per unit; archive the prior household wherever the HOH changed (turnover).
     const today      = new Date().toISOString().split("T")[0]
     const curByUnit  = groupByUnit(current)
@@ -126,13 +156,17 @@ export default function RentRollTab({
     for (const [unit, curMembers] of curByUnit) {
       const incMembers = incByUnit.get(unit) || []
       if (hohOf(curMembers) === hohOf(incMembers)) continue   // same HOH → not a turnover
+      // The prior tenants' true move-out isn't in the roll (it's blank while active),
+      // and Lease To must NOT be used as move-out (tenants renew). The incoming HOH's
+      // move-in is the actual turnover boundary; fall back to the import date.
+      const turnoverDate = incMembers.find(x => isHohRel(x.relationship))?.move_in || today
       for (const m of curMembers) {
         if (!m.name) continue                                  // skip vacant placeholders
         toArchive.push({
           resident_id: m.id, community_id: communityId, unit_number: unit,
           name: m.name, relationship: m.relationship, is_hoh: isHohRel(m.relationship),
           move_in: m.move_in, lease_from: m.lease_from, lease_to: m.lease_to ?? null,
-          move_out: m.move_out ?? today,   // actual move-out isn't in the file → import date
+          move_out: m.move_out ?? turnoverDate,
           archived_reason: "rent_roll_import",
         })
       }
