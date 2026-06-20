@@ -231,6 +231,9 @@ export default function UserDashboard() {
   const [pdMessage,       setPdMessage]       = useState("")
   const [pdError,         setPdError]         = useState("")
   const [pdFilterComm,    setPdFilterComm]    = useState("")
+  const [pdEditingId,     setPdEditingId]     = useState<string | null>(null)
+  const [pdEditNotes,     setPdEditNotes]     = useState("")
+  const [pdSendingId,     setPdSendingId]     = useState<string | null>(null)
 
   // BOLO
   const [bolos,          setBolos]          = useState<any[]>([])
@@ -1030,27 +1033,52 @@ export default function UserDashboard() {
   async function savePassdown() {
     if (!pdNotes) { setPdError("Passdown notes are required."); return }
     setPdSaving(true); setPdError(""); setPdMessage("")
-    const { data: created, error } = await supabase.from("passdown_logs").insert({
+    // Save as a draft only — sending the email is now a separate, reviewed step
+    // so the narrative can be edited before it goes out to the next shift.
+    const { error } = await supabase.from("passdown_logs").insert({
       date: pdDate, shift: pdShift,
       community_id: pdCommunity || null,
       officer_name: pdOfficer, notes: pdNotes,
       created_at: new Date().toISOString()
-    }).select("id").single()
+    })
     setPdSaving(false)
     if (error) { setPdError(error.message); return }
-    setPdMessage("✅ Passdown submitted.")
-    // Fire-and-forget email notification to active recipients. Failures
-    // are logged but don't block the UI flow.
-    if ((created as { id?: string } | null)?.id) {
-      fetch("/api/passdowns/notify", {
-        method:  "POST",
-        headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ id: (created as { id: string }).id }),
-      }).catch(e => console.error("[passdown notify]", e))
-    }
-    logActivity("created", "Passdown", "", `Passdown submitted — ${pdDate} ${pdShift}`)
+    setPdMessage("✅ Saved as a draft — review it below and click Send when ready.")
+    logActivity("created", "Passdown", "", `Passdown saved — ${pdDate} ${pdShift}`)
     setPdNotes("")
     loadPassdowns()
+  }
+
+  function startEditPassdown(p: any) { setPdEditingId(p.id); setPdEditNotes(p.notes || "") }
+
+  async function saveEditPassdown(p: any) {
+    const { error } = await supabase.from("passdown_logs").update({ notes: pdEditNotes }).eq("id", p.id)
+    if (error) { alert("Edit failed: " + error.message); return }
+    await logActivity("edited", "Passdown", p.id, `Edited passdown — ${p.date} ${p.shift}`)
+    setPdEditingId(null); setPdEditNotes(""); loadPassdowns()
+  }
+
+  async function sendPassdown(p: any) {
+    const msg = p.sent_at
+      ? "This passdown was already sent. Send it again to the next-shift recipients?"
+      : "Send this passdown to the next-shift recipients now?"
+    if (!window.confirm(msg)) return
+    setPdSendingId(p.id)
+    try {
+      const res = await fetch("/api/passdowns/notify", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ id: p.id }),
+      })
+      if (!res.ok) throw new Error(`notify failed (${res.status})`)
+      await supabase.from("passdown_logs").update({ sent_at: new Date().toISOString() }).eq("id", p.id)
+      await logActivity("sent", "Passdown", p.id, `Passdown sent — ${p.date} ${p.shift}`)
+      loadPassdowns()
+    } catch (e: any) {
+      alert("Send failed: " + (e?.message || e))
+    } finally {
+      setPdSendingId(null)
+    }
   }
 
   // ── BOLO ──
@@ -2315,8 +2343,9 @@ export default function UserDashboard() {
                 {pdMessage && <div className="bg-green-50 border border-green-200 text-green-700 px-3 py-2 rounded text-sm mb-3">{pdMessage}</div>}
                 <button onClick={savePassdown} disabled={pdSaving}
                   className="px-6 py-2.5 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
-                  {pdSaving ? "Submitting..." : "Submit Passdown"}
+                  {pdSaving ? "Saving..." : "Save Passdown (draft)"}
                 </button>
+                <p className="text-xs text-gray-400 mt-2">Saving does not send it. Review &amp; edit the narrative in <span className="font-medium">Recent Passdowns</span>, then click Send.</p>
               </div>
             </div>
 
@@ -2347,7 +2376,32 @@ export default function UserDashboard() {
                       <div>{p.officer_name}</div>
                     </div>
                   </div>
-                  <div className="text-sm text-gray-800 whitespace-pre-wrap">{p.notes}</div>
+                  {pdEditingId === p.id ? (
+                    <div>
+                      <textarea rows={6} value={pdEditNotes} onChange={e => setPdEditNotes(e.target.value)} className={textareaCls} />
+                      <div className="flex gap-2 mt-2">
+                        <button onClick={() => saveEditPassdown(p)}
+                          className="px-3 py-1.5 bg-green-700 text-white text-xs font-semibold rounded-lg hover:bg-green-800 border-none cursor-pointer">💾 Save</button>
+                        <button onClick={() => { setPdEditingId(null); setPdEditNotes("") }}
+                          className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-300 border-none cursor-pointer">Cancel</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="text-sm text-gray-800 whitespace-pre-wrap mb-3">{p.notes}</div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        {p.sent_at
+                          ? <span className="text-xs font-semibold text-green-700 bg-green-50 border border-green-200 px-2 py-0.5 rounded-full">✓ Sent {new Date(p.sent_at).toLocaleString()}</span>
+                          : <span className="text-xs font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">Draft — not sent</span>}
+                        <button onClick={() => startEditPassdown(p)}
+                          className="px-3 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer">✏️ Edit</button>
+                        <button onClick={() => sendPassdown(p)} disabled={pdSendingId === p.id}
+                          className="px-3 py-1.5 bg-emerald-700 text-white text-xs font-semibold rounded-lg hover:bg-emerald-800 border-none cursor-pointer disabled:opacity-50">
+                          {pdSendingId === p.id ? "Sending…" : (p.sent_at ? "📨 Resend" : "📨 Send")}
+                        </button>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>
