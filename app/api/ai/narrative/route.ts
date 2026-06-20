@@ -2,36 +2,43 @@ import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 
 // POST /api/ai/narrative
-// AI assist for the Incident Report narrative (item 28). Auth-required. Takes the
-// report's structured fields + the officer's rough notes / current draft and returns
-// a cleaned, professional third-person narrative.
+// AI assist for report narratives (item 28). Auth-required. Takes a report's
+// rough notes / current draft (+ optional structured context fields) and returns
+// a cleaned, professional write-up. Works for any report type via `kind`.
 //
 // Uses Google Gemini (free tier) via the REST API — no SDK dependency. Set
 // GEMINI_API_KEY in the environment (free key from https://aistudio.google.com).
 // GEMINI_MODEL optionally overrides the model (default gemini-2.5-flash).
-// The model receives incident PII (names, locations) — mind that when reviewing.
+// The model receives report PII (names, locations) — mind that when reviewing.
 export const runtime = "nodejs"
 
 type Body = {
+  kind?: string
   mode?: "draft" | "tighten" | "expand" | "formal"
   notes?: string
-  fields?: {
-    incident_type?: string
-    location?: string
-    building?: string
-    apartment?: string
-    persons_involved?: string
-    action_taken?: string
-    date?: string
-    time?: string
-  }
+  fields?: Record<string, any>
 }
 
 const MODE_TASK: Record<string, string> = {
-  draft:   "Turn the officer's rough notes below into a complete, well-organized incident narrative.",
-  tighten: "Tighten and condense the narrative below — remove redundancy and filler while keeping every fact.",
-  expand:  "Expand the narrative below into a fuller account, adding clarity and structure. Do NOT invent facts not present in the notes or fields.",
-  formal:  "Rewrite the narrative below in a more formal, professional tone suitable for a security incident report.",
+  draft:   "Turn the officer's rough notes below into a complete, well-organized write-up.",
+  tighten: "Tighten and condense the text below — remove redundancy and filler while keeping every fact.",
+  expand:  "Expand the text below into a fuller account, adding clarity and structure. Do NOT invent facts not present in the notes or fields.",
+  formal:  "Rewrite the text below in a more formal, professional tone.",
+}
+
+// How the model is told to frame each report type.
+const KIND_FRAMING: Record<string, string> = {
+  incident:   "the narrative section of a security incident report",
+  daily:      "the narrative for a security officer's daily activity / patrol log",
+  contact:    "a field-contact / subject-interview report written by a security officer",
+  vehicle_fi: "a vehicle field-interview report written by a security officer",
+  parking:    "the notes for a parking-violation report",
+  passdown:   "shift passdown notes for the next officer — what happened this shift, ongoing situations, and items needing follow-up",
+  violation:  "the description of a lease violation",
+}
+
+function humanize(key: string): string {
+  return key.replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase())
 }
 
 export async function POST(req: Request) {
@@ -52,28 +59,25 @@ export async function POST(req: Request) {
   }
 
   const mode = input.mode && MODE_TASK[input.mode] ? input.mode : "draft"
+  const framing = (input.kind && KIND_FRAMING[input.kind]) || "a professional security report"
   const notes = String(input.notes || "").slice(0, 8000)
   if (!notes.trim()) return NextResponse.json({ error: "Nothing to work with — add some notes first." }, { status: 400 })
 
   const f = input.fields || {}
-  const unit = [f.building, f.apartment].filter(Boolean).join("-")
-  const details = [
-    f.incident_type && `Incident type: ${f.incident_type}`,
-    (unit || f.location) && `Location: ${[unit, f.location].filter(Boolean).join(" — ")}`,
-    (f.date || f.time) && `When: ${[f.date, f.time].filter(Boolean).join(" ")}`,
-    f.persons_involved && `Persons involved: ${f.persons_involved}`,
-    f.action_taken && `Action taken: ${f.action_taken}`,
-  ].filter(Boolean).join("\n") || "(no structured details provided)"
+  const details = Object.entries(f)
+    .filter(([, v]) => v != null && String(v).trim() !== "")
+    .map(([k, v]) => `${humanize(k)}: ${String(v).trim()}`)
+    .join("\n") || "(no structured details provided)"
 
-  const instructions =
-    "You help a licensed security officer write the narrative section of an incident report. " +
+  const system =
+    `You help a licensed security officer write ${framing}. ` +
     "Write in clear, professional, factual third person, past tense. Use only the facts given in the " +
     "structured details and the officer's notes — never invent names, times, outcomes, or events. " +
     "Do not add legal conclusions or opinions. Keep it concise and readable. " +
-    "Output ONLY the finished narrative text — no preamble, headings, labels, bullet points, or commentary."
+    "Output ONLY the finished text — no preamble, headings, labels, bullet points, or commentary."
 
   const prompt =
-    `${instructions}\n\n` +
+    `${system}\n\n` +
     `Structured details:\n${details}\n\n` +
     `Officer's notes / current draft:\n${notes}\n\n` +
     `Task: ${MODE_TASK[mode]}`

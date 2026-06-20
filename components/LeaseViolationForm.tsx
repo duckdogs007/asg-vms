@@ -13,6 +13,7 @@ import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/LocationField"
 import { buildHohSnapshot, EMPTY_SNAPSHOT } from "@/lib/hohSnapshot"
+import AiAssist from "@/components/AiAssist"
 
 const inputCls = "w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
 const labelCls = "block text-xs font-medium text-gray-600 mb-1"
@@ -421,7 +422,11 @@ export default function LeaseViolationForm({
           </div>
 
           <div className="sm:col-span-2">
-            <label className={labelCls}>Description (optional)</label>
+            <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+              <label className={labelCls + " mb-0"}>Description (optional)</label>
+              <AiAssist kind="violation" value={description} onChange={setDescription}
+                fields={{ violation_type: violationTypes.find(v => v.id === violationTypeId)?.label || otherType, category: category === "lease_compliance" ? "Lease compliance" : "Security/community", notice_level: noticeLevel }} />
+            </div>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}

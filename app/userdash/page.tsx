@@ -12,6 +12,7 @@ import { checkIsAdmin } from "@/lib/admin"
 import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/LocationField"
 import { buildHohSnapshot, EMPTY_SNAPSHOT } from "@/lib/hohSnapshot"
 import LeaseViolationForm from "@/components/LeaseViolationForm"
+import AiAssist from "@/components/AiAssist"
 import GateChecklist from "./GateChecklist"
 import { VehicleFields, EMPTY_VEHICLE, isNoPlate, displayPlate, type VehicleInfo } from "@/components/VehicleFields"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
@@ -214,8 +215,6 @@ export default function UserDashboard() {
   const [incFollowUp,    setIncFollowUp]    = useState(false)
   const [incOfficer,     setIncOfficer]     = useState("")
   const [incPhotoFiles,  setIncPhotoFiles]  = useState<File[]>([])
-  const [aiBusy,         setAiBusy]         = useState<string | null>(null)  // which narrative action is running
-  const [aiError,        setAiError]        = useState("")
   // Linked reference numbers (item 25) — same incident across Reliant / HPD / ASG systems
   const [incReliantNo,   setIncReliantNo]   = useState("")
   const [incHpdNo,       setIncHpdNo]       = useState("")
@@ -568,38 +567,6 @@ export default function UserDashboard() {
     setReportMessage("✅ Daily log submitted.")
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather("")
     logActivity("created", "Daily Log", "", `Daily log submitted — ${dailyDate}`)
-  }
-
-  // AI narrative assist (item 28) — sends the incident's structured fields + the
-  // current description to /api/ai/narrative and replaces the description with the
-  // cleaned, professional write-up. Officer reviews/edits before submitting.
-  async function callAiNarrative(mode: "draft" | "tighten" | "formal") {
-    if (!incDescription.trim()) { setAiError("Add some notes in the description first."); return }
-    setAiBusy(mode); setAiError("")
-    try {
-      const res = await fetch("/api/ai/narrative", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          mode,
-          notes: incDescription,
-          fields: {
-            incident_type: incType,
-            location: incLoc.location,
-            building: incLoc.building, apartment: incLoc.apartment,
-            persons_involved: incPersons, action_taken: incAction,
-            date: incDate, time: incTime,
-          },
-        }),
-      })
-      const data = await res.json()
-      if (!res.ok) throw new Error(data?.error || `Request failed (${res.status})`)
-      if (data.text) setIncDescription(data.text)
-    } catch (e: any) {
-      setAiError(e?.message || "AI assist failed.")
-    } finally {
-      setAiBusy(null)
-    }
   }
 
   async function saveIncidentReport() {
@@ -1691,7 +1658,10 @@ export default function UserDashboard() {
                   <input value={dailyWeather} onChange={e => setDailyWeather(e.target.value)} placeholder="e.g. Clear, Rainy" className={inputCls} /></div>
               </div>
               <div className="mb-4">
-                <label className={labelCls}>Patrol Narrative <span className="text-red-500">*</span></label>
+                <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                  <label className={labelCls + " mb-0"}>Patrol Narrative <span className="text-red-500">*</span></label>
+                  <AiAssist kind="daily" value={dailyNarrative} onChange={setDailyNarrative} fields={{ shift: dailyShift, weather: dailyWeather }} />
+                </div>
                 <textarea rows={5} value={dailyNarrative} onChange={e => setDailyNarrative(e.target.value)}
                   placeholder="Describe patrol activities, observations, and any notable events..."
                   className={textareaCls} />
@@ -1745,25 +1715,11 @@ export default function UserDashboard() {
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <label className={labelCls + " mb-0"}>Incident Description <span className="text-red-500">*</span></label>
-                  <div className="flex items-center gap-1.5">
-                    <button type="button" onClick={() => callAiNarrative("draft")} disabled={!!aiBusy}
-                      title="Turn your notes into a full narrative"
-                      className="px-2.5 py-1 bg-violet-700 text-white text-xs font-semibold rounded-md hover:bg-violet-800 border-none cursor-pointer disabled:opacity-50">
-                      {aiBusy === "draft" ? "✨ Writing…" : "✨ AI Draft"}
-                    </button>
-                    <button type="button" onClick={() => callAiNarrative("tighten")} disabled={!!aiBusy}
-                      className="px-2.5 py-1 bg-violet-100 text-violet-800 text-xs font-semibold rounded-md hover:bg-violet-200 border-none cursor-pointer disabled:opacity-50">
-                      {aiBusy === "tighten" ? "…" : "Tighten"}
-                    </button>
-                    <button type="button" onClick={() => callAiNarrative("formal")} disabled={!!aiBusy}
-                      className="px-2.5 py-1 bg-violet-100 text-violet-800 text-xs font-semibold rounded-md hover:bg-violet-200 border-none cursor-pointer disabled:opacity-50">
-                      {aiBusy === "formal" ? "…" : "More formal"}
-                    </button>
-                  </div>
+                  <AiAssist kind="incident" value={incDescription} onChange={setIncDescription}
+                    fields={{ incident_type: incType, location: incLoc.location, building: incLoc.building, apartment: incLoc.apartment, persons_involved: incPersons, action_taken: incAction, date: incDate, time: incTime }} />
                 </div>
                 <textarea rows={5} value={incDescription} onChange={e => setIncDescription(e.target.value)}
                   placeholder="Jot down rough notes, then ✨ AI Draft to expand them into a full narrative — or write it yourself." className={textareaCls} />
-                {aiError && <div className="text-xs text-red-600 mt-1">{aiError}</div>}
                 <p className="text-[11px] text-gray-400 mt-1">AI assist is a drafting aid — review and edit before submitting. You are responsible for the final report.</p>
               </div>
               <div className="mb-4">
@@ -1849,7 +1805,10 @@ export default function UserDashboard() {
                   <input value={ctOfficer} onChange={e => setCtOfficer(e.target.value)} className={inputCls} /></div>
               </div>
               <div className="mb-4">
-                <label className={labelCls}>Notes</label>
+                <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                  <label className={labelCls + " mb-0"}>Notes</label>
+                  <AiAssist kind="contact" value={ctNotes} onChange={setCtNotes} fields={{ subject: `${ctFirstName} ${ctLastName}`, reason: ctReason, location: ctLocation }} />
+                </div>
                 <textarea rows={4} value={ctNotes} onChange={e => setCtNotes(e.target.value)}
                   placeholder="Details of the contact — description, outcome, follow-up needed..."
                   className={textareaCls} />
@@ -1934,7 +1893,10 @@ export default function UserDashboard() {
               )}
               {registryBanner(vfiRegChecked, vfiRegHits, vfiVehicle.plate)}
               <div className="mb-4">
-                <label className={labelCls}>Notes</label>
+                <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                  <label className={labelCls + " mb-0"}>Notes</label>
+                  <AiAssist kind="vehicle_fi" value={vfiNotes} onChange={setVfiNotes} fields={{ reason: vfiReason, vehicle: [vfiVehicle.year, vfiVehicle.color, vfiVehicle.make, vfiVehicle.model].filter(Boolean).join(" "), plate: vfiVehicle.plate }} />
+                </div>
                 <textarea rows={4} value={vfiNotes} onChange={e => setVfiNotes(e.target.value)}
                   placeholder="Details of the vehicle investigation — outcome, occupants, follow-up..."
                   className={textareaCls} />
@@ -2038,7 +2000,10 @@ export default function UserDashboard() {
               {registryBanner(pvRegChecked, pvRegHits, pvVehicle.plate)}
 
               <div className="mb-4">
-                <label className={labelCls}>Notes</label>
+                <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                  <label className={labelCls + " mb-0"}>Notes</label>
+                  <AiAssist kind="parking" value={pvNotes} onChange={setPvNotes} fields={{ violation_type: pvViolationType, vehicle: [pvVehicle.year, pvVehicle.color, pvVehicle.make, pvVehicle.model].filter(Boolean).join(" ") }} />
+                </div>
                 <textarea rows={4} value={pvNotes} onChange={e => setPvNotes(e.target.value)}
                   placeholder="Details — repeat offender, prior warnings, condition of vehicle..."
                   className={textareaCls} />
@@ -2387,7 +2352,10 @@ export default function UserDashboard() {
                     </select></div>
                 </div>
                 <div className="mb-4">
-                  <label className={labelCls}>Passdown Notes <span className="text-red-500">*</span></label>
+                  <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                    <label className={labelCls + " mb-0"}>Passdown Notes <span className="text-red-500">*</span></label>
+                    <AiAssist kind="passdown" value={pdNotes} onChange={setPdNotes} fields={{ shift: pdShift, date: pdDate }} />
+                  </div>
                   <textarea rows={6} value={pdNotes} onChange={e => setPdNotes(e.target.value)}
                     placeholder="Summarize shift activity, ongoing situations, items needing follow-up by incoming officer..."
                     className={textareaCls} />
