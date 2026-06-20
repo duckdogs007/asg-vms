@@ -72,7 +72,7 @@ interface OfficerOnDuty {
   off_duty_at:  string | null
   is_online:    boolean
 }
-type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "violation" | "view"
+type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "view"
 
 export default function UserDashboard() {
 
@@ -1602,7 +1602,6 @@ export default function UserDashboard() {
             <button className={rTabCls("contact")}  onClick={() => setReportTab("contact")}>📋 Field Contact</button>
             <button className={rTabCls("vfi")}      onClick={() => setReportTab("vfi")}>🚗 Vehicle FI</button>
             <button className={rTabCls("parking")}  onClick={() => setReportTab("parking")}>🅿️ Parking Violation</button>
-            <button className={rTabCls("violation")} onClick={() => setReportTab("violation")}>⚖️ Lease Violation</button>
             <button className={rTabCls("view")}     onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
           </div>
 
@@ -2005,20 +2004,6 @@ export default function UserDashboard() {
                 className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
                 {reportSaving ? "Submitting..." : "Submit Parking Violation"}
               </button>
-            </div>
-          )}
-
-          {/* LEASE VIOLATION (standalone — community violation or management-issued late rent) */}
-          {reportTab === "violation" && (
-            <div className="max-w-2xl">
-              <h3 className="text-lg font-bold mb-1 text-gray-800">Issue Lease Violation</h3>
-              <p className="text-xs text-gray-500 mb-4">Standalone violation with no prior incident (e.g. trash/noise, or a management-issued late-rent notice). To attach a violation to an existing incident, use <span className="font-medium">View Reports → Issue Lease Violation</span>.</p>
-              <LeaseViolationForm
-                communities={communities}
-                defaultCommunityId={incCommunity || communityId}
-                isAdmin={isAdmin}
-                onSaved={() => { setReportMessage("✅ Lease violation issued."); loadPastReports() }}
-              />
             </div>
           )}
 
