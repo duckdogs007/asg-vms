@@ -187,7 +187,13 @@ export default function Home() {
         {/* MODULES — secondary */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
 
-          <ComingSoon icon="📷" title="Camera Systems"  desc="Integrated live feed and recording access." />
+          <ModuleCard
+            href="/vms/property"
+            icon="🏢"
+            title="Property Hub"
+            desc="Rent roll, lease violations, unit activity, community contacts, and registered vehicles."
+            color="indigo"
+          />
 
           <ModuleCard
             href="/alerts"

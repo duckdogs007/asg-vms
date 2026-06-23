@@ -280,8 +280,11 @@ export default function UserDashboard() {
   const [editBoloPlate,      setEditBoloPlate]      = useState("")
   const [editBoloPlateState, setEditBoloPlateState] = useState("")
   const [editBoloCommunity,setEditBoloCommunity]= useState("")
-  const [editBoloAddedBy,  setEditBoloAddedBy]  = useState("")
-  const [savingBoloEdit,   setSavingBoloEdit]   = useState(false)
+  const [editBoloAddedBy,      setEditBoloAddedBy]      = useState("")
+  const [editBoloPhotoFile,    setEditBoloPhotoFile]    = useState<File | null>(null)
+  const [editBoloPhotoPreview, setEditBoloPhotoPreview] = useState("")
+  const [editBoloCurrentPhoto, setEditBoloCurrentPhoto] = useState("")
+  const [savingBoloEdit,       setSavingBoloEdit]       = useState(false)
 
   // On Duty tab
   const [officers,        setOfficers]        = useState<OfficerOnDuty[]>([])
@@ -1164,6 +1167,9 @@ export default function UserDashboard() {
     setEditBoloPlateState(b.plate_state || "")
     setEditBoloCommunity(b.community_id || "")
     setEditBoloAddedBy(b.added_by || "")
+    setEditBoloCurrentPhoto(b.photo_url || "")
+    setEditBoloPhotoFile(null)
+    setEditBoloPhotoPreview("")
     setBoloError(""); setBoloMessage("")
   }
 
@@ -1172,13 +1178,25 @@ export default function UserDashboard() {
     setEditBoloName(""); setEditBoloDesc(""); setEditBoloReason("")
     setEditBoloDob(""); setEditBoloOln(""); setEditBoloSsn(""); setEditBoloSex(""); setEditBoloRace(""); setEditBoloFirearm(false)
     setEditBoloVehicle(""); setEditBoloPlate(""); setEditBoloPlateState(""); setEditBoloCommunity(""); setEditBoloAddedBy("")
+    setEditBoloPhotoFile(null); setEditBoloPhotoPreview(""); setEditBoloCurrentPhoto("")
     setBoloError("")
   }
 
   async function saveBoloEdit(b: any) {
     if (!editBoloName && !editBoloDesc) { setBoloError("Name or description is required."); return }
     setSavingBoloEdit(true); setBoloError(""); setBoloMessage("")
-    const { error } = await supabase.from("bolos").update({
+    let newPhotoUrl: string | undefined = undefined
+    if (editBoloPhotoFile) {
+      const ext  = editBoloPhotoFile.name.split(".").pop() || "jpg"
+      const path = `bolo_${Date.now()}.${ext}`
+      const { data: up, error: upErr } = await supabase.storage
+        .from("contact-photos").upload(path, editBoloPhotoFile, { upsert: false })
+      if (!upErr && up) {
+        const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
+        newPhotoUrl = publicUrl
+      }
+    }
+    const payload: Record<string, unknown> = {
       name:         editBoloName || null,
       description:  editBoloDesc || null,
       reason:       editBoloReason || null,
@@ -1193,7 +1211,9 @@ export default function UserDashboard() {
       plate_state:  editBoloPlateState || null,
       community_id: editBoloCommunity || null,
       added_by:     editBoloAddedBy || null,
-    }).eq("id", b.id)
+    }
+    if (newPhotoUrl !== undefined) payload.photo_url = newPhotoUrl
+    const { error } = await supabase.from("bolos").update(payload).eq("id", b.id)
     setSavingBoloEdit(false)
     if (error) { setBoloError("Update failed: " + error.message); return }
     setBoloMessage(`✅ BOLO updated.`)
@@ -2641,12 +2661,38 @@ export default function UserDashboard() {
                       </select></div>
                     <div><label className={labelCls}>Added By</label>
                       <input value={editBoloAddedBy} onChange={e => setEditBoloAddedBy(e.target.value)} className={inputCls} /></div>
-                    {b.photo_url && (
-                      <div className="sm:col-span-2 flex items-center gap-3">
-                        <SignedImage src={b.photo_url} bucket="contact-photos" alt="" className="w-16 h-20 object-cover rounded border border-gray-300" />
-                        <span className="text-xs text-gray-500">Photo replacement coming soon — current photo unchanged on save.</span>
+                    {/* PHOTO — replace or add */}
+                    <div className="sm:col-span-2">
+                      <label className={labelCls}>Subject Photo</label>
+                      <div className="flex items-start gap-4">
+                        <div className="w-24 h-28 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
+                          {editBoloPhotoPreview
+                            ? <img src={editBoloPhotoPreview} alt="preview" className="w-full h-full object-cover" />
+                            : editBoloCurrentPhoto
+                              ? <SignedImage src={editBoloCurrentPhoto} bucket="contact-photos" alt="" className="w-full h-full object-cover" />
+                              : <span className="text-gray-400 text-xs text-center px-1">No photo</span>}
+                        </div>
+                        <div className="flex-1 pt-1">
+                          <input type="file" accept="image/*"
+                            onChange={e => {
+                              const file = e.target.files?.[0] || null
+                              setEditBoloPhotoFile(file)
+                              setEditBoloPhotoPreview(file ? URL.createObjectURL(file) : "")
+                            }}
+                            className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-700 file:text-white hover:file:bg-red-800 cursor-pointer" />
+                          {editBoloCurrentPhoto && !editBoloPhotoPreview && (
+                            <p className="text-xs text-gray-400 mt-1">Select a file to replace the current photo.</p>
+                          )}
+                          {editBoloPhotoPreview && (
+                            <button type="button"
+                              onClick={() => { setEditBoloPhotoFile(null); setEditBoloPhotoPreview("") }}
+                              className="text-xs text-red-600 hover:text-red-800 mt-1 border-none bg-transparent cursor-pointer p-0">
+                              ✕ Remove new photo
+                            </button>
+                          )}
+                        </div>
                       </div>
-                    )}
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => saveBoloEdit(b)} disabled={savingBoloEdit}

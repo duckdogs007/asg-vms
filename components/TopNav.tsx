@@ -21,6 +21,20 @@ export default function TopNav() {
   const [sosOpen,        setSosOpen]        = useState(false)
   const [sosSending,     setSosSending]     = useState(false)
   const [sosResult,      setSosResult]      = useState<"" | "ok" | "fail">("")
+  const [changelogOpen,  setChangelogOpen]  = useState(false)
+  const [changelog,      setChangelog]      = useState<Array<{id: string; title: string; blurb: string; posted_at: string}>>([])
+  const [lastSeenAt,     setLastSeenAt]     = useState<string | null>(null)
+
+  useEffect(() => {
+    const saved = localStorage.getItem("asg-changelog-last-seen")
+    setLastSeenAt(saved)
+    supabase.from("changelog")
+      .select("id, title, blurb, posted_at")
+      .eq("is_published", true)
+      .order("posted_at", { ascending: false })
+      .limit(20)
+      .then(({ data }) => setChangelog(data || []))
+  }, [])
 
   useEffect(() => {
     const saved = localStorage.getItem("asg-night-mode") === "true"
@@ -60,6 +74,14 @@ export default function TopNav() {
 
     return () => subscription.unsubscribe()
   }, [])
+
+  function markChangelogSeen() {
+    const now = new Date().toISOString()
+    localStorage.setItem("asg-changelog-last-seen", now)
+    setLastSeenAt(now)
+  }
+
+  const unreadCount = changelog.filter(e => !lastSeenAt || e.posted_at > lastSeenAt).length
 
   async function handleLogout() {
     await supabase.auth.signOut()
@@ -166,7 +188,7 @@ export default function TopNav() {
           <span className="hidden lg:block text-gray-300">|</span>
 
           {/* User dropdown */}
-          <div className="relative flex items-center gap-1.5 cursor-pointer" onClick={() => setMenuOpen(!menuOpen)}>
+          <div className="relative flex items-center gap-1.5 cursor-pointer" onClick={() => { setMenuOpen(!menuOpen); setChangelogOpen(false) }}>
             <span className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span>
             <span className="text-sm font-bold text-gray-800 hidden sm:block">{displayName || "—"}</span>
             <span className="text-[10px] text-gray-500">▼</span>
@@ -180,6 +202,60 @@ export default function TopNav() {
               </div>
             )}
           </div>
+
+          {/* What's New changelog */}
+          {userEmail && (
+            <div className="relative">
+              <button
+                onClick={() => {
+                  const opening = !changelogOpen
+                  setChangelogOpen(opening)
+                  setMenuOpen(false)
+                  if (opening) markChangelogSeen()
+                }}
+                title="Latest Developments"
+                className="relative px-2 sm:px-3 py-1.5 bg-gray-100 text-gray-700 text-xs rounded-md hover:bg-gray-200 transition-colors border-none cursor-pointer"
+              >
+                📣<span className="hidden sm:inline"> What's New</span>
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-blue-600 text-white text-[9px] font-bold rounded-full flex items-center justify-center leading-none">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+
+              {changelogOpen && (
+                <>
+                  <div className="fixed inset-0 z-40" onClick={() => setChangelogOpen(false)} />
+                  <div className="absolute top-9 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-xl w-80 max-h-[28rem] overflow-y-auto">
+                    <div className="px-4 py-3 border-b border-gray-100 sticky top-0 bg-white">
+                      <div className="font-bold text-gray-900 text-sm">Latest Developments</div>
+                      <div className="text-xs text-gray-400">Recent updates to the VMS platform</div>
+                    </div>
+                    {changelog.length === 0 ? (
+                      <div className="px-4 py-8 text-sm text-gray-400 text-center">No updates posted yet.</div>
+                    ) : changelog.map(entry => {
+                      const unread = !lastSeenAt || entry.posted_at > lastSeenAt
+                      return (
+                        <div key={entry.id} className={`px-4 py-3 border-b border-gray-50 last:border-0 ${unread ? "bg-blue-50" : ""}`}>
+                          <div className="flex items-start gap-2">
+                            {unread && <span className="w-1.5 h-1.5 rounded-full bg-blue-500 flex-shrink-0 mt-1.5"></span>}
+                            <div className={unread ? "" : "pl-3.5"}>
+                              <div className="text-sm font-semibold text-gray-900">{entry.title}</div>
+                              <div className="text-xs text-gray-500 mt-0.5 leading-snug">{entry.blurb}</div>
+                              <div className="text-[10px] text-gray-400 mt-1.5">
+                                {new Date(entry.posted_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+            </div>
+          )}
 
           {/* Panic / SOS — visible to all signed-in users */}
           {userEmail && (
