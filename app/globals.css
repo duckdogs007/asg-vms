@@ -124,6 +124,23 @@ body.dark .text-gray-400 {
   color: #484f58 !important;
 }
 
+/* ── DARK MODE: BLUE TEXT / BACKGROUNDS ── */
+body.dark .text-blue-800 {
+  color: #93c5fd !important;
+}
+
+body.dark .text-blue-700 {
+  color: #60a5fa !important;
+}
+
+body.dark .bg-blue-50 {
+  background-color: #0d1f3c !important;
+}
+
+body.dark .border-blue-100 {
+  border-color: #1e3a6e !important;
+}
+
 /* ── DARK MODE: TABLE ROWS ── */
 body.dark .bg-gray-50.border-b {
   background-color: #161b22 !important;

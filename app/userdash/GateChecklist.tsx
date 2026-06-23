@@ -233,7 +233,7 @@ export default function GateChecklist({
         </div>
 
         {/* INSTRUCTIONS */}
-        <div className="mt-4 bg-blue-50/50 border border-blue-100 rounded-lg p-3">
+        <div className="mt-4 bg-blue-50 border border-blue-100 rounded-lg p-3">
           <div className="text-xs font-bold text-blue-800 uppercase tracking-wide mb-1.5">Instructions</div>
           <ul className="list-disc list-inside text-xs text-gray-600 space-y-0.5">
             {INSTRUCTIONS.map((t, i) => <li key={i}>{t}</li>)}
