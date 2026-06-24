@@ -1765,14 +1765,25 @@ export default function UserDashboard() {
               <div className="mb-4">
                 <label className={labelCls}>Photos</label>
                 <input type="file" accept="image/*" multiple
-                  onChange={e => setIncPhotoFiles(Array.from(e.target.files || []))}
+                  onChange={e => {
+                    const added = Array.from(e.target.files || [])
+                    setIncPhotoFiles(prev => [...prev, ...added])
+                    e.target.value = ""
+                  }}
                   className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-700 file:text-white hover:file:bg-red-800 cursor-pointer" />
-                <p className="text-xs text-gray-400 mt-1">JPG, PNG. Multiple photos allowed.</p>
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG. Open the picker multiple times to add more.</p>
                 {incPhotoFiles.length > 0 && (
                   <div className="flex flex-wrap gap-2 mt-2">
                     {incPhotoFiles.map((f, i) => (
-                      <div key={i} className="w-20 h-24 bg-gray-100 rounded-lg overflow-hidden flex-shrink-0 border border-gray-300">
-                        <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                      <div key={i} className="relative w-20 h-24 flex-shrink-0">
+                        <div className="w-full h-full bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
+                          <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                        </div>
+                        <button type="button"
+                          onClick={() => setIncPhotoFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none border-none cursor-pointer flex items-center justify-center hover:bg-red-700">
+                          ✕
+                        </button>
                       </div>
                     ))}
                   </div>
