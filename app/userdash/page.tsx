@@ -260,8 +260,7 @@ export default function UserDashboard() {
   const [boloPlateState, setBoloPlateState] = useState("")
   const [boloCommunity,  setBoloCommunity]  = useState("")
   const [boloAddedBy,    setBoloAddedBy]    = useState("")
-  const [boloPhotoFile,  setBoloPhotoFile]  = useState<File | null>(null)
-  const [boloPhotoPreview,setBoloPhotoPreview]= useState("")
+  const [boloPhotoFiles, setBoloPhotoFiles] = useState<File[]>([])
   const [boloSaving,     setBoloSaving]     = useState(false)
   const [boloMessage,    setBoloMessage]    = useState("")
   const [boloError,      setBoloError]      = useState("")
@@ -283,9 +282,8 @@ export default function UserDashboard() {
   const [editBoloPlateState, setEditBoloPlateState] = useState("")
   const [editBoloCommunity,setEditBoloCommunity]= useState("")
   const [editBoloAddedBy,      setEditBoloAddedBy]      = useState("")
-  const [editBoloPhotoFile,    setEditBoloPhotoFile]    = useState<File | null>(null)
-  const [editBoloPhotoPreview, setEditBoloPhotoPreview] = useState("")
-  const [editBoloCurrentPhoto, setEditBoloCurrentPhoto] = useState("")
+  const [editBoloPhotoFiles,   setEditBoloPhotoFiles]   = useState<File[]>([])
+  const [editBoloCurrentPhotos,setEditBoloCurrentPhotos]= useState<string[]>([])
   const [savingBoloEdit,       setSavingBoloEdit]       = useState(false)
 
   // On Duty tab
@@ -1222,15 +1220,15 @@ export default function UserDashboard() {
   async function saveBolo() {
     if (!boloName && !boloDesc) { setBoloError("Name or description is required."); return }
     setBoloSaving(true); setBoloError(""); setBoloMessage("")
-    let photoUrl: string | null = null
-    if (boloPhotoFile) {
-      const ext  = boloPhotoFile.name.split(".").pop() || "jpg"
-      const path = `bolo_${Date.now()}.${ext}`
+    const photoUrls: string[] = []
+    for (const f of boloPhotoFiles) {
+      const ext  = f.name.split(".").pop() || "jpg"
+      const path = `bolo_${Date.now()}_${photoUrls.length}.${ext}`
       const { data: up, error: upErr } = await supabase.storage
-        .from("contact-photos").upload(path, boloPhotoFile, { upsert: false })
+        .from("contact-photos").upload(path, f, { upsert: false })
       if (!upErr && up) {
         const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
-        photoUrl = publicUrl
+        photoUrls.push(publicUrl)
       }
     }
     const { data: created, error } = await supabase.from("bolos").insert({
@@ -1240,7 +1238,7 @@ export default function UserDashboard() {
       dob: boloDob || null, oln: boloOln || null, ssn: boloSsn || null,
       sex: boloSex || null, race: boloRace || null, firearm_flag: boloFirearm,
       community_id: boloCommunity || null, added_by: boloAddedBy || null,
-      photo_url: photoUrl, active: true,
+      photo_urls: photoUrls.length ? photoUrls : null, active: true,
       created_at: new Date().toISOString()
     }).select("id").single()
     setBoloSaving(false)
@@ -1257,7 +1255,7 @@ export default function UserDashboard() {
     logActivity("created", "BOLO", "", `BOLO added — ${boloName || boloDesc}`)
     setBoloName(""); setBoloDesc(""); setBoloReason(""); setBoloVehicle(""); setBoloPlate(""); setBoloPlateState("")
     setBoloDob(""); setBoloOln(""); setBoloSsn(""); setBoloSex(""); setBoloRace(""); setBoloFirearm(false)
-    setBoloPhotoFile(null); setBoloPhotoPreview(""); setShowAddBolo(false)
+    setBoloPhotoFiles([]); setShowAddBolo(false)
     loadBolos()
   }
 
@@ -1277,9 +1275,8 @@ export default function UserDashboard() {
     setEditBoloPlateState(b.plate_state || "")
     setEditBoloCommunity(b.community_id || "")
     setEditBoloAddedBy(b.added_by || "")
-    setEditBoloCurrentPhoto(b.photo_url || "")
-    setEditBoloPhotoFile(null)
-    setEditBoloPhotoPreview("")
+    setEditBoloCurrentPhotos(Array.isArray(b.photo_urls) && b.photo_urls.length ? b.photo_urls : b.photo_url ? [b.photo_url] : [])
+    setEditBoloPhotoFiles([])
     setBoloError(""); setBoloMessage("")
   }
 
@@ -1288,24 +1285,25 @@ export default function UserDashboard() {
     setEditBoloName(""); setEditBoloDesc(""); setEditBoloReason("")
     setEditBoloDob(""); setEditBoloOln(""); setEditBoloSsn(""); setEditBoloSex(""); setEditBoloRace(""); setEditBoloFirearm(false)
     setEditBoloVehicle(""); setEditBoloPlate(""); setEditBoloPlateState(""); setEditBoloCommunity(""); setEditBoloAddedBy("")
-    setEditBoloPhotoFile(null); setEditBoloPhotoPreview(""); setEditBoloCurrentPhoto("")
+    setEditBoloPhotoFiles([]); setEditBoloCurrentPhotos([])
     setBoloError("")
   }
 
   async function saveBoloEdit(b: any) {
     if (!editBoloName && !editBoloDesc) { setBoloError("Name or description is required."); return }
     setSavingBoloEdit(true); setBoloError(""); setBoloMessage("")
-    let newPhotoUrl: string | undefined = undefined
-    if (editBoloPhotoFile) {
-      const ext  = editBoloPhotoFile.name.split(".").pop() || "jpg"
-      const path = `bolo_${Date.now()}.${ext}`
+    const newUrls: string[] = []
+    for (const f of editBoloPhotoFiles) {
+      const ext  = f.name.split(".").pop() || "jpg"
+      const path = `bolo_${Date.now()}_${newUrls.length}.${ext}`
       const { data: up, error: upErr } = await supabase.storage
-        .from("contact-photos").upload(path, editBoloPhotoFile, { upsert: false })
+        .from("contact-photos").upload(path, f, { upsert: false })
       if (!upErr && up) {
         const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
-        newPhotoUrl = publicUrl
+        newUrls.push(publicUrl)
       }
     }
+    const mergedPhotos = [...editBoloCurrentPhotos, ...newUrls]
     const payload: Record<string, unknown> = {
       name:         editBoloName || null,
       description:  editBoloDesc || null,
@@ -1321,8 +1319,8 @@ export default function UserDashboard() {
       plate_state:  editBoloPlateState || null,
       community_id: editBoloCommunity || null,
       added_by:     editBoloAddedBy || null,
+      photo_urls:   mergedPhotos.length ? mergedPhotos : null,
     }
-    if (newPhotoUrl !== undefined) payload.photo_url = newPhotoUrl
     const { error } = await supabase.from("bolos").update(payload).eq("id", b.id)
     setSavingBoloEdit(false)
     if (error) { setBoloError("Update failed: " + error.message); return }
@@ -2765,24 +2763,31 @@ export default function UserDashboard() {
 
                 {/* PHOTO */}
                 <div className="sm:col-span-2">
-                  <label className={labelCls}>Subject Photo</label>
-                  <div className="flex items-start gap-4">
-                    <div className="w-24 h-28 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
-                      {boloPhotoPreview
-                        ? <img src={boloPhotoPreview} alt="preview" className="w-full h-full object-cover" />
-                        : <span className="text-gray-400 text-xs text-center px-1">No photo</span>}
+                  <label className={labelCls}>Photos</label>
+                  <input type="file" accept="image/*" multiple
+                    onChange={e => {
+                      const added = Array.from(e.target.files || [])
+                      setBoloPhotoFiles(prev => [...prev, ...added])
+                      e.target.value = ""
+                    }}
+                    className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-700 file:text-white hover:file:bg-red-800 cursor-pointer" />
+                  <p className="text-xs text-gray-400 mt-1">JPG, PNG. Select multiple or open picker again to add more.</p>
+                  {boloPhotoFiles.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {boloPhotoFiles.map((f, i) => (
+                        <div key={i} className="relative w-20 h-24 flex-shrink-0">
+                          <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden border border-gray-300">
+                            <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                          </div>
+                          <button type="button"
+                            onClick={() => setBoloPhotoFiles(prev => prev.filter((_, j) => j !== i))}
+                            className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none border-none cursor-pointer flex items-center justify-center hover:bg-red-700">
+                            ✕
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                    <div className="flex-1 pt-1">
-                      <input type="file" accept="image/*"
-                        onChange={e => {
-                          const file = e.target.files?.[0] || null
-                          setBoloPhotoFile(file)
-                          setBoloPhotoPreview(file ? URL.createObjectURL(file) : "")
-                        }}
-                        className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-700 file:text-white hover:file:bg-red-800 cursor-pointer" />
-                      <p className="text-xs text-gray-400 mt-1">JPG, PNG accepted</p>
-                    </div>
-                  </div>
+                  )}
                 </div>
               </div>
               <button onClick={saveBolo} disabled={boloSaving}
@@ -2852,35 +2857,47 @@ export default function UserDashboard() {
                       <input value={editBoloAddedBy} onChange={e => setEditBoloAddedBy(e.target.value)} className={inputCls} /></div>
                     {/* PHOTO — replace or add */}
                     <div className="sm:col-span-2">
-                      <label className={labelCls}>Subject Photo</label>
-                      <div className="flex items-start gap-4">
-                        <div className="w-24 h-28 bg-gray-200 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
-                          {editBoloPhotoPreview
-                            ? <img src={editBoloPhotoPreview} alt="preview" className="w-full h-full object-cover" />
-                            : editBoloCurrentPhoto
-                              ? <SignedImage src={editBoloCurrentPhoto} bucket="contact-photos" alt="" className="w-full h-full object-cover" />
-                              : <span className="text-gray-400 text-xs text-center px-1">No photo</span>}
+                      <label className={labelCls}>Photos</label>
+                      {editBoloCurrentPhotos.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mb-2">
+                          {editBoloCurrentPhotos.map((url, i) => (
+                            <div key={i} className="relative w-20 h-24 flex-shrink-0">
+                              <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden border border-gray-300">
+                                <SignedImage src={url} bucket="contact-photos" alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                              </div>
+                              <button type="button"
+                                onClick={() => setEditBoloCurrentPhotos(prev => prev.filter((_, j) => j !== i))}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none border-none cursor-pointer flex items-center justify-center hover:bg-red-700">
+                                ✕
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                        <div className="flex-1 pt-1">
-                          <input type="file" accept="image/*"
-                            onChange={e => {
-                              const file = e.target.files?.[0] || null
-                              setEditBoloPhotoFile(file)
-                              setEditBoloPhotoPreview(file ? URL.createObjectURL(file) : "")
-                            }}
-                            className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-700 file:text-white hover:file:bg-red-800 cursor-pointer" />
-                          {editBoloCurrentPhoto && !editBoloPhotoPreview && (
-                            <p className="text-xs text-gray-400 mt-1">Select a file to replace the current photo.</p>
-                          )}
-                          {editBoloPhotoPreview && (
-                            <button type="button"
-                              onClick={() => { setEditBoloPhotoFile(null); setEditBoloPhotoPreview("") }}
-                              className="text-xs text-red-600 hover:text-red-800 mt-1 border-none bg-transparent cursor-pointer p-0">
-                              ✕ Remove new photo
-                            </button>
-                          )}
+                      )}
+                      <input type="file" accept="image/*" multiple
+                        onChange={e => {
+                          const added = Array.from(e.target.files || [])
+                          setEditBoloPhotoFiles(prev => [...prev, ...added])
+                          e.target.value = ""
+                        }}
+                        className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-red-700 file:text-white hover:file:bg-red-800 cursor-pointer" />
+                      <p className="text-xs text-gray-400 mt-1">Select multiple or open picker again to add more.</p>
+                      {editBoloPhotoFiles.length > 0 && (
+                        <div className="flex flex-wrap gap-2 mt-2">
+                          {editBoloPhotoFiles.map((f, i) => (
+                            <div key={i} className="relative w-20 h-24 flex-shrink-0">
+                              <div className="w-full h-full bg-gray-200 rounded-lg overflow-hidden border border-gray-300">
+                                <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                              </div>
+                              <button type="button"
+                                onClick={() => setEditBoloPhotoFiles(prev => prev.filter((_, j) => j !== i))}
+                                className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none border-none cursor-pointer flex items-center justify-center hover:bg-red-700">
+                                ✕
+                              </button>
+                            </div>
+                          ))}
                         </div>
-                      </div>
+                      )}
                     </div>
                   </div>
                   <div className="flex gap-2">
@@ -2897,9 +2914,15 @@ export default function UserDashboard() {
               ) : (
                 /* DISPLAY MODE */
                 <div className="flex gap-4">
-                  {b.photo_url && (
+                  {Array.isArray(b.photo_urls) && b.photo_urls.length > 0 ? (
+                    <div className="flex flex-wrap gap-1 flex-shrink-0">
+                      {b.photo_urls.map((url: string, i: number) => (
+                        <SignedImage key={i} src={url} bucket="contact-photos" alt={`BOLO photo ${i + 1}`} className="w-20 h-24 object-cover rounded-lg border border-red-200" />
+                      ))}
+                    </div>
+                  ) : b.photo_url ? (
                     <SignedImage src={b.photo_url} bucket="contact-photos" alt="BOLO subject" className="w-20 h-24 object-cover rounded-lg flex-shrink-0 border border-red-200" />
-                  )}
+                  ) : null}
                   <div className="flex-1 min-w-0">
                     <div className="flex justify-between items-start mb-1">
                       <div>
