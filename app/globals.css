@@ -121,7 +121,7 @@ body.dark .text-gray-500 {
 }
 
 body.dark .text-gray-400 {
-  color: #484f58 !important;
+  color: #8b949e !important;
 }
 
 /* ── DARK MODE: BLUE TEXT / BACKGROUNDS ── */
@@ -176,3 +176,50 @@ body.dark thead th {
   animation: marquee 60s linear infinite;
   white-space: nowrap;
 }
+
+/* ── DARK MODE: RED (Incident Reports) ── */
+body.dark .bg-red-50   { background-color: #1e0a0a !important; }
+body.dark .bg-red-100  { background-color: #2d1010 !important; }
+body.dark .text-red-700  { color: #fca5a5 !important; }
+body.dark .text-red-800  { color: #f87171 !important; }
+body.dark .border-red-200 { border-color: #5f1515 !important; }
+body.dark .border-red-300 { border-color: #7f1d1d !important; }
+body.dark .hover\:bg-red-100:hover { background-color: #371414 !important; }
+
+/* ── DARK MODE: PURPLE (Field Contact Reports) ── */
+body.dark .bg-purple-50   { background-color: #130a1e !important; }
+body.dark .bg-purple-100  { background-color: #1f1035 !important; }
+body.dark .text-purple-700  { color: #c4b5fd !important; }
+body.dark .text-purple-800  { color: #a78bfa !important; }
+body.dark .border-purple-200 { border-color: #3d1f6b !important; }
+body.dark .hover\:bg-purple-100:hover { background-color: #271440 !important; }
+
+/* ── DARK MODE: ORANGE (Vehicle FI Reports) ── */
+body.dark .bg-orange-50   { background-color: #1a0e00 !important; }
+body.dark .bg-orange-100  { background-color: #271500 !important; }
+body.dark .text-orange-700  { color: #fdba74 !important; }
+body.dark .text-orange-800  { color: #fb923c !important; }
+body.dark .text-orange-500  { color: #f97316 !important; }
+body.dark .border-orange-200 { border-color: #6b2f00 !important; }
+body.dark .hover\:bg-orange-100:hover { background-color: #301a00 !important; }
+
+/* ── DARK MODE: AMBER (Parking Violations) ── */
+body.dark .bg-amber-50   { background-color: #1a1400 !important; }
+body.dark .bg-amber-100  { background-color: #271f00 !important; }
+body.dark .text-amber-700  { color: #fde68a !important; }
+body.dark .text-amber-800  { color: #fcd34d !important; }
+body.dark .text-amber-900  { color: #fbbf24 !important; }
+body.dark .border-amber-200 { border-color: #6b5100 !important; }
+body.dark .border-amber-300 { border-color: #7c6000 !important; }
+body.dark .hover\:bg-amber-100:hover { background-color: #302500 !important; }
+
+/* ── DARK MODE: GREEN (status badges, no-match banners) ── */
+body.dark .bg-green-50   { background-color: #0a1a0a !important; }
+body.dark .bg-green-100  { background-color: #0f2b0f !important; }
+body.dark .text-green-700  { color: #86efac !important; }
+body.dark .text-green-800  { color: #4ade80 !important; }
+body.dark .border-green-200 { border-color: #14532d !important; }
+body.dark .border-green-100 { border-color: #0f3e22 !important; }
+
+/* ── DARK MODE: BLUE badge chip (bg-blue-100 is different from bg-blue-50) ── */
+body.dark .bg-blue-100 { background-color: #0c2d5e !important; }
