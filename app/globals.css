@@ -213,6 +213,12 @@ body.dark .border-amber-200 { border-color: #6b5100 !important; }
 body.dark .border-amber-300 { border-color: #7c6000 !important; }
 body.dark .hover\:bg-amber-100:hover { background-color: #302500 !important; }
 
+/* ── DARK MODE: TEAL (daily logs) ── */
+body.dark .text-teal-700  { color: #5eead4 !important; }
+body.dark .text-teal-800  { color: #2dd4bf !important; }
+body.dark .bg-teal-50     { background-color: #04201e !important; }
+body.dark .border-teal-200 { border-color: #0d4f4a !important; }
+
 /* ── DARK MODE: GREEN (status badges, no-match banners) ── */
 body.dark .bg-green-50   { background-color: #0a1a0a !important; }
 body.dark .bg-green-100  { background-color: #0f2b0f !important; }

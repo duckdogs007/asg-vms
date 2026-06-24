@@ -168,7 +168,7 @@ export default function Home() {
             href="/userdash"
             icon="📋"
             title="User Dashboard"
-            desc="Passdowns, BOLOs, Officer Reports, Watchlist, Rent Roll, Audit Log."
+            desc="Passdowns, BOLOs, Officer Reports, Watchlist, and Rent Roll."
             color="gray"
           />
 

@@ -113,6 +113,16 @@ const EMPTY_STATS: Stats = {
   byDay: {}, byHour: {}
 }
 
+interface CommSummaryRow {
+  id: string
+  name: string
+  incidents: number
+  fieldContacts: number
+  vehicleFIs: number
+  parking: number
+  dailyLogs: number
+}
+
 export default function ReportsPage() {
 
   const [community,      setCommunity]      = useState("")
@@ -129,6 +139,8 @@ export default function ReportsPage() {
   const [deleting,       setDeleting]       = useState<string | null>(null)
   const [entryLogSearch, setEntryLogSearch] = useState("")
   const [priorTotal,     setPriorTotal]     = useState<number | null>(null)
+  const [commSummary,        setCommSummary]        = useState<CommSummaryRow[]>([])
+  const [commSummaryLoading, setCommSummaryLoading] = useState(false)
 
   const [stats, setStats] = useState<Stats>(EMPTY_STATS)
   // Parking violations for the selected community + date range (filtered by the
@@ -177,7 +189,10 @@ export default function ReportsPage() {
       })
   }, [community])
 
-  useEffect(() => { if (community) loadData() }, [community, dateFrom, dateTo])
+  useEffect(() => { if (community) loadData() }, [community, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { if (communities.length > 0) loadCommunitySummary() }, [dateFrom, dateTo, communities])
 
   useEffect(() => {
     if (!community) return
@@ -266,6 +281,36 @@ export default function ReportsPage() {
       .gte("created_at", prior.from + "T00:00:00")
       .lte("created_at", prior.to   + "T23:59:59")
       .then(({ count }) => setPriorTotal(count ?? 0))
+  }
+
+  async function loadCommunitySummary() {
+    if (communities.length === 0) return
+    setCommSummaryLoading(true)
+    const [incRes, ctRes, vfiRes, pvRes, logRes] = await Promise.all([
+      supabase.from("incident_reports").select("community_id").gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("contact_history").select("community_id").gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59"),
+      supabase.from("vehicle_fi_logs").select("community_id").gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("parking_violations").select("community_id").gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("officer_daily_logs").select("community_id").gte("date", dateFrom).lte("date", dateTo),
+    ])
+    const cnt = (rows: any[] | null, id: string) =>
+      (rows || []).filter(r => r.community_id === id).length
+    const rows: CommSummaryRow[] = communities.map(c => ({
+      id:            c.id,
+      name:          c.name,
+      incidents:     cnt(incRes.data, c.id),
+      fieldContacts: cnt(ctRes.data, c.id),
+      vehicleFIs:    cnt(vfiRes.data, c.id),
+      parking:       cnt(pvRes.data, c.id),
+      dailyLogs:     cnt(logRes.data, c.id),
+    }))
+    rows.sort((a, b) => {
+      const ta = a.incidents + a.fieldContacts + a.vehicleFIs + a.parking + a.dailyLogs
+      const tb = b.incidents + b.fieldContacts + b.vehicleFIs + b.parking + b.dailyLogs
+      return tb - ta
+    })
+    setCommSummary(rows)
+    setCommSummaryLoading(false)
   }
 
   function computeStats(logs: VisitorLog[]) {
@@ -586,6 +631,86 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+
+      {/* ── REPORTS BY COMMUNITY ── */}
+      {communities.length > 0 && (
+        <Section label={`Reports by Community · ${dateFrom} → ${dateTo}`}>
+          {commSummaryLoading ? (
+            <div className="text-gray-400 text-sm animate-pulse py-4">Loading…</div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-gray-100">
+                    <th className="px-4 py-2.5 font-semibold">Community</th>
+                    <th className="px-4 py-2.5 font-semibold text-right">Incidents</th>
+                    <th className="px-4 py-2.5 font-semibold text-right">Field Contacts</th>
+                    <th className="px-4 py-2.5 font-semibold text-right">Vehicle FIs</th>
+                    <th className="px-4 py-2.5 font-semibold text-right">Parking</th>
+                    <th className="px-4 py-2.5 font-semibold text-right">Daily Logs</th>
+                    <th className="px-4 py-2.5 font-semibold text-right">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {commSummary.map((row, i) => {
+                    const total = row.incidents + row.fieldContacts + row.vehicleFIs + row.parking + row.dailyLogs
+                    const isSelected = row.id === community
+                    return (
+                      <tr key={row.id}
+                        className={`cursor-pointer hover:bg-gray-50 transition-colors ${i < commSummary.length - 1 ? "border-b border-gray-100" : ""} ${isSelected ? "bg-blue-50" : ""}`}
+                        onClick={() => setCommunity(row.id)}
+                      >
+                        <td className={`px-4 py-2.5 font-semibold ${isSelected ? "text-blue-700" : "text-gray-800"}`}>
+                          {row.name}
+                          {isSelected && <span className="ml-2 text-[10px] font-normal text-blue-400 uppercase tracking-wider">viewing</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono">
+                          {row.incidents > 0 ? <span className="text-red-700 font-semibold">{row.incidents}</span> : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono">
+                          {row.fieldContacts > 0 ? <span className="text-purple-700 font-semibold">{row.fieldContacts}</span> : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono">
+                          {row.vehicleFIs > 0 ? <span className="text-orange-700 font-semibold">{row.vehicleFIs}</span> : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono">
+                          {row.parking > 0 ? <span className="text-amber-700 font-semibold">{row.parking}</span> : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right font-mono">
+                          {row.dailyLogs > 0 ? <span className="text-teal-700 font-semibold">{row.dailyLogs}</span> : <span className="text-gray-300">—</span>}
+                        </td>
+                        <td className="px-4 py-2.5 text-right">
+                          {total > 0
+                            ? <span className="font-bold text-gray-800">{total}</span>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t border-gray-200 bg-gray-50">
+                    <td className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Totals</td>
+                    {(["incidents","fieldContacts","vehicleFIs","parking","dailyLogs"] as const).map(key => {
+                      const sum = commSummary.reduce((a, r) => a + r[key], 0)
+                      return (
+                        <td key={key} className="px-4 py-2 text-right font-bold text-gray-700 font-mono">
+                          {sum > 0 ? sum : <span className="text-gray-300">—</span>}
+                        </td>
+                      )
+                    })}
+                    <td className="px-4 py-2 text-right font-bold text-gray-800 font-mono">
+                      {commSummary.reduce((a, r) => a + r.incidents + r.fieldContacts + r.vehicleFIs + r.parking + r.dailyLogs, 0) || <span className="text-gray-300">—</span>}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* ── VISITOR ACTIVITY (per community) ── */}
 
       {hasData && (
         <>
