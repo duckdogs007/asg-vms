@@ -166,8 +166,7 @@ export default function UserDashboard() {
   const [ctSsn,         setCtSsn]         = useState("")
   const [ctOln,         setCtOln]         = useState("")
   const [ctAddress,     setCtAddress]     = useState("")
-  const [ctPhotoFile,   setCtPhotoFile]   = useState<File | null>(null)
-  const [ctPhotoPreview,setCtPhotoPreview]= useState("")
+  const [ctPhotoFiles,  setCtPhotoFiles]  = useState<File[]>([])
 
   // Vehicle FI
   const [vfiDate,         setVfiDate]         = useState(new Date().toISOString().split("T")[0])
@@ -182,8 +181,7 @@ export default function UserDashboard() {
   const [vfiViolation,    setVfiViolation]    = useState(false)
   const [vfiViolationNum, setVfiViolationNum] = useState("")
   const [vfiNotes,        setVfiNotes]        = useState("")
-  const [vfiPhotoFile,    setVfiPhotoFile]    = useState<File | null>(null)
-  const [vfiPhotoPreview, setVfiPhotoPreview] = useState("")
+  const [vfiPhotoFiles,   setVfiPhotoFiles]   = useState<File[]>([])
   const [vfiBoloHits,     setVfiBoloHits]     = useState<any[]>([])
   const [vfiBoloChecked,  setVfiBoloChecked]  = useState(false)
   const [vfiRegHits,      setVfiRegHits]      = useState<any[]>([])
@@ -199,8 +197,7 @@ export default function UserDashboard() {
   const [pvSpace,         setPvSpace]         = useState("")
   const [pvViolationType, setPvViolationType] = useState<string>(PARKING_VIOLATION_TYPES[0])
   const [pvNotes,         setPvNotes]         = useState("")
-  const [pvPhotoFile,     setPvPhotoFile]     = useState<File | null>(null)
-  const [pvPhotoPreview,  setPvPhotoPreview]  = useState("")
+  const [pvPhotoFiles,    setPvPhotoFiles]    = useState<File[]>([])
   const [pvTowRequested,  setPvTowRequested]  = useState(false)
   const [pvTowReason,     setPvTowReason]     = useState("")
   const [pvBoloHits,      setPvBoloHits]      = useState<any[]>([])
@@ -677,15 +674,15 @@ export default function UserDashboard() {
     const contactedAt = ctDate && ctTime
       ? new Date(`${ctDate}T${ctTime}`).toISOString()
       : new Date(`${ctDate}T00:00:00`).toISOString()
-    let photoUrl: string | null = null
-    if (ctPhotoFile) {
-      const ext  = ctPhotoFile.name.split(".").pop() || "jpg"
-      const path = `${Date.now()}_${ctFirstName}_${ctLastName}.${ext}`
+    const photoUrls: string[] = []
+    for (const f of ctPhotoFiles) {
+      const ext  = f.name.split(".").pop() || "jpg"
+      const path = `ct_${Date.now()}_${photoUrls.length}.${ext}`
       const { data: up, error: upErr } = await supabase.storage
-        .from("contact-photos").upload(path, ctPhotoFile, { upsert: false })
+        .from("contact-photos").upload(path, f, { upsert: false })
       if (!upErr && up) {
         const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
-        photoUrl = publicUrl
+        photoUrls.push(publicUrl)
       }
     }
     const { error } = await supabase.from("contact_history").insert({
@@ -694,7 +691,7 @@ export default function UserDashboard() {
       notes: ctNotes || null, community_id: ctCommunity || null,
       sex: ctSex || null, race: ctRace || null, dob: ctDob || null,
       ssn: ctSsn || null, oln: ctOln || null, address: ctAddress || null,
-      photo_url: photoUrl,
+      photo_urls: photoUrls.length ? photoUrls : null,
     })
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
@@ -702,22 +699,22 @@ export default function UserDashboard() {
     logActivity("created", "Field Contact", "", `Field contact logged — ${ctFirstName} ${ctLastName}`)
     setCtFirstName(""); setCtLastName(""); setCtLocation(""); setCtReason(""); setCtOfficer(""); setCtNotes("")
     setCtSex(""); setCtRace(""); setCtDob(""); setCtSsn(""); setCtOln(""); setCtAddress("")
-    setCtPhotoFile(null); setCtPhotoPreview("")
+    setCtPhotoFiles([])
     setCtDate(new Date().toISOString().split("T")[0]); setCtTime("")
   }
 
   async function saveVehicleFI() {
     if (!vfiVehicle.plate && !vfiVehicle.make) { setReportError("Plate or Make is required."); return }
     setReportSaving(true); setReportError(""); setReportMessage("")
-    let photoUrl: string | null = null
-    if (vfiPhotoFile) {
-      const ext  = vfiPhotoFile.name.split(".").pop() || "jpg"
-      const path = `vfi_${Date.now()}.${ext}`
+    const photoUrls: string[] = []
+    for (const f of vfiPhotoFiles) {
+      const ext  = f.name.split(".").pop() || "jpg"
+      const path = `vfi_${Date.now()}_${photoUrls.length}.${ext}`
       const { data: up, error: upErr } = await supabase.storage
-        .from("contact-photos").upload(path, vfiPhotoFile, { upsert: false })
+        .from("contact-photos").upload(path, f, { upsert: false })
       if (!upErr && up) {
         const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
-        photoUrl = publicUrl
+        photoUrls.push(publicUrl)
       }
     }
     // Active-BOLO plate cross-check, snapshotted onto the row (same as parking).
@@ -746,7 +743,7 @@ export default function UserDashboard() {
       violation_issued: vfiViolation,
       violation_number: vfiViolation ? (vfiViolationNum || null) : null,
       notes: vfiNotes || null,
-      photo_url: photoUrl,
+      photo_urls: photoUrls.length ? photoUrls : null,
       bolo_match: boloMatch,
       created_at: new Date().toISOString()
     })
@@ -779,7 +776,7 @@ export default function UserDashboard() {
     logActivity("created", "Vehicle FI", "", `Vehicle FI logged — ${vfiVehicle.plate || vfiVehicle.make} ${vfiDate}`)
     setVfiLoc(EMPTY_LOCATION); setVfiVehicle(EMPTY_VEHICLE); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
     setVfiFollowUp(false); setVfiViolation(false); setVfiViolationNum("")
-    setVfiPhotoFile(null); setVfiPhotoPreview("")
+    setVfiPhotoFiles([])
     setVfiBoloHits([]); setVfiBoloChecked(false); setVfiRegHits([]); setVfiRegChecked(false)
     setVfiDate(new Date().toISOString().split("T")[0]); setVfiTime("")
   }
@@ -886,15 +883,15 @@ export default function UserDashboard() {
     if (!pvVehicle.plate.trim()) { setReportError("License plate is required for a parking violation."); return }
     setReportSaving(true); setReportError(""); setReportMessage("")
 
-    let photoUrl: string | null = null
-    if (pvPhotoFile) {
-      const ext  = pvPhotoFile.name.split(".").pop() || "jpg"
-      const path = `pv_${Date.now()}.${ext}`
+    const photoUrls: string[] = []
+    for (const f of pvPhotoFiles) {
+      const ext  = f.name.split(".").pop() || "jpg"
+      const path = `pv_${Date.now()}_${photoUrls.length}.${ext}`
       const { data: up, error: upErr } = await supabase.storage
-        .from("contact-photos").upload(path, pvPhotoFile, { upsert: false })
+        .from("contact-photos").upload(path, f, { upsert: false })
       if (!upErr && up) {
         const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
-        photoUrl = publicUrl
+        photoUrls.push(publicUrl)
       }
     }
 
@@ -920,7 +917,7 @@ export default function UserDashboard() {
       hoh_name: pvSnap.hoh_name, hoh_resident_id: pvSnap.hoh_resident_id,
       household_snapshot: pvSnap.household_snapshot,
       violation_type: pvViolationType || null,
-      notes: pvNotes || null, photo_url: photoUrl,
+      notes: pvNotes || null, photo_urls: photoUrls.length ? photoUrls : null,
       tow_requested: pvTowRequested,
       tow_requested_at: pvTowRequested ? new Date().toISOString() : null,
       tow_requested_by: pvTowRequested ? (pvOfficer || null) : null,
@@ -967,7 +964,7 @@ export default function UserDashboard() {
 
     setPvVehicle(EMPTY_VEHICLE); setPvLoc(EMPTY_LOCATION); setPvSpace(""); setPvNotes("")
     setPvViolationType(PARKING_VIOLATION_TYPES[0]); setPvTowRequested(false); setPvTowReason("")
-    setPvPhotoFile(null); setPvPhotoPreview(""); setPvBoloHits([]); setPvBoloChecked(false); setPvRegHits([]); setPvRegChecked(false)
+    setPvPhotoFiles([]); setPvBoloHits([]); setPvBoloChecked(false); setPvRegHits([]); setPvRegChecked(false)
     setPvTime("")
   }
 
@@ -2002,24 +1999,31 @@ export default function UserDashboard() {
                   className={textareaCls} />
               </div>
               <div className="mb-5">
-                <label className={labelCls}>Person Photo</label>
-                <div className="flex items-start gap-4">
-                  <div className="w-28 h-36 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
-                    {ctPhotoPreview
-                      ? <img src={ctPhotoPreview} alt="preview" className="w-full h-full object-cover" />
-                      : <span className="text-gray-400 text-xs text-center px-2">No photo</span>}
+                <label className={labelCls}>Photos</label>
+                <input type="file" accept="image/*" multiple
+                  onChange={e => {
+                    const added = Array.from(e.target.files || [])
+                    setCtPhotoFiles(prev => [...prev, ...added])
+                    e.target.value = ""
+                  }}
+                  className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG. Select multiple or open picker again to add more.</p>
+                {ctPhotoFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {ctPhotoFiles.map((f, i) => (
+                      <div key={i} className="relative w-20 h-24 flex-shrink-0">
+                        <div className="w-full h-full bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
+                          <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                        </div>
+                        <button type="button"
+                          onClick={() => setCtPhotoFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none border-none cursor-pointer flex items-center justify-center hover:bg-red-700">
+                          ✕
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex-1 pt-1">
-                    <input type="file" accept="image/*"
-                      onChange={e => {
-                        const file = e.target.files?.[0] || null
-                        setCtPhotoFile(file)
-                        setCtPhotoPreview(file ? URL.createObjectURL(file) : "")
-                      }}
-                      className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
-                    <p className="text-xs text-gray-400 mt-1">JPG, PNG accepted</p>
-                  </div>
-                </div>
+                )}
               </div>
               <button onClick={saveContactLog} disabled={reportSaving}
                 className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
@@ -2107,24 +2111,31 @@ export default function UserDashboard() {
                 )}
               </div>
               <div className="mb-5">
-                <label className={labelCls}>Vehicle Photo</label>
-                <div className="flex items-start gap-4">
-                  <div className="w-36 h-28 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
-                    {vfiPhotoPreview
-                      ? <img src={vfiPhotoPreview} alt="preview" className="w-full h-full object-cover" />
-                      : <span className="text-gray-400 text-xs text-center px-2">No photo</span>}
+                <label className={labelCls}>Photos</label>
+                <input type="file" accept="image/*" multiple
+                  onChange={e => {
+                    const added = Array.from(e.target.files || [])
+                    setVfiPhotoFiles(prev => [...prev, ...added])
+                    e.target.value = ""
+                  }}
+                  className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG. Select multiple or open picker again to add more.</p>
+                {vfiPhotoFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {vfiPhotoFiles.map((f, i) => (
+                      <div key={i} className="relative w-20 h-24 flex-shrink-0">
+                        <div className="w-full h-full bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
+                          <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                        </div>
+                        <button type="button"
+                          onClick={() => setVfiPhotoFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none border-none cursor-pointer flex items-center justify-center hover:bg-red-700">
+                          ✕
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex-1 pt-1">
-                    <input type="file" accept="image/*"
-                      onChange={e => {
-                        const file = e.target.files?.[0] || null
-                        setVfiPhotoFile(file)
-                        setVfiPhotoPreview(file ? URL.createObjectURL(file) : "")
-                      }}
-                      className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
-                    <p className="text-xs text-gray-400 mt-1">JPG, PNG accepted</p>
-                  </div>
-                </div>
+                )}
               </div>
               <button onClick={saveVehicleFI} disabled={reportSaving}
                 className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
@@ -2215,24 +2226,31 @@ export default function UserDashboard() {
               </div>
 
               <div className="mb-5">
-                <label className={labelCls}>Vehicle / Violation Photo</label>
-                <div className="flex items-start gap-4">
-                  <div className="w-36 h-28 bg-gray-100 rounded-lg overflow-hidden flex items-center justify-center flex-shrink-0 border border-gray-300">
-                    {pvPhotoPreview
-                      ? <img src={pvPhotoPreview} alt="preview" className="w-full h-full object-cover" />
-                      : <span className="text-gray-400 text-xs text-center px-2">No photo</span>}
+                <label className={labelCls}>Photos</label>
+                <input type="file" accept="image/*" multiple
+                  onChange={e => {
+                    const added = Array.from(e.target.files || [])
+                    setPvPhotoFiles(prev => [...prev, ...added])
+                    e.target.value = ""
+                  }}
+                  className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG. Select multiple or open picker again to add more.</p>
+                {pvPhotoFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {pvPhotoFiles.map((f, i) => (
+                      <div key={i} className="relative w-20 h-24 flex-shrink-0">
+                        <div className="w-full h-full bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
+                          <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                        </div>
+                        <button type="button"
+                          onClick={() => setPvPhotoFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none border-none cursor-pointer flex items-center justify-center hover:bg-red-700">
+                          ✕
+                        </button>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex-1 pt-1">
-                    <input type="file" accept="image/*"
-                      onChange={e => {
-                        const file = e.target.files?.[0] || null
-                        setPvPhotoFile(file)
-                        setPvPhotoPreview(file ? URL.createObjectURL(file) : "")
-                      }}
-                      className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
-                    <p className="text-xs text-gray-400 mt-1">JPG, PNG accepted</p>
-                  </div>
-                </div>
+                )}
               </div>
               <button onClick={saveParkingViolation} disabled={reportSaving}
                 className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
