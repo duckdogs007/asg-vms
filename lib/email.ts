@@ -244,6 +244,104 @@ export function buildBoloEmailHtml(opts: {
   `
 }
 
+export function buildReportEmailHtml(r: any): string {
+  const esc = (s: any) => escapeHtml(String(s ?? ""))
+  const typeLabel =
+    r._type === "Incident"          ? "Incident Report" :
+    r._type === "Field Contact"     ? "Field Contact Report" :
+    r._type === "Vehicle FI"        ? "Vehicle Field Interview" :
+    r._type === "Parking Violation" ? "Parking Violation" :
+                                      "Patrol / Daily Log"
+  const accent =
+    r._type === "Incident"          ? "#b91c1c" :
+    r._type === "Field Contact"     ? "#7c3aed" :
+    r._type === "Vehicle FI"        ? "#c2410c" :
+    r._type === "Parking Violation" ? "#b45309" : "#1d4ed8"
+
+  const facts: Array<[string, string | null | undefined]> = [
+    ["Date",              r.date],
+    ["Time",              r.time],
+    ["Officer",           r.officer_name || r.officer],
+    ["Shift",             r.shift],
+    ["Weather",           r.weather],
+    ["Incident Type",     r.incident_type],
+    ["Location",          r.location],
+    ["Building / Apt",    (r.building || r.apartment) ? [r.building, r.apartment].filter(Boolean).join(" / ") : null],
+    ["HOH",               r.hoh_name],
+    ["Reliant #",         r.reliant_case_no],
+    ["HPD #",             r.hpd_report_no],
+    ["ASG #",             r.asg_report_no],
+    ["Reliant Notified",  r.reliant_notified != null ? (r.reliant_notified ? "Yes" : "No") : null],
+    ["Persons Involved",  r.persons_involved],
+    ["Subject",           r.first_name ? `${r.first_name} ${r.last_name || ""}`.trim() : null],
+    ["DOB",               r.dob],
+    ["Sex",               r.sex],
+    ["Race",              r.race],
+    ["OLN",               r.oln],
+    ["Address",           r.address],
+    ["Reason",            r.reason],
+    ["Make",              r.make],
+    ["Model",             r.model],
+    ["Color",             r.color],
+    ["Year",              r.year],
+    ["Plate",             r.plate],
+    ["State",             r.state],
+    ["Violation Type",    r.violation_type],
+    ["Space",             r.space],
+    ["Tow Requested",     r.tow_requested ? "Yes" : null],
+  ]
+  const factRows = facts
+    .filter(([, v]) => v && String(v).trim())
+    .map(([k, v]) => `
+      <tr>
+        <td style="padding:4px 12px 4px 0;color:#6b7280;font-weight:600;font-size:13px;vertical-align:top;white-space:nowrap;">${esc(k)}</td>
+        <td style="padding:4px 0;color:#111827;font-size:14px;">${esc(v)}</td>
+      </tr>`).join("")
+
+  const textSections: Array<[string, string]> = (
+    [
+      r.narrative    ? ["Patrol Narrative",      r.narrative]    : null,
+      r.description  ? ["Incident Description",  r.description]  : null,
+      r.action_taken ? ["Action Taken",          r.action_taken] : null,
+      r.notes        ? ["Notes",                 r.notes]        : null,
+    ] as Array<[string, string] | null>
+  ).filter((x): x is [string, string] => x !== null)
+
+  const textBlocks = textSections.map(([label, content]) => `
+    <div style="margin:0 0 14px;">
+      <div style="font-size:11px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">${label}</div>
+      <div style="padding:12px 14px;border:1px solid #e5e7eb;border-radius:6px;background:#f9fafb;color:#111827;font-size:14px;line-height:1.6;white-space:pre-wrap;">${esc(content)}</div>
+    </div>`).join("")
+
+  const photoCount = (Array.isArray(r.photo_urls) ? r.photo_urls.length : 0) + (r.photo_url ? 1 : 0)
+  const photoNote = photoCount > 0
+    ? `<div style="margin:0 0 14px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;color:#166534;font-size:13px;">📷 ${photoCount} photo${photoCount > 1 ? "s" : ""} attached — view in VMS</div>`
+    : ""
+  const followUpNote = (r.follow_up_required || r.follow_up)
+    ? `<div style="padding:10px 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;color:#9a3412;font-size:13px;font-weight:600;">⚠ Follow-up action required</div>`
+    : ""
+
+  return `
+    <div style="font-family:system-ui,-apple-system,'Segoe UI',sans-serif;max-width:640px;margin:0 auto;">
+      <div style="border-left:4px solid ${accent};padding:14px 18px;background:#f9fafb;margin-bottom:0;">
+        <div style="font-size:11px;text-transform:uppercase;letter-spacing:0.05em;color:${accent};font-weight:700;">AMERICAN SECURITY GROUP — ${esc(typeLabel)}</div>
+        <h2 style="margin:4px 0 0;color:#111827;font-size:18px;">
+          ${esc(r.date || "")}${r.time ? " · " + esc(r.time) : ""}${(r.officer_name || r.officer) ? " · " + esc(r.officer_name || r.officer) : ""}
+        </h2>
+        ${r.location ? `<div style="color:#6b7280;font-size:13px;margin-top:2px;">${esc(r.location)}</div>` : ""}
+      </div>
+      <div style="padding:16px 18px 0;">
+        ${factRows ? `<table style="border-collapse:collapse;width:100%;margin-bottom:16px;">${factRows}</table>` : ""}
+        ${textBlocks}
+        ${photoNote}
+        ${followUpNote}
+      </div>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 18px 12px;" />
+      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG VMS · ${escapeHtml(ET_NOW())} ET</p>
+    </div>
+  `
+}
+
 export function buildPassdownEmailHtml(opts: {
   date:         string | null
   shift:        string | null

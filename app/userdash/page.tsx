@@ -134,6 +134,11 @@ export default function UserDashboard() {
   const [expandedReport,setExpandedReport]= useState<number | null>(null)
   const [editingReport, setEditingReport] = useState<number | null>(null)
   const [editFields,    setEditFields]    = useState<Record<string, any>>({})
+  const [emailingReport,setEmailingReport]= useState<number | null>(null)
+  const [emailTo,       setEmailTo]       = useState("")
+  const [emailSending,  setEmailSending]  = useState(false)
+  const [emailResult,   setEmailResult]   = useState<{ok: boolean; msg: string} | null>(null)
+  const [shareCopied,   setShareCopied]   = useState(false)
 
 
   // Daily log
@@ -993,6 +998,114 @@ export default function UserDashboard() {
     await logActivity("deleted", r._type, r.id, `Deleted ${r._type} — ${r.date}`)
     setExpandedReport(null)
     loadPastReports()
+  }
+
+  function printReport(r: any) {
+    const esc = (s: any) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
+    const typeLabel =
+      r._type === "Incident"          ? "Incident Report" :
+      r._type === "Field Contact"     ? "Field Contact Report" :
+      r._type === "Vehicle FI"        ? "Vehicle Field Interview" :
+      r._type === "Parking Violation" ? "Parking Violation" :
+                                        "Patrol / Daily Log"
+    const accent =
+      r._type === "Incident"          ? "#b91c1c" :
+      r._type === "Field Contact"     ? "#7c3aed" :
+      r._type === "Vehicle FI"        ? "#c2410c" :
+      r._type === "Parking Violation" ? "#b45309" : "#1d4ed8"
+    const facts: Array<[string, any]> = [
+      ["Date", r.date], ["Time", r.time],
+      ["Officer", r.officer_name || r.officer],
+      ["Shift", r.shift], ["Weather", r.weather],
+      ["Incident Type", r.incident_type],
+      ["Location", r.location],
+      ["Building / Apt", (r.building || r.apartment) ? [r.building, r.apartment].filter(Boolean).join(" / ") : null],
+      ["HOH", r.hoh_name],
+      ["Reliant #", r.reliant_case_no], ["HPD #", r.hpd_report_no], ["ASG #", r.asg_report_no],
+      ["Reliant Notified", r.reliant_notified != null ? (r.reliant_notified ? "Yes" : "No") : null],
+      ["Persons Involved", r.persons_involved],
+      ["Subject", r.first_name ? `${r.first_name} ${r.last_name || ""}`.trim() : null],
+      ["DOB", r.dob], ["Sex", r.sex], ["Race", r.race], ["OLN", r.oln], ["Address", r.address],
+      ["Reason", r.reason],
+      ["Make", r.make], ["Model", r.model], ["Color", r.color], ["Year", r.year],
+      ["Plate", r.plate ? `${displayPlate(r.plate)}${r.state && !isNoPlate(r.plate) ? " (" + r.state + ")" : ""}` : null],
+      ["Violation Type", r.violation_type], ["Space", r.space],
+      ["Tow Requested", r.tow_requested ? "Yes" : null],
+    ]
+    const rows = facts.filter(([,v]) => v).map(([k,v]) =>
+      `<tr><td style="padding:4px 10px 4px 0;color:#555;font-weight:600;font-size:12px;white-space:nowrap;vertical-align:top;">${esc(k)}</td><td style="padding:4px 0;font-size:13px;">${esc(v)}</td></tr>`
+    ).join("")
+    const rawSections: Array<[string, string] | null> = [
+      r.narrative    ? ["Patrol Narrative",     r.narrative]    : null,
+      r.description  ? ["Incident Description", r.description]  : null,
+      r.action_taken ? ["Action Taken",         r.action_taken] : null,
+      r.notes        ? ["Notes",                r.notes]        : null,
+    ]
+    const textSections = rawSections.filter((x): x is [string, string] => x !== null)
+    const textBlocks = textSections.map(([label, text]) =>
+      `<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:4px;">${label}</div><div style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:4px;font-size:13px;line-height:1.6;white-space:pre-wrap;">${esc(text)}</div></div>`
+    ).join("")
+    const photoCount = (Array.isArray(r.photo_urls) ? r.photo_urls.length : 0) + (r.photo_url ? 1 : 0)
+    const photoLine = photoCount > 0 ? `<p style="color:#166534;font-size:12px;">📷 ${photoCount} photo${photoCount>1?"s":""} attached — view in VMS</p>` : ""
+    const followUp = (r.follow_up_required || r.follow_up) ? `<p style="color:#9a3412;font-weight:600;font-size:12px;">⚠ Follow-up action required</p>` : ""
+    const printedAt = new Date().toLocaleString("en-US",{timeZone:"America/New_York",dateStyle:"medium",timeStyle:"short"})
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(typeLabel)}</title>
+      <style>body{font-family:system-ui,-apple-system,sans-serif;margin:0;padding:20px;color:#111;}@media print{body{padding:0;}}</style>
+    </head><body>
+      <div style="border-left:4px solid ${accent};padding:10px 14px;background:#f9fafb;margin-bottom:16px;">
+        <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.05em;color:${accent};font-weight:700;margin-bottom:2px;">AMERICAN SECURITY GROUP — ${esc(typeLabel)}</div>
+        <div style="font-size:15px;font-weight:700;">${esc(r.date||"")}${r.time?" · "+esc(r.time):""}${(r.officer_name||r.officer)?" · "+esc(r.officer_name||r.officer):""}</div>
+        ${r.location?`<div style="color:#666;font-size:12px;">${esc(r.location)}</div>`:""}
+      </div>
+      ${rows?`<table style="border-collapse:collapse;margin-bottom:14px;">${rows}</table>`:""}
+      ${textBlocks}${photoLine}${followUp}
+      <div style="border-top:1px solid #e5e7eb;margin-top:20px;padding-top:8px;color:#9ca3af;font-size:10px;">ASG VMS · Printed ${esc(printedAt)} ET</div>
+    </body></html>`
+    const w = window.open("", "_blank", "width=820,height=960")
+    if (!w) return
+    w.document.write(html)
+    w.document.close()
+    setTimeout(() => { w.print() }, 400)
+  }
+
+  async function shareReport(r: any) {
+    const typeLabel = r._type || "Report"
+    const lines = [
+      `ASG VMS — ${typeLabel}`,
+      r.date ? `Date: ${r.date}${r.time ? " " + r.time : ""}` : "",
+      (r.officer_name || r.officer) ? `Officer: ${r.officer_name || r.officer}` : "",
+      r.incident_type ? `Type: ${r.incident_type}` : "",
+      r.location ? `Location: ${r.location}` : "",
+      (r.building || r.apartment) ? `Bldg/Apt: ${[r.building, r.apartment].filter(Boolean).join(" / ")}` : "",
+      r.persons_involved ? `Persons: ${r.persons_involved}` : "",
+      (r.narrative || r.description) ? `\n${r.narrative || r.description}` : "",
+      r.action_taken ? `\nAction Taken: ${r.action_taken}` : "",
+    ].filter(Boolean).join("\n")
+    if (typeof navigator !== "undefined" && "share" in navigator) {
+      try { await navigator.share({ title: `ASG VMS — ${typeLabel}`, text: lines }); return } catch {}
+    }
+    await navigator.clipboard.writeText(lines)
+    setShareCopied(true)
+    setTimeout(() => setShareCopied(false), 2000)
+  }
+
+  async function sendReportEmail(r: any) {
+    if (!emailTo.trim()) return
+    setEmailSending(true); setEmailResult(null)
+    try {
+      const res = await fetch("/api/reports/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: emailTo.trim(), report: r }),
+      })
+      const data = await res.json()
+      setEmailResult({ ok: data.ok, msg: data.ok ? "✅ Sent!" : `Failed: ${data.error || "unknown"}` })
+      if (data.ok) { setEmailTo(""); setTimeout(() => { setEmailingReport(null); setEmailResult(null) }, 2500) }
+    } catch {
+      setEmailResult({ ok: false, msg: "Network error — try again." })
+    } finally {
+      setEmailSending(false)
+    }
   }
 
   async function saveEditedReport(r: any) {
@@ -2236,6 +2349,53 @@ export default function UserDashboard() {
                           </>
                         )}
                       </div>
+
+                      {/* Export row — hidden while editing */}
+                      {editingReport !== i && (
+                        <div className="flex flex-wrap gap-2 mb-4">
+                          <button onClick={() => printReport(r)}
+                            className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 border border-gray-300 cursor-pointer">
+                            🖨 Print
+                          </button>
+                          <button
+                            onClick={() => { setEmailingReport(emailingReport === i ? null : i); setEmailResult(null); setEmailTo("") }}
+                            className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 border border-gray-300 cursor-pointer">
+                            📧 Email
+                          </button>
+                          <button onClick={() => shareReport(r)}
+                            className="px-3 py-1.5 bg-gray-100 text-gray-700 text-xs font-semibold rounded-lg hover:bg-gray-200 border border-gray-300 cursor-pointer">
+                            {shareCopied ? "✅ Copied!" : "🔗 Share"}
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Inline email form */}
+                      {emailingReport === i && editingReport !== i && (
+                        <div className="mb-4 flex flex-wrap items-center gap-2">
+                          <input
+                            type="email"
+                            value={emailTo}
+                            onChange={e => setEmailTo(e.target.value)}
+                            onKeyDown={e => e.key === "Enter" && sendReportEmail(r)}
+                            placeholder="Recipient email address"
+                            className="flex-1 min-w-[220px] px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                          />
+                          <button onClick={() => sendReportEmail(r)}
+                            disabled={emailSending || !emailTo.trim()}
+                            className="px-4 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer disabled:opacity-50">
+                            {emailSending ? "Sending…" : "Send"}
+                          </button>
+                          <button onClick={() => { setEmailingReport(null); setEmailResult(null); setEmailTo("") }}
+                            className="px-3 py-1.5 bg-gray-200 text-gray-700 text-xs rounded-lg border-none cursor-pointer">
+                            Cancel
+                          </button>
+                          {emailResult && (
+                            <span className={`text-xs font-semibold ${emailResult.ok ? "text-green-600" : "text-red-600"}`}>
+                              {emailResult.msg}
+                            </span>
+                          )}
+                        </div>
+                      )}
 
                       {violationForId === r.id && (
                         <div className="mb-4 border border-amber-300 bg-amber-50 rounded-lg p-4">
