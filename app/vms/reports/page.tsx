@@ -113,14 +113,21 @@ const EMPTY_STATS: Stats = {
   byDay: {}, byHour: {}
 }
 
-interface CommSummaryRow {
-  id: string
-  name: string
-  incidents: number
-  fieldContacts: number
-  vehicleFIs: number
-  parking: number
-  dailyLogs: number
+const REPORT_TYPES = [
+  { key: "incidents",     label: "Incident Reports",   color: "red",    table: "incident_reports",   dateCol: "date" },
+  { key: "fieldContacts", label: "Field Contacts",     color: "purple", table: "contact_history",    dateCol: "created_at" },
+  { key: "vehicleFIs",    label: "Vehicle FIs",        color: "orange", table: "vehicle_fi_logs",    dateCol: "date" },
+  { key: "parking",       label: "Parking Violations", color: "amber",  table: "parking_violations", dateCol: "date" },
+  { key: "dailyLogs",     label: "Daily Logs",         color: "teal",   table: "officer_daily_logs", dateCol: "date" },
+] as const
+type RptTypeKey = typeof REPORT_TYPES[number]["key"]
+
+const RPT_COLORS: Record<string, { idle: string; open: string; title: string; val: string }> = {
+  red:    { idle: "bg-red-50 border-red-200",       open: "bg-red-100 border-red-300",       title: "text-red-700",    val: "text-red-800" },
+  purple: { idle: "bg-purple-50 border-purple-200", open: "bg-purple-100 border-purple-300", title: "text-purple-700", val: "text-purple-800" },
+  orange: { idle: "bg-orange-50 border-orange-200", open: "bg-orange-100 border-orange-300", title: "text-orange-700", val: "text-orange-800" },
+  amber:  { idle: "bg-amber-50 border-amber-200",   open: "bg-amber-100 border-amber-300",   title: "text-amber-700",  val: "text-amber-800" },
+  teal:   { idle: "bg-teal-50 border-teal-200",     open: "bg-teal-100 border-teal-300",     title: "text-teal-700",   val: "text-teal-800" },
 }
 
 export default function ReportsPage() {
@@ -139,8 +146,13 @@ export default function ReportsPage() {
   const [deleting,       setDeleting]       = useState<string | null>(null)
   const [entryLogSearch, setEntryLogSearch] = useState("")
   const [priorTotal,     setPriorTotal]     = useState<number | null>(null)
-  const [commSummary,        setCommSummary]        = useState<CommSummaryRow[]>([])
-  const [commSummaryLoading, setCommSummaryLoading] = useState(false)
+  const EMPTY_RPT: Record<RptTypeKey, number> = { incidents: 0, fieldContacts: 0, vehicleFIs: 0, parking: 0, dailyLogs: 0 }
+  const [rptCommunity,     setRptCommunity]     = useState("")
+  const [rptSummary,       setRptSummary]       = useState<Record<RptTypeKey, number>>(EMPTY_RPT)
+  const [rptSummaryLoading,setRptSummaryLoading]= useState(false)
+  const [rptOpenDetail,    setRptOpenDetail]    = useState<RptTypeKey | null>(null)
+  const [rptDetailRows,    setRptDetailRows]    = useState<any[]>([])
+  const [rptDetailLoading, setRptDetailLoading] = useState(false)
 
   const [stats, setStats] = useState<Stats>(EMPTY_STATS)
   // Parking violations for the selected community + date range (filtered by the
@@ -175,7 +187,10 @@ export default function ReportsPage() {
       const savedMatch = data.find(c => c.id === savedId)
       const stLuke     = data.find(c => c.name.toLowerCase().includes("st. luke") || c.name.toLowerCase().includes("st luke"))
       const chosen     = savedMatch || stLuke || data[0]
-      if (chosen) setCommunity(chosen.id)
+      if (chosen) {
+        setCommunity(chosen.id)
+        setRptCommunity(chosen.id)
+      }
     })
   }, [])
 
@@ -192,7 +207,7 @@ export default function ReportsPage() {
   useEffect(() => { if (community) loadData() }, [community, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (communities.length > 0) loadCommunitySummary() }, [dateFrom, dateTo, communities])
+  useEffect(() => { if (rptCommunity) { setRptOpenDetail(null); setRptDetailRows([]); loadRptSummary() } }, [rptCommunity, dateFrom, dateTo])
 
   useEffect(() => {
     if (!community) return
@@ -283,34 +298,41 @@ export default function ReportsPage() {
       .then(({ count }) => setPriorTotal(count ?? 0))
   }
 
-  async function loadCommunitySummary() {
-    if (communities.length === 0) return
-    setCommSummaryLoading(true)
-    const [incRes, ctRes, vfiRes, pvRes, logRes] = await Promise.all([
-      supabase.from("incident_reports").select("community_id").gte("date", dateFrom).lte("date", dateTo),
-      supabase.from("contact_history").select("community_id").gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59"),
-      supabase.from("vehicle_fi_logs").select("community_id").gte("date", dateFrom).lte("date", dateTo),
-      supabase.from("parking_violations").select("community_id").gte("date", dateFrom).lte("date", dateTo),
-      supabase.from("officer_daily_logs").select("community_id").gte("date", dateFrom).lte("date", dateTo),
+  async function loadRptSummary() {
+    if (!rptCommunity) return
+    setRptSummaryLoading(true)
+    const [incR, ctR, vfiR, pvR, logR] = await Promise.all([
+      supabase.from("incident_reports").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("contact_history").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59"),
+      supabase.from("vehicle_fi_logs").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("parking_violations").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("officer_daily_logs").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
     ])
-    const cnt = (rows: any[] | null, id: string) =>
-      (rows || []).filter(r => r.community_id === id).length
-    const rows: CommSummaryRow[] = communities.map(c => ({
-      id:            c.id,
-      name:          c.name,
-      incidents:     cnt(incRes.data, c.id),
-      fieldContacts: cnt(ctRes.data, c.id),
-      vehicleFIs:    cnt(vfiRes.data, c.id),
-      parking:       cnt(pvRes.data, c.id),
-      dailyLogs:     cnt(logRes.data, c.id),
-    }))
-    rows.sort((a, b) => {
-      const ta = a.incidents + a.fieldContacts + a.vehicleFIs + a.parking + a.dailyLogs
-      const tb = b.incidents + b.fieldContacts + b.vehicleFIs + b.parking + b.dailyLogs
-      return tb - ta
+    setRptSummary({
+      incidents:     incR.count  || 0,
+      fieldContacts: ctR.count   || 0,
+      vehicleFIs:    vfiR.count  || 0,
+      parking:       pvR.count   || 0,
+      dailyLogs:     logR.count  || 0,
     })
-    setCommSummary(rows)
-    setCommSummaryLoading(false)
+    setRptSummaryLoading(false)
+  }
+
+  async function toggleRptDetail(key: RptTypeKey) {
+    if (rptOpenDetail === key) { setRptOpenDetail(null); setRptDetailRows([]); return }
+    setRptOpenDetail(key)
+    setRptDetailRows([])
+    setRptDetailLoading(true)
+    const rt = REPORT_TYPES.find(r => r.key === key)!
+    let q = supabase.from(rt.table).select("*").eq("community_id", rptCommunity)
+    if (rt.dateCol === "created_at") {
+      q = q.gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59")
+    } else {
+      q = q.gte("date", dateFrom).lte("date", dateTo)
+    }
+    const { data } = await (q as any).order(rt.dateCol, { ascending: false }).limit(200)
+    setRptDetailRows(data || [])
+    setRptDetailLoading(false)
   }
 
   function computeStats(logs: VisitorLog[]) {
@@ -634,78 +656,149 @@ export default function ReportsPage() {
 
       {/* ── REPORTS BY COMMUNITY ── */}
       {communities.length > 0 && (
-        <Section label={`Reports by Community · ${dateFrom} → ${dateTo}`}>
-          {commSummaryLoading ? (
-            <div className="text-gray-400 text-sm animate-pulse py-4">Loading…</div>
-          ) : (
-            <div className="bg-white border border-gray-200 rounded-xl overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-gray-100">
-                    <th className="px-4 py-2.5 font-semibold">Community</th>
-                    <th className="px-4 py-2.5 font-semibold text-right">Incidents</th>
-                    <th className="px-4 py-2.5 font-semibold text-right">Field Contacts</th>
-                    <th className="px-4 py-2.5 font-semibold text-right">Vehicle FIs</th>
-                    <th className="px-4 py-2.5 font-semibold text-right">Parking</th>
-                    <th className="px-4 py-2.5 font-semibold text-right">Daily Logs</th>
-                    <th className="px-4 py-2.5 font-semibold text-right">Total</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {commSummary.map((row, i) => {
-                    const total = row.incidents + row.fieldContacts + row.vehicleFIs + row.parking + row.dailyLogs
-                    const isSelected = row.id === community
+        <Section label="Reports by Community">
+          {/* Community picker — scoped to communities accessible to this user */}
+          <div className="mb-4">
+            <select
+              value={rptCommunity}
+              onChange={e => setRptCommunity(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white w-72"
+            >
+              <option value="">Select a community…</option>
+              {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            </select>
+          </div>
+
+          {rptCommunity && (
+            rptSummaryLoading ? (
+              <div className="text-gray-400 text-sm animate-pulse py-4">Loading…</div>
+            ) : (
+              <>
+                {/* Summary cards — each is a link to expand inline detail */}
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
+                  {REPORT_TYPES.map(rt => {
+                    const count  = rptSummary[rt.key]
+                    const isOpen = rptOpenDetail === rt.key
+                    const clr    = RPT_COLORS[rt.color]
                     return (
-                      <tr key={row.id}
-                        className={`cursor-pointer hover:bg-gray-50 transition-colors ${i < commSummary.length - 1 ? "border-b border-gray-100" : ""} ${isSelected ? "bg-blue-50" : ""}`}
-                        onClick={() => setCommunity(row.id)}
+                      <button key={rt.key}
+                        onClick={() => toggleRptDetail(rt.key)}
+                        disabled={count === 0}
+                        className={`text-left border rounded-xl px-4 py-3 transition-all w-full ${
+                          count === 0
+                            ? "opacity-40 cursor-not-allowed bg-gray-50 border-gray-200"
+                            : isOpen
+                              ? `${clr.open} shadow-sm cursor-pointer`
+                              : `${clr.idle} hover:shadow-sm cursor-pointer`
+                        }`}
                       >
-                        <td className={`px-4 py-2.5 font-semibold ${isSelected ? "text-blue-700" : "text-gray-800"}`}>
-                          {row.name}
-                          {isSelected && <span className="ml-2 text-[10px] font-normal text-blue-400 uppercase tracking-wider">viewing</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-mono">
-                          {row.incidents > 0 ? <span className="text-red-700 font-semibold">{row.incidents}</span> : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-mono">
-                          {row.fieldContacts > 0 ? <span className="text-purple-700 font-semibold">{row.fieldContacts}</span> : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-mono">
-                          {row.vehicleFIs > 0 ? <span className="text-orange-700 font-semibold">{row.vehicleFIs}</span> : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-mono">
-                          {row.parking > 0 ? <span className="text-amber-700 font-semibold">{row.parking}</span> : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-right font-mono">
-                          {row.dailyLogs > 0 ? <span className="text-teal-700 font-semibold">{row.dailyLogs}</span> : <span className="text-gray-300">—</span>}
-                        </td>
-                        <td className="px-4 py-2.5 text-right">
-                          {total > 0
-                            ? <span className="font-bold text-gray-800">{total}</span>
-                            : <span className="text-gray-300">—</span>}
-                        </td>
-                      </tr>
+                        <div className={`text-xs font-medium mb-1 ${count === 0 ? "text-gray-400" : clr.title}`}>{rt.label}</div>
+                        <div className={`text-2xl font-bold leading-tight ${count === 0 ? "text-gray-400" : clr.val}`}>{count}</div>
+                        {count > 0 && (
+                          <div className="text-[10px] text-blue-600 mt-1 font-semibold underline">
+                            {isOpen ? "▲ collapse" : "▼ view details"}
+                          </div>
+                        )}
+                      </button>
                     )
                   })}
-                </tbody>
-                <tfoot>
-                  <tr className="border-t border-gray-200 bg-gray-50">
-                    <td className="px-4 py-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">Totals</td>
-                    {(["incidents","fieldContacts","vehicleFIs","parking","dailyLogs"] as const).map(key => {
-                      const sum = commSummary.reduce((a, r) => a + r[key], 0)
-                      return (
-                        <td key={key} className="px-4 py-2 text-right font-bold text-gray-700 font-mono">
-                          {sum > 0 ? sum : <span className="text-gray-300">—</span>}
-                        </td>
-                      )
-                    })}
-                    <td className="px-4 py-2 text-right font-bold text-gray-800 font-mono">
-                      {commSummary.reduce((a, r) => a + r.incidents + r.fieldContacts + r.vehicleFIs + r.parking + r.dailyLogs, 0) || <span className="text-gray-300">—</span>}
-                    </td>
-                  </tr>
-                </tfoot>
-              </table>
-            </div>
+                </div>
+
+                {/* Inline detail panel */}
+                {rptOpenDetail && (() => {
+                  const rt = REPORT_TYPES.find(r => r.key === rptOpenDetail)!
+                  const clr = RPT_COLORS[rt.color]
+                  return (
+                    <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-2">
+                      <div className={`px-4 py-2.5 border-b border-gray-100 flex items-center justify-between ${clr.idle}`}>
+                        <span className={`text-sm font-semibold ${clr.title}`}>
+                          {rt.label}
+                          {!rptDetailLoading && <span className="ml-2 font-normal text-gray-500">({rptDetailRows.length} record{rptDetailRows.length !== 1 ? "s" : ""})</span>}
+                        </span>
+                        <button onClick={() => { setRptOpenDetail(null); setRptDetailRows([]) }}
+                          className="text-xs text-gray-400 hover:text-gray-700 cursor-pointer bg-transparent border-none">
+                          ✕ Close
+                        </button>
+                      </div>
+
+                      {rptDetailLoading ? (
+                        <div className="px-4 py-6 text-gray-400 text-sm animate-pulse">Loading records…</div>
+                      ) : rptDetailRows.length === 0 ? (
+                        <div className="px-4 py-6 text-gray-400 text-sm text-center">No records found.</div>
+                      ) : (
+                        <div className="divide-y divide-gray-100 max-h-[480px] overflow-y-auto">
+                          {rptDetailRows.map((row, i) => {
+                            if (rptOpenDetail === "incidents") return (
+                              <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
+                                <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">{row.date || "—"}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-semibold text-gray-800 truncate">{row.incident_type || row.violation_type || "—"}</div>
+                                  <div className="text-xs text-gray-500 truncate">
+                                    {[row.building && row.apartment ? `${row.building} / ${row.apartment}` : (row.building || row.apartment || null), row.issued_by || row.officer_name].filter(Boolean).join(" · ") || "—"}
+                                  </div>
+                                  {row.description && <div className="text-xs text-gray-400 truncate mt-0.5">{row.description}</div>}
+                                </div>
+                                {row.lvl_issued && <span className="px-2 py-0.5 bg-amber-100 text-amber-700 text-xs font-bold rounded-full flex-shrink-0">LVL</span>}
+                              </div>
+                            )
+                            if (rptOpenDetail === "fieldContacts") return (
+                              <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
+                                <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">
+                                  {row.created_at ? new Date(utc(row.created_at)).toLocaleDateString("en-CA") : "—"}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-semibold text-gray-800 truncate">{row.contact_name || row.subject_name || "—"}</div>
+                                  <div className="text-xs text-gray-500 truncate">{row.officer_name || "—"}</div>
+                                  {row.notes && <div className="text-xs text-gray-400 truncate mt-0.5">{row.notes}</div>}
+                                </div>
+                              </div>
+                            )
+                            if (rptOpenDetail === "vehicleFIs") return (
+                              <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
+                                <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">{row.date || "—"}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-semibold text-gray-800 font-mono">{displayPlate(row.plate) || "—"}{row.state && !isNoPlate(row.plate || "") ? ` (${row.state})` : ""}</div>
+                                  <div className="text-xs text-gray-500 truncate">
+                                    {[row.year, row.color, row.make, row.model].filter(Boolean).join(" ") || "—"}
+                                  </div>
+                                  <div className="text-xs text-gray-400 truncate">{row.officer_name || "—"}</div>
+                                </div>
+                                {row.notes && <div className="text-xs text-gray-400 max-w-[200px] truncate">{row.notes}</div>}
+                              </div>
+                            )
+                            if (rptOpenDetail === "parking") return (
+                              <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
+                                <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">{row.date || "—"}{row.time ? <><br />{row.time}</> : ""}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-semibold text-gray-800 font-mono">{displayPlate(row.plate) || "—"}{row.state && !isNoPlate(row.plate || "") ? ` (${row.state})` : ""}</div>
+                                  <div className="text-xs text-gray-500 truncate">{row.violation_type || "—"}{row.location ? ` · ${row.location}` : ""}{row.space ? ` Space ${row.space}` : ""}</div>
+                                  <div className="text-xs text-gray-400 truncate">{row.officer_name || "—"}</div>
+                                </div>
+                                <div className="flex gap-1 flex-shrink-0">
+                                  {row.bolo_match    && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">BOLO</span>}
+                                  {row.tow_requested && <span className="px-2 py-0.5 bg-orange-100 text-orange-700 text-xs font-bold rounded-full">Tow</span>}
+                                </div>
+                              </div>
+                            )
+                            if (rptOpenDetail === "dailyLogs") return (
+                              <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
+                                <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">{row.date || "—"}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-semibold text-gray-800 truncate">{row.officer_name || row.officer || "—"}</div>
+                                  <div className="text-xs text-gray-500 truncate">{[row.shift, row.log_type].filter(Boolean).join(" · ") || "—"}</div>
+                                  {(row.narrative || row.notes) && <div className="text-xs text-gray-400 truncate mt-0.5">{row.narrative || row.notes}</div>}
+                                </div>
+                              </div>
+                            )
+                            return null
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+              </>
+            )
           )}
         </Section>
       )}
