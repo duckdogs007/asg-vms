@@ -133,12 +133,17 @@ const REPORT_TYPES = [
 type RptTypeKey = typeof REPORT_TYPES[number]["key"]
 
 const SUB_BADGE: Record<string, string> = {
+  // camelCase keys — Recent Submissions (s.typeKey)
   incident:     "bg-red-100 text-red-700",
   fieldContact: "bg-purple-100 text-purple-700",
   vehicleFI:    "bg-orange-100 text-orange-700",
   parking:      "bg-amber-100 text-amber-700",
   dailyLog:     "bg-teal-100 text-teal-700",
   maintenance:  "bg-emerald-100 text-emerald-700",
+  // snake_case keys — Review Queue (q.report_type)
+  field_contact: "bg-purple-100 text-purple-700",
+  vehicle_fi:    "bg-orange-100 text-orange-700",
+  daily_log:     "bg-teal-100 text-teal-700",
 }
 
 const RPT_COLORS: Record<string, { idle: string; open: string; title: string; val: string }> = {

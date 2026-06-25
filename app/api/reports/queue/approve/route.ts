@@ -69,12 +69,13 @@ export async function POST(req: NextRequest) {
       html:    buildReportEmailHtml({ ...report, _type: emailType }),
     })
 
-    await supabase.from("report_queue").update({
+    const { error: updateErr } = await supabase.from("report_queue").update({
       status:      "sent",
       reviewed_by: user.email,
       reviewed_at: now,
       sent_at:     now,
     }).eq("id", queueId)
+    if (updateErr) throw new Error("Queue status update failed: " + updateErr.message)
 
     return NextResponse.json({ ok: true, recipients })
   } catch (e: any) {
