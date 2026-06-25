@@ -330,6 +330,22 @@ export default function UserDashboard() {
     if (activeTab === "onduty")    loadOfficersOnDuty()
   }, [activeTab])
 
+  // Pre-fill narrative with current date/time stamp when switching to a report tab (only if empty)
+  useEffect(() => {
+    const now = new Date()
+    const mm   = (now.getMonth() + 1).toString().padStart(2, "0")
+    const dd   = now.getDate().toString().padStart(2, "0")
+    const hh   = now.getHours().toString().padStart(2, "0")
+    const min  = now.getMinutes().toString().padStart(2, "0")
+    const ts   = `[${mm}/${dd}/${now.getFullYear()} ${hh}:${min}] `
+    if (reportTab === "daily"       && !dailyNarrative)  setDailyNarrative(ts)
+    if (reportTab === "incident"    && !incDescription)   setIncDescription(ts)
+    if (reportTab === "contact"     && !ctNotes)          setCtNotes(ts)
+    if (reportTab === "vfi"         && !vfiNotes)         setVfiNotes(ts)
+    if (reportTab === "parking"     && !pvNotes)          setPvNotes(ts)
+    if (reportTab === "maintenance" && !mntDesc)          setMntDesc(ts)
+  }, [reportTab]) // eslint-disable-line react-hooks/exhaustive-deps
+
   async function loadOfficersOnDuty() {
     setOfficersLoading(true); setOfficersError("")
     try {
@@ -1937,7 +1953,7 @@ export default function UserDashboard() {
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <label className={labelCls + " mb-0"}>Patrol Narrative <span className="text-red-500">*</span></label>
-                  <AiAssist kind="daily" value={dailyNarrative} onChange={setDailyNarrative} fields={{ shift: dailyShift, weather: dailyWeather }} />
+                  <AiAssist kind="daily" value={dailyNarrative} onChange={setDailyNarrative} fields={{ shift: dailyShift }} />
                 </div>
                 <textarea rows={5} value={dailyNarrative} onChange={e => setDailyNarrative(e.target.value)}
                   placeholder="Describe patrol activities, observations, and any notable events..."
