@@ -15,9 +15,9 @@
 |---|------|-------|
 | 30 | "Latest Developments" dropdown | in-app changelog under the user menu |
 | 32 | Property Hub homepage tab | placement; possibly replace Camera tab |
-| 36 | Property Maintenance report | new report type under Officer Reports with remittal |
-| 37 | Post Orders — admin update/edit | create/edit/save per community |
-| 38 | Watchlist box — hyperlink to Watchlist page | homepage quick-nav win |
+| 34 | Guest user access | view-only role for clients/auditors |
+| 30 | "Latest Developments" dropdown | in-app changelog under the user menu |
+| 32 | Property Hub homepage tab | placement; possibly replace Camera tab |
 
 ---
 
@@ -121,6 +121,9 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 
 ## Done
 
+- [x] ~~**38. Watchlist box — hyperlink to Watchlist page**~~ — StatCard extended with optional href prop; Watchlist Active card on homepage links to /userdash (completed June 24, 2026)
+- [x] ~~**37. Post Orders — admin update/edit**~~ — PostOrdersTab gains isAdmin prop with Edit Post Orders link button; admin/post-orders page adds audit logging on save (completed June 24, 2026)
+- [x] ~~**36. Property Maintenance report**~~ — new property_maintenance_reports table; 🔧 Maintenance tab in Officer Reports (userdash) with structured location, issue type, description, photos; auto-emails maintenance POC from community_contacts on submit; emerald colour in view reports + dark mode (completed June 24, 2026)
 - [x] ~~**35. Reports page — Reports by Community section**~~ — community dropdown (defaults to user's assigned community), 5 report-type summary cards (Incidents, Field Contacts, Vehicle FIs, Parking Violations, Daily Logs) with count queries; each card expands inline detail panel (up to 200 records, on demand) (completed June 24, 2026)
 - [x] ~~**33. BOLO — add/edit photo attachments in Edit mode**~~ — multi-photo upload (add new + remove existing in edit mode); `bolos.photo_urls text[]` column; legacy `photo_url` (single) initialised into array for backward compat (completed June 23, 2026)
 - [x] ~~**18. Incident Reports + all report types — multi-photo upload**~~ — multi-image upload with thumbnail grid and ✕ per photo; extended to Parking Violations, Vehicle FIs, Field Contacts (all now use `photo_urls text[]`); stored in `contact-photos` bucket (completed June 23, 2026)
