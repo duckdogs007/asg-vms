@@ -115,13 +115,6 @@ In the Post Orders section, set up the customer/location email recipient(s) who 
 - Admin/property-manager editable (role model); officers/guests view-only.
 
 
-#### 45. Connect new Vercel domain (asg-psp) to the project
-Connect the new domain name **asg-psp** to the VMS project in Vercel.
-
-- Add the domain in Vercel project settings and configure DNS (records per Vercel's instructions).
-- Confirm SSL provisioning and that the domain resolves to the app.
-- Decide primary vs. redirect: whether asg-psp becomes the primary URL and asg-vms redirects to it (or both serve).
-- Update hardcoded URLs / links / docs (incl. TODO + handoff app URL) once the primary domain is set. "PSP" aligns with the Property Solutions Platform rename (item 44).
 
 #### 19. Visitor Check-In — driver's license scanning (handheld wireless)
 Scan a DL with a wireless handheld scanner to auto-fill check-in.
@@ -142,6 +135,7 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 
 ## Done
 
+- [x] ~~**45. Connect asg-psp.com domain**~~ — `asg-psp.com` + `www.asg-psp.com` added to Vercel project (DNS via Vercel nameservers); aliased to production on deploy `dpl_7vbFi5v9dYCAZ2Hp6sVxmN4vd6xd` (completed June 25, 2026)
 - [x] ~~**44. Header rename**~~ — "Integrated Property Solutions Platform" → "Property Solutions Platform" across login page, homepage, and layout metadata (completed June 25, 2026)
 - [x] ~~**29. Remit reports to client via email — review/approval workflow**~~ — `report_queue` table + state machine (pending → needs_revision → pending → sent); officers see live status badge on each report card + resubmit flow when revision requested; supervisors/admins see Review Queue on Reports page (approve & send, or return with notes); approval API sends email to community contacts with fallback to ASG-Supervisors@teamasg.com; all 6 report types enqueued on submit; Recent Submissions cross-community feed added; Supervisor role (separate from Admin) added — approves reports but no Admin portal access; Post Orders bullet-point editing fixed (completed June 24, 2026)
 - [x] ~~**32. Property Hub — homepage tab placement**~~ — completed June 24, 2026
