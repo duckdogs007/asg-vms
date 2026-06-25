@@ -13,10 +13,8 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| 30 | "Latest Developments" dropdown | in-app changelog under the user menu |
-| 32 | Property Hub homepage tab | placement; possibly replace Camera tab |
-| 30 | "Latest Developments" dropdown | in-app changelog under the user menu |
-| 32 | Property Hub homepage tab | placement; possibly replace Camera tab |
+| 31 | Users Online + Chat | presence + real-time messaging under the hamburger menu |
+| 29 | Remit reports to client via email | review/approval workflow, supervisor sign-off |
 
 ---
 
@@ -36,29 +34,13 @@ Reports emailed to the client once reviewed; routing differs by type; send trigg
 
 ### Platform & UI
 
-#### 30. 🔨 "Latest Developments" / What's New dropdown
-Changelog dropdown in the top bar, under the user-name menu, highlighting newest changes.
-
-- **Placement:** top-right, under/near the user-name dropdown.
-- **Content:** reverse-chron entries (date, title, one-line blurb); optional "Live now" vs "Coming soon" split.
-- **Unread indicator:** per-user last-seen; badge clears on open.
-- **Source:** a `changelog` table (admin-posted) — cleaner than a static list and enables the unread badge.
-- In-app twin of the staff announcement email.
-
-#### 31. Users Online + Chat (under the vertical menu)
+#### 31. 🔨 Users Online + Chat (under the vertical menu)
 Presence + real-time messaging, from the hamburger (☰) menu.
 
 - **Presence:** who's online/on-duty via Supabase Realtime presence + existing login tracking (`audit_logs`, On Duty tab).
 - **Chat:** real-time messages via a `chat_messages` table + Realtime; RLS-scoped.
 - **Decide:** all-users vs. community-scoped; DM vs. team channel vs. both; supervisor broadcast to on-duty.
 - **Consider:** retention; whether chats are auditable (security context); unread/notifications; guard-post usability.
-
-#### 32. 🔨 Property Hub — homepage tab placement
-Give Property Hub a direct spot in the main homepage nav.
-
-- Current nav: Home · VMS · Alerts · Property Hub · User Dashboard · Intel Terminal · Reports · Admin Dashboard — confirm whether this is an add, a reorder, or a prominence change.
-- **Possible swap:** replace/relocate the Camera tab — the camera wall is a separate system, not VMS-integrated.
-- Confirm desired tab order.
 
 ### Standalone
 
@@ -120,6 +102,8 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 
 ## Done
 
+- [x] ~~**32. Property Hub — homepage tab placement**~~ — completed June 24, 2026
+- [x] ~~**30. "Latest Developments" / What's New dropdown**~~ — completed June 24, 2026
 - [x] ~~**34. Guest user access — view-only privileges**~~ — `guest` role in `user_assignments`; Admin Dashboard Users tab gains Access Level dropdown (Officer / Guest / Admin Super) + independent Community picker; `checkIsGuest()` added to lib/admin.ts; userdash hides all filing tabs/BOLO add/watchlist add/passdown submit/gate check; check-in disables submit; alerts hides Acknowledge (completed June 24, 2026)
 - [x] ~~**38. Watchlist box — hyperlink to Watchlist page**~~ — StatCard extended with optional href prop; Watchlist Active card on homepage links to /userdash (completed June 24, 2026)
 - [x] ~~**37. Post Orders — admin update/edit**~~ — PostOrdersTab gains isAdmin prop with Edit Post Orders link button; admin/post-orders page adds audit logging on save (completed June 24, 2026)
