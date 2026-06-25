@@ -5,6 +5,7 @@ import { useParams } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { SignedImage } from "@/components/SignedImage"
+import { checkCanApprove } from "@/lib/admin"
 
 const TYPE_CONFIG: Record<string, { table: string; label: string; color: string }> = {
   "incident":      { table: "incident_reports",             label: "Incident Report",    color: "red"     },
@@ -64,6 +65,11 @@ export default function ReportDetailPage() {
   const [communityName, setCommunityName] = useState("")
   const [loading,       setLoading]       = useState(true)
   const [notFound,      setNotFound]      = useState(false)
+  const [canEmail,      setCanEmail]      = useState(false)
+  const [emailSending,  setEmailSending]  = useState(false)
+  const [emailResult,   setEmailResult]   = useState<{ ok: boolean; msg: string } | null>(null)
+
+  useEffect(() => { checkCanApprove().then(setCanEmail) }, [])
 
   useEffect(() => {
     if (!config) { setNotFound(true); setLoading(false); return }
@@ -86,6 +92,23 @@ export default function ReportDetailPage() {
       setLoading(false)
     })
   }, [type, id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function resendEmail() {
+    setEmailSending(true); setEmailResult(null)
+    try {
+      const res  = await fetch("/api/reports/resend", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ reportId: id, reportType: type }),
+      })
+      const data = await res.json()
+      if (!res.ok) setEmailResult({ ok: false, msg: data.error || `Error ${res.status}` })
+      else setEmailResult({ ok: true, msg: `Sent to ${(data.recipients as string[]).join(", ")}` })
+    } catch (e: any) {
+      setEmailResult({ ok: false, msg: e?.message || "Request failed" })
+    } finally {
+      setEmailSending(false)
+    }
+  }
 
   if (loading)  return <div className="p-8 text-gray-400 text-sm">Loading…</div>
   if (notFound || !config) return (
@@ -119,24 +142,51 @@ export default function ReportDetailPage() {
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
+      <style>{`@media print { .no-print { display: none !important; } body { background: white; } }`}</style>
 
-      {/* Breadcrumb + type badge */}
-      <div className="mb-5">
-        <Link href="/vms/reports" className="text-xs text-blue-700 hover:underline">← Reports</Link>
-        <div className="flex flex-wrap items-center gap-2 mt-3">
-          <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${TYPE_BADGE[config.color] ?? "bg-gray-100 text-gray-700 border-gray-200"}`}>
-            {config.label}
-          </span>
-          {qBadge && (
-            <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${qBadge.cls}`}>{qBadge.label}</span>
-          )}
-          {r.firearm_flag && (
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-700 text-white">🔫 Firearm</span>
-          )}
-          {r.follow_up_required && (
-            <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-100 text-orange-700">⚠ Follow-up Required</span>
-          )}
+      {/* Breadcrumb + action bar */}
+      <div className="mb-5 no-print">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <Link href="/vms/reports" className="text-xs text-blue-700 hover:underline">← Reports</Link>
+          <div className="flex items-center gap-2">
+            {canEmail && (
+              <button
+                onClick={resendEmail}
+                disabled={emailSending}
+                className="px-3 py-1.5 text-xs font-semibold bg-blue-50 text-blue-700 border border-blue-200 rounded-lg hover:bg-blue-100 disabled:opacity-50"
+              >
+                {emailSending ? "Sending…" : "📧 Email Report"}
+              </button>
+            )}
+            <button
+              onClick={() => window.print()}
+              className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-200"
+            >
+              🖨 Print
+            </button>
+          </div>
         </div>
+        {emailResult && (
+          <div className={`mt-2 text-xs px-3 py-2 rounded-lg ${emailResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+            {emailResult.ok ? `✓ ${emailResult.msg}` : `✕ ${emailResult.msg}`}
+          </div>
+        )}
+      </div>
+
+      {/* Type + status badges — visible in print */}
+      <div className="flex flex-wrap items-center gap-2 mb-5">
+        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${TYPE_BADGE[config.color] ?? "bg-gray-100 text-gray-700 border-gray-200"}`}>
+          {config.label}
+        </span>
+        {qBadge && (
+          <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${qBadge.cls}`}>{qBadge.label}</span>
+        )}
+        {r.firearm_flag && (
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-red-700 text-white">🔫 Firearm</span>
+        )}
+        {r.follow_up_required && (
+          <span className="text-xs font-bold px-2.5 py-1 rounded-full bg-orange-100 text-orange-700">⚠ Follow-up Required</span>
+        )}
       </div>
 
       {/* Revision notes */}
