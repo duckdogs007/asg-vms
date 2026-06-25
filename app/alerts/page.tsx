@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic"
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
-import { ADMIN_EMAILS } from "@/lib/admin"
+import { ADMIN_EMAILS, checkIsGuest } from "@/lib/admin"
 
 interface AlertRow {
   id:           string
@@ -71,13 +71,15 @@ export default function AlertsPage() {
   const [loading, setLoading] = useState(true)
   const [filter,  setFilter]  = useState<"open" | "all" | "watchlist" | "incident" | "sos">("open")
   const [userEmail, setUserEmail] = useState("")
-  const [isAdmin, setIsAdmin] = useState(false)
+  const [isAdmin,   setIsAdmin]   = useState(false)
+  const [isGuest,   setIsGuest]   = useState(false)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUserEmail(user?.email || "")
       setIsAdmin(ADMIN_EMAILS.includes(user?.email || ""))
     })
+    checkIsGuest().then(ok => setIsGuest(ok)).catch(() => setIsGuest(false))
     loadAll()
     const t = setInterval(loadAll, 30000)
     return () => clearInterval(t)
@@ -259,7 +261,7 @@ export default function AlertsPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    {!a.ack_at && a.status === "sent" && (
+                    {!isGuest && !a.ack_at && a.status === "sent" && (
                       <button
                         onClick={() => ack(a)}
                         className="px-3 py-1 bg-green-700 hover:bg-green-800 text-white text-xs font-semibold rounded border-none cursor-pointer"

@@ -106,16 +106,25 @@ export async function PATCH(req: Request) {
   if (body.community_id !== undefined && body.community_id !== null && !UUID_RE.test(body.community_id)) {
     return NextResponse.json({ error: "community_id must be a UUID or null" }, { status: 400 })
   }
-  if (body.role !== undefined && body.role !== null && body.role !== "admin_super") {
-    return NextResponse.json({ error: "role must be null or 'admin_super'" }, { status: 400 })
+  const VALID_ROLES = [null, "admin_super", "guest"]
+  if (body.role !== undefined && !VALID_ROLES.includes(body.role ?? null)) {
+    return NextResponse.json({ error: "role must be null, 'admin_super', or 'guest'" }, { status: 400 })
   }
+
+  // Fetch existing row so we can do a partial update — only overwrite the
+  // fields that were explicitly sent in this request.
+  const { data: existing } = await admin
+    .from("user_assignments")
+    .select("community_id, role")
+    .eq("user_id", body.user_id)
+    .maybeSingle()
 
   const { error } = await admin
     .from("user_assignments")
     .upsert({
       user_id:      body.user_id,
-      community_id: body.community_id ?? null,
-      role:         body.role ?? null,
+      community_id: body.community_id !== undefined ? (body.community_id ?? null) : (existing?.community_id ?? null),
+      role:         body.role         !== undefined ? (body.role         ?? null) : (existing?.role         ?? null),
       updated_at:   new Date().toISOString(),
     }, { onConflict: "user_id" })
 

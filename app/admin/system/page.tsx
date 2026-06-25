@@ -224,28 +224,31 @@ export default function AdminSystemPage() {
     setBucketStatus(status)
   }
 
-  // Dropdown sentinel for the "Admin/Super" choice
-  const ADMIN_SUPER = "__admin_super__"
+  async function saveRole(userId: string, role: string | null) {
+    setUsers(prev => prev.map(u => u.id !== userId ? u : ({ ...u, role })))
+    // When setting admin_super clear community; when clearing role, also clear community
+    const community_id = (role === "admin_super" || role === null) ? null : undefined
+    const body: any = { user_id: userId, role }
+    if (community_id !== undefined) body.community_id = community_id
+    const r = await fetch("/api/admin/users", {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    })
+    if (!r.ok) {
+      const json = await r.json().catch(() => ({}))
+      setUsersError(json.error || `HTTP ${r.status}`)
+    }
+  }
 
-  async function saveAssignment(userId: string, value: string) {
-    // value is either "" (unassigned), "__admin_super__", or a community_id
-    const body =
-      value === ADMIN_SUPER ? { user_id: userId, community_id: null, role: "admin_super" } :
-      value === ""          ? { user_id: userId, community_id: null, role: null } :
-                              { user_id: userId, community_id: value, role: null }
-
-    // Optimistic update
+  async function saveCommunity(userId: string, communityId: string | null) {
     setUsers(prev => prev.map(u => u.id !== userId ? u : ({
       ...u,
-      community_id: body.community_id,
-      community:    body.community_id ? (communities.find(c => c.id === body.community_id)?.name || null) : null,
-      role:         body.role,
+      community_id: communityId,
+      community:    communityId ? (communities.find(c => c.id === communityId)?.name || null) : null,
     })))
-
     const r = await fetch("/api/admin/users", {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId, community_id: communityId }),
     })
     if (!r.ok) {
       const json = await r.json().catch(() => ({}))
@@ -570,8 +573,8 @@ export default function AdminSystemPage() {
               <thead className="bg-gray-50 text-xs uppercase text-gray-500">
                 <tr>
                   <th className="px-3 py-2 text-left">Email</th>
-                  <th className="px-3 py-2 text-left">Role</th>
-                  <th className="px-3 py-2 text-left">Location</th>
+                  <th className="px-3 py-2 text-left">Access Level</th>
+                  <th className="px-3 py-2 text-left">Community</th>
                   <th className="px-3 py-2 text-left">Confirmed</th>
                   <th className="px-3 py-2 text-left">Created</th>
                   <th className="px-3 py-2 text-left">Last Login</th>
@@ -583,22 +586,34 @@ export default function AdminSystemPage() {
                   <tr key={u.id} className="border-t border-gray-100 hover:bg-gray-50">
                     <td className="px-3 py-2 font-mono text-xs">{u.email || "—"}</td>
                     <td className="px-3 py-2">
-                      {u.is_admin
-                        ? <span className="px-2 py-0.5 bg-blue-100 text-blue-800 text-xs font-semibold rounded">Admin</span>
-                        : <span className="px-2 py-0.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded">User</span>}
-                    </td>
-                    <td className="px-3 py-2">
                       <select
-                        value={u.role === "admin_super" ? ADMIN_SUPER : (u.community_id || "")}
-                        onChange={(e) => saveAssignment(u.id, e.target.value)}
+                        value={u.role === "admin_super" ? "admin_super" : u.role === "guest" ? "guest" : "officer"}
+                        onChange={e => {
+                          const v = e.target.value
+                          saveRole(u.id, v === "officer" ? null : v)
+                        }}
                         className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600"
                       >
-                        <option value="">— Unassigned —</option>
-                        <option value={ADMIN_SUPER}>Admin / Super</option>
-                        {communities.map(c => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
-                        ))}
+                        <option value="officer">Officer</option>
+                        <option value="guest">Guest (view-only)</option>
+                        <option value="admin_super">Admin / Super</option>
                       </select>
+                    </td>
+                    <td className="px-3 py-2">
+                      {u.role === "admin_super" ? (
+                        <span className="text-xs text-gray-400">— all —</span>
+                      ) : (
+                        <select
+                          value={u.community_id || ""}
+                          onChange={e => saveCommunity(u.id, e.target.value || null)}
+                          className="px-2 py-1 border border-gray-300 rounded text-xs bg-white focus:outline-none focus:ring-1 focus:ring-blue-600"
+                        >
+                          <option value="">— Unassigned —</option>
+                          {communities.map(c => (
+                            <option key={c.id} value={c.id}>{c.name}</option>
+                          ))}
+                        </select>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {u.email_confirmed_at

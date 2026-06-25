@@ -9,7 +9,7 @@ import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
 import { fireAlert } from "@/lib/alerts"
 import { maskSSN } from "@/lib/format"
-import { checkIsAdmin } from "@/lib/admin"
+import { checkIsAdmin, checkIsGuest } from "@/lib/admin"
 import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/LocationField"
 import { buildHohSnapshot, EMPTY_SNAPSHOT } from "@/lib/hohSnapshot"
 import LeaseViolationForm from "@/components/LeaseViolationForm"
@@ -114,6 +114,7 @@ export default function UserDashboard() {
   // Watchlist edit (admin-only). Default false so no buttons render before
   // the admin check resolves; failure leaves it false (safe fallback).
   const [isAdmin,        setIsAdmin]        = useState(false)
+  const [isGuest,        setIsGuest]        = useState(false)
   const [editingWlId,    setEditingWlId]    = useState<string | null>(null)
   const [editFirst,      setEditFirst]      = useState("")
   const [editLast,       setEditLast]       = useState("")
@@ -310,8 +311,8 @@ export default function UserDashboard() {
   useEffect(() => { loadInit() }, [])
 
   useEffect(() => {
-    // Async admin check — fail-safe to false if anything goes wrong
     checkIsAdmin().then(ok => setIsAdmin(ok)).catch(() => setIsAdmin(false))
+    checkIsGuest().then(ok => setIsGuest(ok)).catch(() => setIsGuest(false))
   }, [])
 
   useEffect(() => {
@@ -1501,7 +1502,7 @@ export default function UserDashboard() {
           🔍 BOLO {activeBoloCount > 0 && <span className="ml-1.5 bg-red-600 text-white text-xs rounded-full px-1.5 py-0.5">{activeBoloCount}</span>}
         </button>
         <button className={tabCls("reports")}   onClick={() => setActiveTab("reports")}>📋 Officer Reports</button>
-        <button className={tabCls("gatecheck")} onClick={() => setActiveTab("gatecheck")}>🚪 Gate Checklist</button>
+        {!isGuest && <button className={tabCls("gatecheck")} onClick={() => setActiveTab("gatecheck")}>🚪 Gate Checklist</button>}
         <button className={tabCls("watchlist")} onClick={() => setActiveTab("watchlist")}>🚨 Watchlist</button>
       </div>
 
@@ -1649,23 +1650,24 @@ export default function UserDashboard() {
               <input value={watchlistSearch} onChange={(e) => setWatchlistSearch(e.target.value)}
                 placeholder="Search name, OLN, or reason..."
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-600" />
-              <button onClick={() => {
-                  const opening = !showAddWatchlist
-                  setShowAddWatchlist(opening)
-                  setWlMessage(""); setWlError("")
-                  // Reset the form's Location each time the form opens, so the
-                  // user is forced to actively pick where the entry should go
-                  // (auto-filling it caused entries to land at the wrong site).
-                  if (opening) setWlCommunity("")
-                }}
-                className="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
-                {showAddWatchlist ? "✕ Cancel" : "+ Add Person"}
-              </button>
-              <label className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200 cursor-pointer">
-                ⬆ Import CSV
-                <input type="file" accept=".csv" className="hidden"
-                  onChange={e => { if (e.target.files?.[0]) handleWatchlistCSV(e.target.files[0]) }} />
-              </label>
+              {!isGuest && (
+                <button onClick={() => {
+                    const opening = !showAddWatchlist
+                    setShowAddWatchlist(opening)
+                    setWlMessage(""); setWlError("")
+                    if (opening) setWlCommunity("")
+                  }}
+                  className="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
+                  {showAddWatchlist ? "✕ Cancel" : "+ Add Person"}
+                </button>
+              )}
+              {!isGuest && (
+                <label className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200 cursor-pointer">
+                  ⬆ Import CSV
+                  <input type="file" accept=".csv" className="hidden"
+                    onChange={e => { if (e.target.files?.[0]) handleWatchlistCSV(e.target.files[0]) }} />
+                </label>
+              )}
             </div>
           </div>
 
@@ -1872,13 +1874,13 @@ export default function UserDashboard() {
       {activeTab === "reports" && (
         <div>
           <div className="flex gap-2 mb-6 flex-wrap">
-            <button className={rTabCls("daily")}    onClick={() => setReportTab("daily")}>📝 Daily Log</button>
-            <button className={rTabCls("incident")} onClick={() => setReportTab("incident")}>🚨 Incident Report</button>
-            <button className={rTabCls("contact")}  onClick={() => setReportTab("contact")}>📋 Field Contact</button>
-            <button className={rTabCls("vfi")}      onClick={() => setReportTab("vfi")}>🚗 Vehicle FI</button>
-            <button className={rTabCls("parking")}     onClick={() => setReportTab("parking")}>🅿️ Parking Violation</button>
-            <button className={rTabCls("maintenance")} onClick={() => setReportTab("maintenance")}>🔧 Maintenance</button>
-            <button className={rTabCls("view")}        onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
+            {!isGuest && <button className={rTabCls("daily")}       onClick={() => setReportTab("daily")}>📝 Daily Log</button>}
+            {!isGuest && <button className={rTabCls("incident")}    onClick={() => setReportTab("incident")}>🚨 Incident Report</button>}
+            {!isGuest && <button className={rTabCls("contact")}     onClick={() => setReportTab("contact")}>📋 Field Contact</button>}
+            {!isGuest && <button className={rTabCls("vfi")}         onClick={() => setReportTab("vfi")}>🚗 Vehicle FI</button>}
+            {!isGuest && <button className={rTabCls("parking")}     onClick={() => setReportTab("parking")}>🅿️ Parking Violation</button>}
+            {!isGuest && <button className={rTabCls("maintenance")} onClick={() => setReportTab("maintenance")}>🔧 Maintenance</button>}
+            <button className={rTabCls("view")} onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
           </div>
 
           {reportError   && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{reportError}</div>}
@@ -2778,7 +2780,7 @@ export default function UserDashboard() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* SUBMIT FORM */}
-            <div>
+            {!isGuest && <div>
               <h3 className="text-lg font-bold mb-4 text-gray-800">Submit Passdown</h3>
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
@@ -2813,7 +2815,7 @@ export default function UserDashboard() {
                 </button>
                 <p className="text-xs text-gray-400 mt-2">Saving does not send it. Review &amp; edit the narrative in <span className="font-medium">Recent Passdowns</span>, then click Send.</p>
               </div>
-            </div>
+            </div>}
 
             {/* RECENT PASSDOWNS */}
             <div>
@@ -2893,10 +2895,12 @@ export default function UserDashboard() {
                 className="px-3 py-2 text-sm text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 border-none cursor-pointer">
                 {boloShowAll ? "Show Active Only" : "Show All"}
               </button>
-              <button onClick={() => { setShowAddBolo(!showAddBolo); setBoloMessage(""); setBoloError("") }}
-                className="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
-                {showAddBolo ? "✕ Cancel" : "+ Add BOLO"}
-              </button>
+              {!isGuest && (
+                <button onClick={() => { setShowAddBolo(!showAddBolo); setBoloMessage(""); setBoloError("") }}
+                  className="px-4 py-2 bg-red-700 text-white text-sm font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
+                  {showAddBolo ? "✕ Cancel" : "+ Add BOLO"}
+                </button>
+              )}
             </div>
           </div>
 

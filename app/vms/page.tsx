@@ -7,6 +7,7 @@ import { Community, Unit, Resident } from "@/lib/types"
 import CadTicker from "@/components/CadTicker"
 import BoloTicker from "@/components/BoloTicker"
 import { fireAlert } from "@/lib/alerts"
+import { checkIsGuest } from "@/lib/admin"
 
 type MatchStatus = "none" | "verify" | "confirmed" | "cleared"
 
@@ -40,6 +41,7 @@ export default function VMSPage() {
   const [alertMode,      setAlertMode]      = useState(false)
   const [statusMessage,  setStatusMessage]  = useState("")
 
+  const [isGuest,        setIsGuest]        = useState(false)
   const [saving,         setSaving]         = useState(false)
   const [saveError,      setSaveError]      = useState("")
   const [loadError,      setLoadError]      = useState("")
@@ -49,6 +51,10 @@ export default function VMSPage() {
   // Guards against firing the watchlist-hit alert + denied_entries insert more
   // than once per BARRED confirmation (DOB input can re-fire on backspace/retype).
   const barredFiredRef = useRef(false)
+
+  useEffect(() => {
+    checkIsGuest().then(ok => setIsGuest(ok)).catch(() => setIsGuest(false))
+  }, [])
 
   useEffect(() => {
     loadCommunities()
@@ -389,13 +395,19 @@ export default function VMSPage() {
                 </div>
               )}
 
-              <button
-                onClick={matchStatus === "confirmed" ? undefined : handleProceedCheckIn}
-                disabled={saving || matchStatus === "confirmed"}
-                className={checkInBtnCls}
-              >
-                {saving ? "Saving..." : matchStatus === "confirmed" ? "🚫 ENTRY DENIED — BARRED" : "✅ Proceed Check-In"}
-              </button>
+              {isGuest ? (
+                <div className="px-4 py-3 bg-amber-50 border border-amber-200 text-amber-800 text-sm rounded-lg text-center font-medium">
+                  👁 View-only access — check-in is disabled for guest accounts.
+                </div>
+              ) : (
+                <button
+                  onClick={matchStatus === "confirmed" ? undefined : handleProceedCheckIn}
+                  disabled={saving || matchStatus === "confirmed"}
+                  className={checkInBtnCls}
+                >
+                  {saving ? "Saving..." : matchStatus === "confirmed" ? "🚫 ENTRY DENIED — BARRED" : "✅ Proceed Check-In"}
+                </button>
+              )}
               {matchStatus === "confirmed" && (
                 <>
                   <div className="text-xs text-red-600 text-center font-medium">Contact supervisor before proceeding</div>

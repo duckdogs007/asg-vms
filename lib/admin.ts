@@ -25,3 +25,17 @@ export async function checkIsAdmin(): Promise<boolean> {
     .maybeSingle()
   return !error && !!data
 }
+
+// Returns true if the current user has role='guest' in user_assignments.
+// Guests can view all data but cannot create, edit, or delete anything.
+export async function checkIsGuest(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+  const { data, error } = await supabase
+    .from("user_assignments")
+    .select("role")
+    .eq("user_id", user.id)
+    .eq("role", "guest")
+    .maybeSingle()
+  return !error && !!data
+}
