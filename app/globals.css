@@ -90,6 +90,14 @@ body.dark .bg-gray-50 {
   border-color: #30363d !important;
 }
 
+body.dark .bg-gray-100 {
+  background-color: #2d333b !important;
+}
+
+body.dark .hover\:bg-gray-200:hover {
+  background-color: #373e47 !important;
+}
+
 body.dark .bg-white {
   background-color: #1c2128 !important;
   color: #e6edf3;
