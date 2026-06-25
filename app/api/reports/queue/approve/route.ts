@@ -52,10 +52,20 @@ export async function POST(req: NextRequest) {
 
     let recipients: string[] = []
     if (qRow.community_id) {
-      const { data: contacts } = await supabase
-        .from("community_contacts").select("email, name")
+      // Check per-type delivery recipients first
+      const { data: rdr } = await supabase
+        .from("report_delivery_recipients").select("email")
         .eq("community_id", qRow.community_id)
-      recipients = (contacts || []).map((c: any) => c.email).filter(Boolean)
+        .eq("report_type", qRow.report_type)
+      recipients = (rdr || []).map((r: any) => r.email).filter(Boolean)
+
+      // Fall back to all community contacts if no per-type config
+      if (recipients.length === 0) {
+        const { data: contacts } = await supabase
+          .from("community_contacts").select("email")
+          .eq("community_id", qRow.community_id)
+        recipients = (contacts || []).map((c: any) => c.email).filter(Boolean)
+      }
     }
     if (recipients.length === 0) recipients = [SUPERVISOR_FALLBACK]
 

@@ -156,6 +156,7 @@ export default function UserDashboard() {
   const [dailyWeather,   setDailyWeather]   = useState("")
   const [dailyNarrative, setDailyNarrative] = useState("")
   const [dailyNotes,     setDailyNotes]     = useState("")
+  const [dailyPhotoFiles, setDailyPhotoFiles] = useState<File[]>([])
 
   // Field contact
   const [ctFirstName,   setCtFirstName]   = useState("")
@@ -593,17 +594,28 @@ export default function UserDashboard() {
   async function saveDailyLog() {
     if (!dailyNarrative) { setReportError("Patrol narrative is required."); return }
     setReportSaving(true); setReportError(""); setReportMessage("")
+    const photoUrls: string[] = []
+    for (const f of dailyPhotoFiles) {
+      const ext = f.name.split(".").pop()
+      const path = `dal_${Date.now()}_${photoUrls.length}.${ext}`
+      const { data: up } = await supabase.storage.from("contact-photos").upload(path, f, { upsert: false })
+      if (up) {
+        const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
+        photoUrls.push(publicUrl)
+      }
+    }
     const { data: ins, error } = await supabase.from("officer_daily_logs").insert({
       date: dailyDate, shift: dailyShift, community_id: dailyCommunity,
       officer_name: dailyOfficer, weather: dailyWeather,
       narrative: dailyNarrative, notes: dailyNotes,
+      photo_urls: photoUrls.length ? photoUrls : null,
       created_at: new Date().toISOString()
     }).select("id").single()
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
     if (ins?.id) enqueueReport("daily_log", ins.id, dailyCommunity, dailyOfficer || officerName, `Daily Log — ${dailyDate}`)
     setReportMessage("✅ Daily log submitted — pending supervisor review.")
-    setDailyNarrative(""); setDailyNotes(""); setDailyWeather("")
+    setDailyNarrative(""); setDailyNotes(""); setDailyWeather(""); setDailyPhotoFiles([])
     logActivity("created", "Daily Log", "", `Daily log submitted — ${dailyDate}`)
   }
 
@@ -1936,6 +1948,33 @@ export default function UserDashboard() {
                 <textarea rows={3} value={dailyNotes} onChange={e => setDailyNotes(e.target.value)}
                   placeholder="Shift handoff notes, maintenance issues, follow-ups..."
                   className={textareaCls} />
+              </div>
+              <div className="mb-5">
+                <label className={labelCls}>Photos / Attachments</label>
+                <input type="file" accept="image/*" multiple
+                  onChange={e => {
+                    const added = Array.from(e.target.files || [])
+                    setDailyPhotoFiles(prev => [...prev, ...added])
+                    e.target.value = ""
+                  }}
+                  className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG. Select multiple or open picker again to add more.</p>
+                {dailyPhotoFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {dailyPhotoFiles.map((f, i) => (
+                      <div key={i} className="relative w-20 h-24 flex-shrink-0">
+                        <div className="w-full h-full bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
+                          <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                        </div>
+                        <button type="button"
+                          onClick={() => setDailyPhotoFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none border-none cursor-pointer flex items-center justify-center hover:bg-red-700">
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <button onClick={saveDailyLog} disabled={reportSaving}
                 className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">

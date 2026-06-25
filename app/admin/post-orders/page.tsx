@@ -19,17 +19,31 @@ const EMPTY_CONTACT:   PostOrderContact       = { role: "", name: "", contact: "
 const EMPTY_PROCEDURE: PostOrderProcedure     = { title: "", icon: "📌", items: [] }
 const EMPTY_EXAMPLE:   PostOrderReportExample = { title: "", body: "" }
 
+const REPORT_TYPES = [
+  { key: "incident",      label: "Incident Reports" },
+  { key: "field_contact", label: "Field Contact" },
+  { key: "vehicle_fi",    label: "Vehicle FI" },
+  { key: "parking",       label: "Parking Violations" },
+  { key: "daily_log",     label: "Daily Activity Log" },
+  { key: "maintenance",   label: "Maintenance Reports" },
+]
+
+type DeliveryRecipient = { email: string; label: string }
+
 export default function PostOrdersEditorPage() {
 
-  const [communities, setCommunities] = useState<Community[]>([])
-  const [communityId, setCommunityId] = useState("")
-  const [orders,      setOrders]      = useState<PostOrders>(EMPTY_POST_ORDERS)
-  const [loading,     setLoading]     = useState(true)
-  const [saving,      setSaving]      = useState(false)
-  const [savedAt,     setSavedAt]     = useState("")
-  const [error,       setError]       = useState("")
-  const [isAdmin,     setIsAdmin]     = useState<boolean | null>(null)
-  const [userEmail,   setUserEmail]   = useState("")
+  const [communities,     setCommunities]     = useState<Community[]>([])
+  const [communityId,     setCommunityId]     = useState("")
+  const [orders,          setOrders]          = useState<PostOrders>(EMPTY_POST_ORDERS)
+  const [loading,         setLoading]         = useState(true)
+  const [saving,          setSaving]          = useState(false)
+  const [savedAt,         setSavedAt]         = useState("")
+  const [error,           setError]           = useState("")
+  const [isAdmin,         setIsAdmin]         = useState<boolean | null>(null)
+  const [userEmail,       setUserEmail]       = useState("")
+  const [reportDelivery,  setReportDelivery]  = useState<Record<string, DeliveryRecipient[]>>(
+    () => Object.fromEntries(REPORT_TYPES.map(t => [t.key, []]))
+  )
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUserEmail(user?.email || ""))
@@ -60,8 +74,17 @@ export default function PostOrdersEditorPage() {
     setLoading(true)
     setError("")
     setSavedAt("")
-    const result = await loadPostOrders(id)
+    const [result, { data: rdr }] = await Promise.all([
+      loadPostOrders(id),
+      supabase.from("report_delivery_recipients").select("report_type, email, label, sort_order")
+        .eq("community_id", id).order("sort_order"),
+    ])
     setOrders(result || { ...EMPTY_POST_ORDERS, lastUpdated: new Date().toISOString().slice(0, 10) })
+    const grouped: Record<string, DeliveryRecipient[]> = Object.fromEntries(REPORT_TYPES.map(t => [t.key, []]))
+    for (const r of (rdr || [])) {
+      if (grouped[r.report_type]) grouped[r.report_type].push({ email: r.email, label: r.label || "" })
+    }
+    setReportDelivery(grouped)
     setLoading(false)
   }
 
@@ -74,11 +97,20 @@ export default function PostOrdersEditorPage() {
     setSaving(true)
     setError("")
     const { error: err } = await savePostOrders(communityId, orders)
-    setSaving(false)
-    if (err) {
-      setError("Save failed: " + err)
-      return
+    if (err) { setSaving(false); setError("Save failed: " + err); return }
+
+    // Sync report delivery recipients: delete all then re-insert
+    await supabase.from("report_delivery_recipients").delete().eq("community_id", communityId)
+    const rows: any[] = []
+    for (const { key } of REPORT_TYPES) {
+      const recipients = reportDelivery[key] || []
+      recipients.forEach((r, i) => {
+        if (r.email.trim()) rows.push({ community_id: communityId, report_type: key, email: r.email.trim(), label: r.label.trim() || null, sort_order: i })
+      })
     }
+    if (rows.length > 0) await supabase.from("report_delivery_recipients").insert(rows)
+
+    setSaving(false)
     const communityName = communities.find(c => c.id === communityId)?.name || communityId
     supabase.from("audit_logs").insert({
       user_email:    userEmail,
@@ -111,6 +143,14 @@ export default function PostOrdersEditorPage() {
     setOrders(o => ({ ...o, reportExamples: o.reportExamples.map((e, idx) => idx === i ? { ...e, ...patch } : e) }))
   const addExample    = () => setOrders(o => ({ ...o, reportExamples: [...o.reportExamples, { ...EMPTY_EXAMPLE }] }))
   const removeExample = (i: number) => setOrders(o => ({ ...o, reportExamples: o.reportExamples.filter((_, idx) => idx !== i) }))
+
+  // ── Report delivery handlers ──
+  const setDeliveryRecipient = (type: string, i: number, patch: Partial<DeliveryRecipient>) =>
+    setReportDelivery(d => ({ ...d, [type]: d[type].map((r, idx) => idx === i ? { ...r, ...patch } : r) }))
+  const addDeliveryRecipient = (type: string) =>
+    setReportDelivery(d => ({ ...d, [type]: [...(d[type] || []), { email: "", label: "" }] }))
+  const removeDeliveryRecipient = (type: string, i: number) =>
+    setReportDelivery(d => ({ ...d, [type]: d[type].filter((_, idx) => idx !== i) }))
 
   const inputCls    = "w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
   const textareaCls = "w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white font-mono"
@@ -276,6 +316,41 @@ export default function PostOrdersEditorPage() {
               </div>
             ))}
             <button type="button" onClick={addExample} className={addCls}>+ Add Report Template</button>
+          </div>
+
+          {/* REPORT DELIVERY */}
+          <div className={sectionCls}>
+            <h3 className="text-sm font-bold text-gray-800 mb-1">📧 Report Delivery</h3>
+            <p className="text-xs text-gray-500 mb-4">Set the email recipients for each report type at this location. When a report is approved, it is sent to all recipients listed here. If none are configured for a type, all community contacts receive it.</p>
+            <div className="space-y-4">
+              {REPORT_TYPES.map(({ key, label }) => (
+                <div key={key} className={cardCls}>
+                  <div className="text-xs font-bold text-gray-700 mb-2">{label}</div>
+                  {(reportDelivery[key] || []).length === 0 && (
+                    <div className="text-xs text-gray-400 mb-2">No recipients configured — falls back to community contacts.</div>
+                  )}
+                  {(reportDelivery[key] || []).map((r, i) => (
+                    <div key={i} className="flex gap-2 mb-2 items-center">
+                      <input
+                        type="email"
+                        value={r.email}
+                        onChange={e => setDeliveryRecipient(key, i, { email: e.target.value })}
+                        placeholder="recipient@example.com"
+                        className="flex-1 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                      />
+                      <input
+                        value={r.label}
+                        onChange={e => setDeliveryRecipient(key, i, { label: e.target.value })}
+                        placeholder="Label (optional)"
+                        className="w-36 px-3 py-1.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
+                      />
+                      <button type="button" onClick={() => removeDeliveryRecipient(key, i)} className={removeCls}>✕</button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={() => addDeliveryRecipient(key)} className={addCls + " text-xs py-1 px-2"}>+ Add Recipient</button>
+                </div>
+              ))}
+            </div>
           </div>
 
           {/* Sticky save */}
