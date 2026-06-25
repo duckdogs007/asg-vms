@@ -4,6 +4,7 @@ export const dynamic = "force-dynamic"
 
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
@@ -1093,6 +1094,15 @@ export default function UserDashboard() {
     "Maintenance":       "property_maintenance_reports",
   }
 
+  const REPORT_TYPE_SLUG: Record<string, string> = {
+    "Incident":          "incident",
+    "Daily Log":         "daily-log",
+    "Field Contact":     "field-contact",
+    "Vehicle FI":        "vehicle-fi",
+    "Parking Violation": "parking",
+    "Maintenance":       "maintenance",
+  }
+
   async function deleteReport(r: any) {
     if (!window.confirm(`Delete this ${r._type} report? This cannot be undone.`)) return
     const table = REPORT_TABLE[r._type]
@@ -1860,6 +1870,7 @@ export default function UserDashboard() {
                       {(p.ban_date || p.banned_date) && <div>Banned: {p.ban_date || p.banned_date}</div>}
                       {p.banned_by && <div>By: {p.banned_by}</div>}
                     </div>
+                    <Link href={`/vms/intel/${p.id}`} className="text-xs text-blue-700 hover:underline mt-1">View →</Link>
                     {isAdmin && (
                       <div className="flex gap-1.5 mt-1">
                         <button onClick={() => startWatchlistEdit(p)} title="Edit" className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded border-none cursor-pointer">✎ Edit</button>
@@ -2533,12 +2544,21 @@ export default function UserDashboard() {
                       {r.shift         && <span className="text-xs text-gray-500 shrink-0">{r.shift} Shift</span>}
                       <span className="text-sm font-semibold text-gray-800 truncate">{summary}</span>
                     </div>
-                    <div className="flex items-center gap-4 shrink-0 ml-3">
+                    <div className="flex items-center gap-3 shrink-0 ml-3">
                       <div className="text-right text-xs text-gray-400">
                         <div>{r.date}{r.time ? " · " + r.time : ""}</div>
                         <div>{r.officer_name || r.officer}</div>
                         {followUp && <div className="text-orange-500 font-semibold">⚠ Follow-up</div>}
                       </div>
+                      {REPORT_TYPE_SLUG[r._type] && (
+                        <Link
+                          href={`/vms/reports/${REPORT_TYPE_SLUG[r._type]}/${r.id}`}
+                          onClick={e => e.stopPropagation()}
+                          className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium"
+                        >
+                          View →
+                        </Link>
+                      )}
                       <span className="text-gray-400 text-sm">{expandedReport === i ? "▲" : "▼"}</span>
                     </div>
                   </div>
@@ -3211,6 +3231,12 @@ export default function UserDashboard() {
                       </div>
                     )}
                     <div className="flex gap-2 mt-3 flex-wrap">
+                      <Link
+                        href={`/vms/intel/bolo/${b.id}`}
+                        className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+                      >
+                        🔍 Details
+                      </Link>
                       {b.active ? (
                         <button onClick={() => resolveBolo(b.id)}
                           className="px-3 py-1.5 text-xs font-semibold bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 border-none cursor-pointer">

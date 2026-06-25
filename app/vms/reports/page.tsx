@@ -1,10 +1,31 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog } from "@/lib/types"
 import { ADMIN_EMAILS, checkCanApprove } from "@/lib/admin"
 import { displayPlate, isNoPlate } from "@/components/VehicleFields"
+
+// Recent-submissions typeKey → URL slug for /vms/reports/[type]/[id]
+const SUB_TYPE_SLUG: Record<string, string> = {
+  incident:     "incident",
+  fieldContact: "field-contact",
+  vehicleFI:    "vehicle-fi",
+  parking:      "parking",
+  dailyLog:     "daily-log",
+  maintenance:  "maintenance",
+}
+
+// report_queue.report_type → URL slug
+const QUEUE_TYPE_SLUG: Record<string, string> = {
+  incident:      "incident",
+  field_contact: "field-contact",
+  vehicle_fi:    "vehicle-fi",
+  parking:       "parking",
+  daily_log:     "daily-log",
+  maintenance:   "maintenance",
+}
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
@@ -847,6 +868,12 @@ export default function ReportsPage() {
                             {new Date(utc(q.submitted_at)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                           </div>
                         </div>
+                        <Link
+                          href={`/vms/reports/${QUEUE_TYPE_SLUG[q.report_type] ?? q.report_type}/${q.report_id}`}
+                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg whitespace-nowrap"
+                        >
+                          🔍 View
+                        </Link>
                         <button
                           onClick={() => approveReport(q.id)}
                           disabled={approvingId === q.id}
@@ -952,6 +979,12 @@ export default function ReportsPage() {
                         {new Date(utc(s.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                       </div>
                     </div>
+                    <Link
+                      href={`/vms/reports/${SUB_TYPE_SLUG[s.typeKey]}/${s.id}`}
+                      className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium"
+                    >
+                      View →
+                    </Link>
                   </div>
                 </div>
               )

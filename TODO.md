@@ -13,7 +13,7 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| 40/42 | Reports — clickable rows → detail view | pending-approval + recent submissions |
+| 29 | Remit reports — review/approval workflow | report remittal enhancements |
 
 ---
 
@@ -135,6 +135,8 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 
 ## Done
 
+- [x] ~~**40. Reports — pending-approval rows → full report**~~ — 🔍 View link on every queue row; routes to /vms/reports/[type]/[id] detail page (completed June 25, 2026)
+- [x] ~~**42. Reports — recent-submissions rows → full report**~~ — View → link on every Recent Submissions row; same detail page (completed June 25, 2026)
 - [x] ~~**31. Users Online + Chat**~~ — `chat_messages` table (RLS + Realtime); `/chat` page with Supabase Presence (online users panel) + two channels (🌐 All ASG / 🏢 community); real-time message subscription; unread dot badge in nav + hamburger; Enter to send (completed June 25, 2026)
 - [x] ~~**45. Connect asg-psp.com domain**~~ — `asg-psp.com` + `www.asg-psp.com` added to Vercel project (DNS via Vercel nameservers); aliased to production on deploy `dpl_7vbFi5v9dYCAZ2Hp6sVxmN4vd6xd` (completed June 25, 2026)
 - [x] ~~**44. Header rename**~~ — "Integrated Property Solutions Platform" → "Property Solutions Platform" across login page, homepage, and layout metadata (completed June 25, 2026)
