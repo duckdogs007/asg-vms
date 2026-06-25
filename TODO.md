@@ -114,11 +114,6 @@ In the Post Orders section, set up the customer/location email recipient(s) who 
 - Likely overlaps with `community_contacts` (role + email) from item 5; decide whether this is a dedicated "report recipients" list vs. reusing contacts flagged as report recipients. Map report type → recipient where relevant (maintenance → maintenance POC, incident → management).
 - Admin/property-manager editable (role model); officers/guests view-only.
 
-#### 44. Header rename — "Integrated Property Solutions Platform" → "Property Solutions Platform"
-Change the name header on the login and home pages from "Integrated Property Solutions Platform" to just "Property Solutions Platform" (drop "Integrated").
-
-- Update on both the login page and the homepage header.
-- Small text change; check for the string anywhere else it appears (page titles, meta tags).
 
 #### 45. Connect new Vercel domain (asg-psp) to the project
 Connect the new domain name **asg-psp** to the VMS project in Vercel.
@@ -147,6 +142,7 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 
 ## Done
 
+- [x] ~~**44. Header rename**~~ — "Integrated Property Solutions Platform" → "Property Solutions Platform" across login page, homepage, and layout metadata (completed June 25, 2026)
 - [x] ~~**29. Remit reports to client via email — review/approval workflow**~~ — `report_queue` table + state machine (pending → needs_revision → pending → sent); officers see live status badge on each report card + resubmit flow when revision requested; supervisors/admins see Review Queue on Reports page (approve & send, or return with notes); approval API sends email to community contacts with fallback to ASG-Supervisors@teamasg.com; all 6 report types enqueued on submit; Recent Submissions cross-community feed added; Supervisor role (separate from Admin) added — approves reports but no Admin portal access; Post Orders bullet-point editing fixed (completed June 24, 2026)
 - [x] ~~**32. Property Hub — homepage tab placement**~~ — completed June 24, 2026
 - [x] ~~**30. "Latest Developments" / What's New dropdown**~~ — completed June 24, 2026

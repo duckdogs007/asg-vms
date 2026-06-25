@@ -42,7 +42,7 @@ export default function LoginPage() {
       <div className="bg-white p-10 rounded-xl shadow-lg w-full max-w-[420px] text-center">
 
         <div className="text-2xl font-bold text-blue-800 leading-tight">American Security Group</div>
-        <div className="text-[11px] text-gray-500 uppercase tracking-widest mt-1 mb-3">Integrated Property Solutions</div>
+        <div className="text-[11px] text-gray-500 uppercase tracking-widest mt-1 mb-3">Property Solutions Platform</div>
         <p className="text-sm text-gray-500 mb-6">Sign in to continue</p>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-3">

@@ -100,7 +100,7 @@ export default function Home() {
               <div className="text-xl sm:text-2xl font-bold tracking-wide text-gray-900 leading-tight">
                 American Security Group
               </div>
-              <div className="text-gray-500 text-xs mt-0.5">Integrated Property Solutions Platform</div>
+              <div className="text-gray-500 text-xs mt-0.5">Property Solutions Platform</div>
             </div>
           </div>
           <div className="text-right">

@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     template: "%s — ASG VMS",
     default:  "ASG VMS — Visitor Management",
   },
-  description: "American Security Group — Integrated Property Solutions Platform",
+  description: "American Security Group — Property Solutions Platform",
 }
 
 export const dynamic = "force-dynamic"
