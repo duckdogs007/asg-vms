@@ -25,6 +25,7 @@ export default function TopNav() {
   const [changelogOpen,  setChangelogOpen]  = useState(false)
   const [changelog,      setChangelog]      = useState<Array<{id: string; title: string; blurb: string; posted_at: string}>>([])
   const [lastSeenAt,     setLastSeenAt]     = useState<string | null>(null)
+  const [chatUnread,     setChatUnread]     = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem("asg-changelog-last-seen")
@@ -35,6 +36,23 @@ export default function TopNav() {
       .order("posted_at", { ascending: false })
       .limit(20)
       .then(({ data }) => setChangelog(data || []))
+
+    // Chat unread badge
+    const lastRead = localStorage.getItem("asg-chat-last-read")
+    supabase.from("chat_messages")
+      .select("created_at")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .then(({ data }) => {
+        if (data?.[0]) {
+          setChatUnread(!lastRead || data[0].created_at > lastRead)
+        }
+      })
+
+    // Clear badge when user visits /chat
+    const clearBadge = () => setChatUnread(false)
+    window.addEventListener("chat-read", clearBadge)
+    return () => window.removeEventListener("chat-read", clearBadge)
   }, [])
 
   useEffect(() => {
@@ -195,6 +213,14 @@ export default function TopNav() {
             <Link href="/userdash"     className={navLinkCls}>User Dashboard</Link>
             <Link href="/vms/intel"       className={navLinkCls}>Intel Terminal</Link>
             <Link href="/vms/reports"     className={navLinkCls}>Reports</Link>
+            {userEmail && (
+              <Link href="/chat" className={`${navLinkCls} relative`}>
+                💬 Chat
+                {chatUnread && (
+                  <span className="absolute -top-1 -right-2 w-2 h-2 rounded-full bg-blue-600"></span>
+                )}
+              </Link>
+            )}
             {isAdmin && <Link href="/admin/system" className={navLinkCls}>Admin Dashboard</Link>}
           </div>
         </div>
@@ -387,6 +413,12 @@ export default function TopNav() {
             <Link href="/userdash"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>
             <Link href="/vms/intel"       className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
             <Link href="/vms/reports"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
+            {userEmail && (
+              <Link href="/chat" className={`${mobileNavLinkCls} flex items-center justify-between`} onClick={() => setMobileNavOpen(false)}>
+                <span>💬 Team Chat</span>
+                {chatUnread && <span className="w-2 h-2 rounded-full bg-blue-600 flex-shrink-0"></span>}
+              </Link>
+            )}
             {isAdmin && <Link href="/admin/system" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ Admin Dashboard</Link>}
             <div className="border-t border-gray-100 mt-1 pt-1.5 pb-1.5 px-4 text-xs text-gray-400">{currentTime}</div>
           </div>

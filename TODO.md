@@ -13,7 +13,7 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| 31 | Users Online + Chat | presence + real-time messaging under the hamburger menu |
+| 40/42 | Reports — clickable rows → detail view | pending-approval + recent submissions |
 
 ---
 
@@ -135,6 +135,7 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 
 ## Done
 
+- [x] ~~**31. Users Online + Chat**~~ — `chat_messages` table (RLS + Realtime); `/chat` page with Supabase Presence (online users panel) + two channels (🌐 All ASG / 🏢 community); real-time message subscription; unread dot badge in nav + hamburger; Enter to send (completed June 25, 2026)
 - [x] ~~**45. Connect asg-psp.com domain**~~ — `asg-psp.com` + `www.asg-psp.com` added to Vercel project (DNS via Vercel nameservers); aliased to production on deploy `dpl_7vbFi5v9dYCAZ2Hp6sVxmN4vd6xd` (completed June 25, 2026)
 - [x] ~~**44. Header rename**~~ — "Integrated Property Solutions Platform" → "Property Solutions Platform" across login page, homepage, and layout metadata (completed June 25, 2026)
 - [x] ~~**29. Remit reports to client via email — review/approval workflow**~~ — `report_queue` table + state machine (pending → needs_revision → pending → sent); officers see live status badge on each report card + resubmit flow when revision requested; supervisors/admins see Review Queue on Reports page (approve & send, or return with notes); approval API sends email to community contacts with fallback to ASG-Supervisors@teamasg.com; all 6 report types enqueued on submit; Recent Submissions cross-community feed added; Supervisor role (separate from Admin) added — approves reports but no Admin portal access; Post Orders bullet-point editing fixed (completed June 24, 2026)
