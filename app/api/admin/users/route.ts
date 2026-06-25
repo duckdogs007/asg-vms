@@ -106,9 +106,9 @@ export async function PATCH(req: Request) {
   if (body.community_id !== undefined && body.community_id !== null && !UUID_RE.test(body.community_id)) {
     return NextResponse.json({ error: "community_id must be a UUID or null" }, { status: 400 })
   }
-  const VALID_ROLES = [null, "admin_super", "guest"]
+  const VALID_ROLES = [null, "admin_super", "supervisor", "property_manager", "officer", "guest"]
   if (body.role !== undefined && !VALID_ROLES.includes(body.role ?? null)) {
-    return NextResponse.json({ error: "role must be null, 'admin_super', or 'guest'" }, { status: 400 })
+    return NextResponse.json({ error: "role must be one of: null, admin_super, supervisor, property_manager, officer, guest" }, { status: 400 })
   }
 
   // Fetch existing row so we can do a partial update — only overwrite the

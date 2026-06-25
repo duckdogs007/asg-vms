@@ -13,66 +13,11 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| 29 | Remit reports — review/approval workflow | report remittal enhancements |
+| 43 | Post Orders — report-recipient emails per location | feeds remittal routing |
 
 ---
 
 ## Open items
-
-### Reporting & workflow
-
-#### 29. Remit reports to client via email — review/approval workflow
-Reports emailed to the client once reviewed; routing differs by type; send triggered from **View Reports**.
-
-- **Per-type routing (configurable):** Maintenance = direct send on creation; Patrol/Incident = supervisor review before client send.
-- **State machine:** draft → submitted → (pending review) → approved → sent. Track who/when at each step.
-- **Supervisor can edit during review, with review denoted** ("Reviewed by [name], [date]") carried onto the emailed report. Preserve the officer's original; log edits to `audit_logs`. (Needs supervisor edit rights on others' reports → item 7b.)
-- **Recipients:** per-community, role-based from `community_contacts` (maintenance→maintenance POC, incident→management). Allow override/CC.
-- Reuse existing email infra (`alerts`, `notification_recipients`); log remittance to `audit_logs`.
-- Show remittance status in View Reports.
-
-### Platform & UI
-
-#### 31. 🔨 Users Online + Chat (under the vertical menu)
-Presence + real-time messaging, from the hamburger (☰) menu.
-
-- **Presence:** who's online/on-duty via Supabase Realtime presence + existing login tracking (`audit_logs`, On Duty tab).
-- **Chat:** real-time messages via a `chat_messages` table + Realtime; RLS-scoped.
-- **Decide:** all-users vs. community-scoped; DM vs. team channel vs. both; supervisor broadcast to on-duty.
-- **Consider:** retention; whether chats are auditable (security context); unread/notifications; guard-post usability.
-
-### Standalone
-
-#### 34. Guest user access — view-only privileges
-Add a guest/read-only role that can view but not create, edit, or delete.
-
-- **Use case:** clients/stakeholders (e.g., Envolve/Ed Smart), auditors, or oversight who need visibility without modifying data.
-- **Privileges:** read-only across permitted areas (Reports, Unit History, Property Hub views, dashboards). No report creation/editing, no admin, no violation issuing.
-- **Community-scoped:** a guest is tied to specific community/communities and sees only that data.
-- **Implementation:** add a `guest`/`viewer` role; enforce read-only via RLS (select-only policies); hide create/edit/delete actions in the UI for guests. Widening `user_assignments.role` (currently null / `admin_super` only) is shared work with item 7b.
-- **Decide:** exactly which areas/tabs guests can see; whether guests see PII (names, DOB, plates) or a redacted view; account provisioning.
-
-#### 36. 🔨 Property Maintenance report (Officer Reports) — with remittal
-New report type under Officer Reports for property maintenance issues, with client remittal.
-
-- **Maintenance issue types (extensible):** Lights Out, Fence/Gate Damage, Sprinkler Issue, Building Door Issue, and other similar items; include an "Other" + free-text. Make the list configurable (lookup table) so types can be added without code.
-- **Fields:** community, structured Building # + Apartment # / common-area (per item 26), issue type, description, photo upload (shared upload component), date/time, reporting officer (default to logged-in user).
-- **Remittal (ties to item 29):** Maintenance is a **direct-send-on-creation** type — emailed straight to the maintenance POC (`community_contacts`, maintenance role) without supervisor review. Log remittance to `audit_logs`.
-- Flows into Unit History (item 25) when tied to a bldg/unit.
-
-#### 37. 🔨 Post Orders — admin update/edit
-Admins need the ability to update/edit Post Orders (Property Hub → Post Orders tab).
-
-- Add edit capability for Post Orders content per community (create / update / save).
-- **Access:** admin (and likely property-manager via item 7b) can edit; officers/guests view-only.
-- Support formatting and, where relevant, document/photo attachments (reuse shared upload component).
-- Log edits to `audit_logs`; consider versioning so prior Post Orders aren't lost on update.
-
-#### 38. 🔨 Watchlist box — hyperlink to Watchlist page (Homepage)
-Make the Watchlist box/widget on the Homepage a hyperlink that goes directly to the Watchlist page.
-
-- Link the Homepage Watchlist box to the Watchlist page (whole box clickable, or a clear link).
-- Quick navigation win; small UI change.
 
 #### 7b. Property Hub — `property_manager` role (follow-on)
 Vehicle registry shipped with writes admin-gated; dedicated PM role was deferred.
@@ -90,20 +35,6 @@ Add a file/photo attachments upload feature to DAR reports.
 - Multi-file upload with thumbnail preview (reuse the shared upload component — items 18, 33, 36).
 - Store in Supabase Storage with references on the DAR record.
 - (Confirm whether "DAR" is the existing Daily Log or a distinct report type.)
-
-#### 40. Reports tab — hyperlink pending-approval reports to the full report
-Under the Reports tab, reports listed as pending approval need a hyperlink to open the full report so a supervisor can review and approve it.
-
-- Each pending-approval row links to the full report detail view.
-- From there the supervisor reviews, (optionally edits, per item 29), and approves → triggers remittal.
-- Refines item 29's review/approval workflow — this is the navigation into the report from the pending queue.
-
-#### 42. Reports tab — hyperlink recent submissions to the full report
-In the Reports tab, recent submissions need a hyperlink to the actual report so they can be reviewed after submittal.
-
-- Each recent-submission row links to the full report detail view (read/review).
-- **Generalizes item 40:** same underlying feature — make report-list rows clickable to open the full report. Item 40 is the pending-approval queue; this is the recent-submissions list. Build the clickable-row → detail view once; both lists use it.
-- Applies across report types (DAR, Incident, Field Contact, Vehicle FI, Parking, Maintenance).
 
 #### 43. Post Orders — configure client report-recipient email(s) per location
 In the Post Orders section, set up the customer/location email recipient(s) who reports are delivered to.
