@@ -308,6 +308,11 @@ export default function UserDashboard() {
   const [officersLoading, setOfficersLoading] = useState(false)
   const [officersError,   setOfficersError]   = useState("")
 
+  // Queue / review-workflow state
+  const [userEmail,      setUserEmail]      = useState("")
+  const [revisionText,   setRevisionText]   = useState<Record<string, string>>({})
+  const [revisionSaving, setRevisionSaving] = useState<string | null>(null)
+
   useEffect(() => { loadInit() }, [])
 
   useEffect(() => {
@@ -386,6 +391,7 @@ export default function UserDashboard() {
     }
     const { data: { user } } = await supabase.auth.getUser()
     if (user?.email) {
+      setUserEmail(user.email)
       const name = user.email.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, ch => ch.toUpperCase())
       setDailyOfficer(name); setIncOfficer(name); setPdOfficer(name); setBoloAddedBy(name); setVfiOfficer(name); setPvOfficer(name)
       setOfficerName(name)
@@ -560,21 +566,24 @@ export default function UserDashboard() {
   // ── OFFICER REPORTS ──
   async function loadPastReports() {
     setReportsLoading(true)
-    const [{ data: daily }, { data: incidents }, { data: contacts }, { data: vfi }, { data: parking }, { data: maintenance }] = await Promise.all([
+    const [{ data: daily }, { data: incidents }, { data: contacts }, { data: vfi }, { data: parking }, { data: maintenance }, { data: queue }] = await Promise.all([
       supabase.from("officer_daily_logs").select("*").order("date", { ascending: false }).limit(20),
       supabase.from("incident_reports").select("*").order("date", { ascending: false }).limit(20),
       supabase.from("contact_history").select("*").order("created_at", { ascending: false }).limit(20),
       supabase.from("vehicle_fi_logs").select("*").order("date", { ascending: false }).limit(20),
       supabase.from("parking_violations").select("*").order("date", { ascending: false }).limit(20),
       supabase.from("property_maintenance_reports").select("*").order("date", { ascending: false }).limit(20),
+      supabase.from("report_queue").select("id,report_type,report_id,status,revision_notes,revision_comment").order("submitted_at", { ascending: false }),
     ])
+    const qMap: Record<string, any> = {}
+    for (const q of (queue || [])) qMap[`${q.report_type}:${q.report_id}`] = q
     const combined = [
-      ...(daily       || []).map(r => ({ ...r, _type: "Daily Log"     })),
-      ...(incidents   || []).map(r => ({ ...r, _type: "Incident"      })),
-      ...(contacts    || []).map(r => ({ ...r, _type: "Field Contact", date: r.contacted_at?.split("T")[0] || r.created_at?.split("T")[0] })),
-      ...(vfi         || []).map(r => ({ ...r, _type: "Vehicle FI"    })),
-      ...(parking     || []).map(r => ({ ...r, _type: "Parking Violation" })),
-      ...(maintenance || []).map(r => ({ ...r, _type: "Maintenance"   })),
+      ...(daily       || []).map(r => ({ ...r, _type: "Daily Log",         _queue: qMap[`daily_log:${r.id}`]     || null })),
+      ...(incidents   || []).map(r => ({ ...r, _type: "Incident",          _queue: qMap[`incident:${r.id}`]      || null })),
+      ...(contacts    || []).map(r => ({ ...r, _type: "Field Contact",     _queue: qMap[`field_contact:${r.id}`] || null, date: r.contacted_at?.split("T")[0] || r.created_at?.split("T")[0] })),
+      ...(vfi         || []).map(r => ({ ...r, _type: "Vehicle FI",        _queue: qMap[`vehicle_fi:${r.id}`]    || null })),
+      ...(parking     || []).map(r => ({ ...r, _type: "Parking Violation", _queue: qMap[`parking:${r.id}`]       || null })),
+      ...(maintenance || []).map(r => ({ ...r, _type: "Maintenance",       _queue: qMap[`maintenance:${r.id}`]   || null })),
     ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
     setPastReports(combined)
     setReportsLoading(false)
@@ -583,15 +592,16 @@ export default function UserDashboard() {
   async function saveDailyLog() {
     if (!dailyNarrative) { setReportError("Patrol narrative is required."); return }
     setReportSaving(true); setReportError(""); setReportMessage("")
-    const { error } = await supabase.from("officer_daily_logs").insert({
+    const { data: ins, error } = await supabase.from("officer_daily_logs").insert({
       date: dailyDate, shift: dailyShift, community_id: dailyCommunity,
       officer_name: dailyOfficer, weather: dailyWeather,
       narrative: dailyNarrative, notes: dailyNotes,
       created_at: new Date().toISOString()
-    })
+    }).select("id").single()
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
-    setReportMessage("✅ Daily log submitted.")
+    if (ins?.id) enqueueReport("daily_log", ins.id, dailyCommunity, dailyOfficer || officerName, `Daily Log — ${dailyDate}`)
+    setReportMessage("✅ Daily log submitted — pending supervisor review.")
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather("")
     logActivity("created", "Daily Log", "", `Daily log submitted — ${dailyDate}`)
   }
@@ -639,7 +649,7 @@ export default function UserDashboard() {
       ? await buildHohSnapshot(incCommunity, incLoc.unit_number, incDate)
       : EMPTY_SNAPSHOT
 
-    const { error } = await supabase.from("incident_reports").insert({
+    const { data: ins, error } = await supabase.from("incident_reports").insert({
       date: incDate, time: incTime, community_id: incCommunity,
       location: incLoc.location || null, incident_type: incType,
       location_type: incLoc.location_type,
@@ -654,10 +664,11 @@ export default function UserDashboard() {
       action_taken: incAction, follow_up_required: incFollowUp,
       photo_urls: photoUrls.length ? photoUrls : null,
       officer_name: incOfficer, created_at: new Date().toISOString()
-    })
+    }).select("id").single()
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
-    setReportMessage("✅ Incident report submitted.")
+    if (ins?.id) enqueueReport("incident", ins.id, incCommunity, incOfficer || officerName, incType || "Incident Report")
+    setReportMessage("✅ Incident report submitted — pending supervisor review.")
     if (isHighPriorityIncident(incType)) {
       const communityName = communities.find(c => c.id === incCommunity)?.name || "Unknown"
       fireAlert({
@@ -702,17 +713,18 @@ export default function UserDashboard() {
         photoUrls.push(publicUrl)
       }
     }
-    const { error } = await supabase.from("contact_history").insert({
+    const { data: ins, error } = await supabase.from("contact_history").insert({
       first_name: ctFirstName, last_name: ctLastName, contacted_at: contactedAt,
       location: ctLocation || null, reason: ctReason || null, officer: ctOfficer || null,
       notes: ctNotes || null, community_id: ctCommunity || null,
       sex: ctSex || null, race: ctRace || null, dob: ctDob || null,
       ssn: ctSsn || null, oln: ctOln || null, address: ctAddress || null,
       photo_urls: photoUrls.length ? photoUrls : null,
-    })
+    }).select("id").single()
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
-    setReportMessage("✅ Field contact logged.")
+    if (ins?.id) enqueueReport("field_contact", ins.id, ctCommunity || null, ctOfficer || officerName, `${ctFirstName} ${ctLastName}`.trim() || "Field Contact")
+    setReportMessage("✅ Field contact logged — pending supervisor review.")
     logActivity("created", "Field Contact", "", `Field contact logged — ${ctFirstName} ${ctLastName}`)
     setCtFirstName(""); setCtLastName(""); setCtLocation(""); setCtReason(""); setCtOfficer(""); setCtNotes("")
     setCtSex(""); setCtRace(""); setCtDob(""); setCtSsn(""); setCtOln(""); setCtAddress("")
@@ -742,7 +754,7 @@ export default function UserDashboard() {
       ? await buildHohSnapshot(vfiCommunity, vfiLoc.unit_number, vfiDate)
       : EMPTY_SNAPSHOT
 
-    const { error } = await supabase.from("vehicle_fi_logs").insert({
+    const { data: ins, error } = await supabase.from("vehicle_fi_logs").insert({
       date: vfiDate, time: vfiTime || null,
       community_id: vfiCommunity || null,
       officer_name: vfiOfficer || null,
@@ -763,9 +775,10 @@ export default function UserDashboard() {
       photo_urls: photoUrls.length ? photoUrls : null,
       bolo_match: boloMatch,
       created_at: new Date().toISOString()
-    })
+    }).select("id").single()
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
+    if (ins?.id) enqueueReport("vehicle_fi", ins.id, vfiCommunity || null, vfiOfficer || officerName, vfiVehicle.plate ? `Plate: ${vfiVehicle.plate}` : (vfiVehicle.make || "Vehicle FI"))
 
     // Supervisor alert on a BOLO hit — a flagged vehicle showing up on a field
     // interview is at least as urgent as on a parking ticket.
@@ -789,7 +802,7 @@ export default function UserDashboard() {
       })
     }
 
-    setReportMessage("✅ Vehicle FI logged." + (boloMatch ? " ⚠ BOLO match — supervisor alerted." : ""))
+    setReportMessage("✅ Vehicle FI logged — pending supervisor review." + (boloMatch ? " ⚠ BOLO match — supervisor alerted." : ""))
     logActivity("created", "Vehicle FI", "", `Vehicle FI logged — ${vfiVehicle.plate || vfiVehicle.make} ${vfiDate}`)
     setVfiLoc(EMPTY_LOCATION); setVfiVehicle(EMPTY_VEHICLE); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
     setVfiFollowUp(false); setVfiViolation(false); setVfiViolationNum("")
@@ -921,7 +934,7 @@ export default function UserDashboard() {
       ? await buildHohSnapshot(pvCommunity, pvLoc.unit_number, pvDate)
       : EMPTY_SNAPSHOT
 
-    const { error } = await supabase.from("parking_violations").insert({
+    const { data: ins, error } = await supabase.from("parking_violations").insert({
       date: pvDate, time: pvTime || null,
       community_id: pvCommunity || null,
       officer_name: pvOfficer || null,
@@ -941,9 +954,10 @@ export default function UserDashboard() {
       tow_reason:       pvTowRequested ? (pvTowReason || null) : null,
       bolo_match: boloMatch,
       created_at: new Date().toISOString(),
-    })
+    }).select("id").single()
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
+    if (ins?.id) enqueueReport("parking", ins.id, pvCommunity || null, pvOfficer || officerName, [pvViolationType, pvVehicle.plate].filter(Boolean).join(" · ") || "Parking Violation")
 
     // Supervisor alert only on a BOLO hit or a tow request — standard
     // violations just log. (Chosen default for item 6.)
@@ -976,7 +990,7 @@ export default function UserDashboard() {
     const note = boloMatch
       ? " ⚠ BOLO match — supervisor alerted."
       : pvTowRequested ? " 🚛 Tow requested — supervisor alerted." : ""
-    setReportMessage("✅ Parking violation logged." + note)
+    setReportMessage("✅ Parking violation logged — pending supervisor review." + note)
     logActivity("created", "Parking Violation", "", `Parking violation — ${pvVehicle.plate} (${pvViolationType})`)
 
     setPvVehicle(EMPTY_VEHICLE); setPvLoc(EMPTY_LOCATION); setPvSpace(""); setPvNotes("")
@@ -1005,7 +1019,7 @@ export default function UserDashboard() {
     const comm       = mntCommunity || communityId
     const issueLabel = mntIssueType === "Other" && mntIssueOther ? mntIssueOther : mntIssueType
 
-    const { error } = await supabase.from("property_maintenance_reports").insert({
+    const { data: ins, error } = await supabase.from("property_maintenance_reports").insert({
       community_id:  comm      || null,
       date:          mntDate,
       time:          mntTime   || null,
@@ -1020,47 +1034,10 @@ export default function UserDashboard() {
       status:        "submitted",
       created_by:    mntOfficer || officerName || null,
       created_at:    new Date().toISOString(),
-    })
+    }).select("id").single()
     if (error) { setReportError(error.message); setReportSaving(false); return }
-
-    // Email maintenance POC from community_contacts if one is configured
-    if (comm) {
-      const communityName = communities.find(c => c.id === comm)?.name || ""
-      const { data: contacts } = await supabase
-        .from("community_contacts")
-        .select("email, name")
-        .eq("community_id", comm)
-        .ilike("role", "%maintenance%")
-      const recipients = (contacts || []).map((c: any) => c.email).filter(Boolean)
-      const location =
-        mntLoc.location_type === "unit"
-          ? `Bldg ${mntLoc.building || "—"} / Apt ${mntLoc.apartment || "—"}`
-          : mntLoc.common_area || "Common Area"
-      if (recipients.length > 0) {
-        await fetch("/api/reports/email", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            to: recipients,
-            report: {
-              _type:        "Maintenance",
-              date:         mntDate,
-              time:         mntTime || "",
-              officer_name: mntOfficer || officerName || "",
-              community:    communityName,
-              location,
-              issue_type:   issueLabel,
-              description:  mntDesc || "",
-            },
-          }),
-        })
-        setReportMessage(`✅ Maintenance report submitted and emailed to ${recipients.join(", ")}.`)
-      } else {
-        setReportMessage("✅ Maintenance report submitted. (No maintenance contact on file — email skipped.)")
-      }
-    } else {
-      setReportMessage("✅ Maintenance report submitted.")
-    }
+    if (ins?.id) enqueueReport("maintenance", ins.id, comm || null, mntOfficer || officerName, issueLabel)
+    setReportMessage("✅ Maintenance report submitted — pending supervisor review.")
 
     logActivity("created", "Maintenance", "", `Maintenance report — ${issueLabel} (${mntDate})`)
     setMntDate(new Date().toISOString().split("T")[0])
@@ -1077,6 +1054,34 @@ export default function UserDashboard() {
       action, resource_type: resourceType, resource_id: resourceId, detail,
       created_at: new Date().toISOString()
     })
+  }
+
+  // ── REPORT QUEUE ──
+  function enqueueReport(type: string, id: string, communityId: string | null, officer: string, summary: string) {
+    supabase.from("report_queue").insert({
+      report_type:  type,
+      report_id:    id,
+      community_id: communityId || null,
+      submitted_by: userEmail || null,
+      officer_name: officer || null,
+      summary,
+      status:       "pending",
+      submitted_at: new Date().toISOString(),
+    }).then(({ error: qe }) => { if (qe) console.warn("[queue]", qe.message) })
+  }
+
+  async function resubmitReport(queueId: string, comment: string) {
+    setRevisionSaving(queueId)
+    const { error } = await supabase.from("report_queue").update({
+      status:           "pending",
+      revision_comment: comment,
+      revision_notes:   null,
+      submitted_at:     new Date().toISOString(),
+    }).eq("id", queueId)
+    setRevisionSaving(null)
+    if (error) { alert("Resubmit failed: " + error.message); return }
+    setRevisionText(prev => { const u = { ...prev }; delete u[queueId]; return u })
+    await loadPastReports()
   }
 
   const REPORT_TABLE: Record<string, string> = {
@@ -2509,8 +2514,21 @@ export default function UserDashboard() {
                     className={`px-5 py-4 flex justify-between items-center cursor-pointer ${rowBg}`}
                     onClick={() => setExpandedReport(expandedReport === i ? null : i)}
                   >
-                    <div className="flex items-center gap-3 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-wrap">
                       <span className={`text-xs font-bold px-2 py-0.5 rounded-full shrink-0 ${badgeCls}`}>{badge}</span>
+                      {r._queue && (
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full shrink-0 ${
+                          r._queue.status === "sent"           ? "bg-green-100 text-green-700"  :
+                          r._queue.status === "needs_revision" ? "bg-red-100 text-red-700"      :
+                          r._queue.status === "approved"       ? "bg-blue-100 text-blue-700"    :
+                                                                 "bg-yellow-100 text-yellow-700"
+                        }`}>
+                          {r._queue.status === "sent"           ? "✓ Sent" :
+                           r._queue.status === "needs_revision" ? "! Revision Requested" :
+                           r._queue.status === "approved"       ? "✓ Approved" :
+                                                                  "⏳ Pending"}
+                        </span>
+                      )}
                       {r.incident_type && <span className="text-xs text-gray-500 shrink-0">{r.incident_type}</span>}
                       {r.shift         && <span className="text-xs text-gray-500 shrink-0">{r.shift} Shift</span>}
                       <span className="text-sm font-semibold text-gray-800 truncate">{summary}</span>
@@ -2526,6 +2544,43 @@ export default function UserDashboard() {
                   </div>
                   {expandedReport === i && (
                     <div className="px-5 py-4 border-t border-gray-100 bg-white">
+
+                      {/* Sent-to-client notice */}
+                      {r._queue?.status === "sent" && (
+                        <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg flex items-start gap-2">
+                          <span className="text-green-600 mt-0.5">✅</span>
+                          <div>
+                            <div className="text-xs font-bold text-green-800 uppercase tracking-wide">Sent to Client</div>
+                            {r._queue.revision_comment && (
+                              <div className="text-xs text-green-700 mt-1">Officer note: {r._queue.revision_comment}</div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Revision-requested panel */}
+                      {r._queue?.status === "needs_revision" && (
+                        <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                          <div className="text-xs font-bold text-amber-800 uppercase tracking-wide mb-1">🔄 Revision Requested by Supervisor</div>
+                          {r._queue.revision_notes && (
+                            <div className="text-sm text-amber-900 mb-3 whitespace-pre-wrap">{r._queue.revision_notes}</div>
+                          )}
+                          <textarea
+                            value={revisionText[r._queue.id] || ""}
+                            onChange={e => setRevisionText(prev => ({ ...prev, [r._queue.id]: e.target.value }))}
+                            placeholder="Describe your correction or the additional information requested…"
+                            className="w-full px-3 py-2 border border-amber-300 rounded-md text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-500 bg-white"
+                            rows={3}
+                          />
+                          <button
+                            onClick={() => resubmitReport(r._queue.id, revisionText[r._queue.id] || "")}
+                            disabled={revisionSaving === r._queue.id || !(revisionText[r._queue.id] || "").trim()}
+                            className="mt-2 px-4 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 border-none cursor-pointer disabled:opacity-50"
+                          >
+                            {revisionSaving === r._queue.id ? "Resubmitting…" : "↩ Resubmit for Review"}
+                          </button>
+                        </div>
+                      )}
 
                       {/* Admin action buttons */}
                       <div className="flex gap-2 mb-4">

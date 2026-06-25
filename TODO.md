@@ -3,7 +3,7 @@
 **App:** https://asg-vms.vercel.app/
 **Stack:** Next.js · TypeScript · Supabase · Vercel
 **Supabase project:** ASG-VMS (`xmomsoobriehgrnppewa`)
-**Last updated:** June 24, 2026
+**Last updated:** June 24, 2026 (evening)
 
 > Shared task list for Claude.ai ↔ Claude Code. Keep this file in the repo root as the single source of truth. Companion: `CLAUDE_CODE_HANDOFF.md` (sequenced build plan + migration files).
 
@@ -14,7 +14,6 @@
 | # | Item | Notes |
 |---|------|-------|
 | 31 | Users Online + Chat | presence + real-time messaging under the hamburger menu |
-| 29 | Remit reports to client via email | review/approval workflow, supervisor sign-off |
 
 ---
 
@@ -102,6 +101,7 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 
 ## Done
 
+- [x] ~~**29. Remit reports to client via email — review/approval workflow**~~ — `report_queue` table + state machine (pending → needs_revision → pending → sent); officers see live status badge on each report card + resubmit flow when revision requested; supervisors/admins see Review Queue on Reports page (approve & send, or return with notes); approval API sends email to community contacts with fallback to ASG-Supervisors@teamasg.com; all 6 report types enqueued on submit; Recent Submissions cross-community feed added; Supervisor role (separate from Admin) added — approves reports but no Admin portal access; Post Orders bullet-point editing fixed (completed June 24, 2026)
 - [x] ~~**32. Property Hub — homepage tab placement**~~ — completed June 24, 2026
 - [x] ~~**30. "Latest Developments" / What's New dropdown**~~ — completed June 24, 2026
 - [x] ~~**34. Guest user access — view-only privileges**~~ — `guest` role in `user_assignments`; Admin Dashboard Users tab gains Access Level dropdown (Officer / Guest / Admin Super) + independent Community picker; `checkIsGuest()` added to lib/admin.ts; userdash hides all filing tabs/BOLO add/watchlist add/passdown submit/gate check; check-in disables submit; alerts hides Acknowledge (completed June 24, 2026)

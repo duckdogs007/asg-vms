@@ -63,7 +63,10 @@ export async function savePostOrders(communityId: string, orders: PostOrders): P
       last_updated: orders.lastUpdated,
       data: {
         contacts:       orders.contacts,
-        procedures:     orders.procedures,
+        procedures:     orders.procedures.map(p => ({
+          ...p,
+          items: p.items.map((s: string) => s.trim()).filter(Boolean),
+        })),
         reportExamples: orders.reportExamples,
       },
       updated_at: new Date().toISOString(),

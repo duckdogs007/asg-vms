@@ -101,8 +101,7 @@ export default function PostOrdersEditorPage() {
   const setProcedure = (i: number, patch: Partial<PostOrderProcedure>) =>
     setOrders(o => ({ ...o, procedures: o.procedures.map((p, idx) => idx === i ? { ...p, ...patch } : p) }))
   const setProcedureItems = (i: number, raw: string) => {
-    const items = raw.split("\n").map(s => s.trim()).filter(Boolean)
-    setProcedure(i, { items })
+    setProcedure(i, { items: raw.split("\n") })
   }
   const addProcedure    = () => setOrders(o => ({ ...o, procedures: [...o.procedures, { ...EMPTY_PROCEDURE, items: [] }] }))
   const removeProcedure = (i: number) => setOrders(o => ({ ...o, procedures: o.procedures.filter((_, idx) => idx !== i) }))
@@ -203,12 +202,12 @@ export default function PostOrdersEditorPage() {
                     <input value={c.contact} onChange={e => setContact(i, { contact: e.target.value })} className={inputCls} />
                   </div>
                   <div className="sm:col-span-1">
-                    <button onClick={() => removeContact(i)} className={removeCls}>✕</button>
+                    <button type="button" onClick={() => removeContact(i)} className={removeCls}>✕</button>
                   </div>
                 </div>
               </div>
             ))}
-            <button onClick={addContact} className={addCls}>+ Add Contact</button>
+            <button type="button" onClick={addContact} className={addCls}>+ Add Contact</button>
           </div>
 
           {/* PROCEDURES */}
@@ -229,7 +228,7 @@ export default function PostOrdersEditorPage() {
                     <input value={p.title} onChange={e => setProcedure(i, { title: e.target.value })} className={inputCls} />
                   </div>
                   <div className="sm:col-span-1 flex items-end">
-                    <button onClick={() => removeProcedure(i)} className={removeCls}>✕</button>
+                    <button type="button" onClick={() => removeProcedure(i)} className={removeCls}>✕</button>
                   </div>
                 </div>
                 <div>
@@ -244,7 +243,7 @@ export default function PostOrdersEditorPage() {
                 </div>
               </div>
             ))}
-            <button onClick={addProcedure} className={addCls}>+ Add Procedure</button>
+            <button type="button" onClick={addProcedure} className={addCls}>+ Add Procedure</button>
           </div>
 
           {/* EXAMPLES */}
@@ -261,7 +260,7 @@ export default function PostOrdersEditorPage() {
                     <input value={ex.title} onChange={e => setExample(i, { title: e.target.value })} className={inputCls} />
                   </div>
                   <div className="sm:col-span-1 flex items-end">
-                    <button onClick={() => removeExample(i)} className={removeCls}>✕</button>
+                    <button type="button" onClick={() => removeExample(i)} className={removeCls}>✕</button>
                   </div>
                 </div>
                 <div>
@@ -276,7 +275,7 @@ export default function PostOrdersEditorPage() {
                 </div>
               </div>
             ))}
-            <button onClick={addExample} className={addCls}>+ Add Report Template</button>
+            <button type="button" onClick={addExample} className={addCls}>+ Add Report Template</button>
           </div>
 
           {/* Sticky save */}

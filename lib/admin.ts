@@ -26,6 +26,20 @@ export async function checkIsAdmin(): Promise<boolean> {
   return !error && !!data
 }
 
+// Returns true if the current user can approve/return reports (admin OR supervisor).
+export async function checkCanApprove(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+  if (ADMIN_EMAILS.includes(user.email || "")) return true
+  const { data } = await supabase
+    .from("user_assignments")
+    .select("role")
+    .eq("user_id", user.id)
+    .in("role", ["admin_super", "supervisor"])
+    .maybeSingle()
+  return !!data
+}
+
 // Returns true if the current user has role='guest' in user_assignments.
 // Guests can view all data but cannot create, edit, or delete anything.
 export async function checkIsGuest(): Promise<boolean> {

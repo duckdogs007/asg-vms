@@ -587,7 +587,7 @@ export default function AdminSystemPage() {
                     <td className="px-3 py-2 font-mono text-xs">{u.email || "—"}</td>
                     <td className="px-3 py-2">
                       <select
-                        value={u.role === "admin_super" ? "admin_super" : u.role === "guest" ? "guest" : "officer"}
+                        value={u.role === "admin_super" ? "admin_super" : u.role === "supervisor" ? "supervisor" : u.role === "guest" ? "guest" : "officer"}
                         onChange={e => {
                           const v = e.target.value
                           saveRole(u.id, v === "officer" ? null : v)
@@ -596,7 +596,8 @@ export default function AdminSystemPage() {
                       >
                         <option value="officer">Officer</option>
                         <option value="guest">Guest (view-only)</option>
-                        <option value="admin_super">Admin / Super</option>
+                        <option value="supervisor">Supervisor</option>
+                        <option value="admin_super">Admin</option>
                       </select>
                     </td>
                     <td className="px-3 py-2">

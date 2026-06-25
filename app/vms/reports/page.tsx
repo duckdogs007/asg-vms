@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog } from "@/lib/types"
-import { ADMIN_EMAILS } from "@/lib/admin"
+import { ADMIN_EMAILS, checkCanApprove } from "@/lib/admin"
 import { displayPlate, isNoPlate } from "@/components/VehicleFields"
 
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
@@ -113,6 +113,16 @@ const EMPTY_STATS: Stats = {
   byDay: {}, byHour: {}
 }
 
+interface SubmissionRow {
+  id: string
+  typeKey: "incident" | "fieldContact" | "vehicleFI" | "parking" | "dailyLog" | "maintenance"
+  typeLabel: string
+  officer: string
+  community_id: string | null
+  created_at: string
+  summary: string
+}
+
 const REPORT_TYPES = [
   { key: "incidents",     label: "Incident Reports",   color: "red",    table: "incident_reports",   dateCol: "date" },
   { key: "fieldContacts", label: "Field Contacts",     color: "purple", table: "contact_history",    dateCol: "created_at" },
@@ -121,6 +131,15 @@ const REPORT_TYPES = [
   { key: "dailyLogs",     label: "Daily Logs",         color: "teal",   table: "officer_daily_logs", dateCol: "date" },
 ] as const
 type RptTypeKey = typeof REPORT_TYPES[number]["key"]
+
+const SUB_BADGE: Record<string, string> = {
+  incident:     "bg-red-100 text-red-700",
+  fieldContact: "bg-purple-100 text-purple-700",
+  vehicleFI:    "bg-orange-100 text-orange-700",
+  parking:      "bg-amber-100 text-amber-700",
+  dailyLog:     "bg-teal-100 text-teal-700",
+  maintenance:  "bg-emerald-100 text-emerald-700",
+}
 
 const RPT_COLORS: Record<string, { idle: string; open: string; title: string; val: string }> = {
   red:    { idle: "bg-red-50 border-red-200",       open: "bg-red-100 border-red-300",       title: "text-red-700",    val: "text-red-800" },
@@ -142,6 +161,7 @@ export default function ReportsPage() {
   const [error,          setError]          = useState("")
   const [logLimit,       setLogLimit]       = useState(50)
   const [isAdmin,        setIsAdmin]        = useState(false)
+  const [canApprove,     setCanApprove]     = useState(false)
   const [userEmail,      setUserEmail]      = useState("")
   const [deleting,       setDeleting]       = useState<string | null>(null)
   const [entryLogSearch, setEntryLogSearch] = useState("")
@@ -168,6 +188,17 @@ export default function ReportsPage() {
   const [registry,   setRegistry]   = useState<any[]>([])
   const [regSearch,  setRegSearch]  = useState("")
   const [regKind,    setRegKind]    = useState<"all" | "resident" | "visitor">("all")
+  const [recentSubs,        setRecentSubs]        = useState<SubmissionRow[]>([])
+  const [recentSubsLoading, setRecentSubsLoading] = useState(false)
+
+  // Review queue (admin/supervisor)
+  const [queue,        setQueue]        = useState<any[]>([])
+  const [queueLoading, setQueueLoading] = useState(false)
+  const [approvingId,  setApprovingId]  = useState<string | null>(null)
+  const [returnId,     setReturnId]     = useState<string | null>(null)
+  const [returnNotes,  setReturnNotes]  = useState("")
+  const [returnSaving, setReturnSaving] = useState(false)
+  const [queueMsg,     setQueueMsg]     = useState<Record<string, { ok: boolean; msg: string }>>({})
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -175,6 +206,7 @@ export default function ReportsPage() {
       setUserEmail(email)
       setIsAdmin(ADMIN_EMAILS.includes(email))
     })
+    checkCanApprove().then(setCanApprove)
   }, [])
 
   useEffect(() => {
@@ -405,6 +437,110 @@ export default function ReportsPage() {
       missingUnit: logs.filter(v => !v.unit_number).length,
       byDay, byHour
     })
+  }
+
+  // Load once on mount — cross-community, not date-filtered.
+  useEffect(() => { loadRecentSubmissions() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load queue whenever approve-eligibility resolves
+  useEffect(() => { if (canApprove) loadQueue() }, [canApprove]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function loadRecentSubmissions() {
+    setRecentSubsLoading(true)
+    const N = 20
+    const [incR, ctR, vfiR, pvR, logR, mntR] = await Promise.all([
+      supabase.from("incident_reports").select("id,community_id,created_at,incident_type,officer_name,issued_by").order("created_at", { ascending: false }).limit(N),
+      supabase.from("contact_history").select("id,community_id,created_at,officer_name,contact_name").order("created_at", { ascending: false }).limit(N),
+      supabase.from("vehicle_fi_logs").select("id,community_id,created_at,officer_name,plate").order("created_at", { ascending: false }).limit(N),
+      supabase.from("parking_violations").select("id,community_id,created_at,officer_name,plate,violation_type").order("created_at", { ascending: false }).limit(N),
+      supabase.from("officer_daily_logs").select("id,community_id,created_at,officer_name").order("created_at", { ascending: false }).limit(N),
+      supabase.from("property_maintenance_reports").select("id,community_id,created_at,officer_name,issue_type").order("created_at", { ascending: false }).limit(N),
+    ])
+    const rows: SubmissionRow[] = [
+      ...(incR.data || []).map(r => ({
+        id: r.id, typeKey: "incident" as const, typeLabel: "Incident Report",
+        officer: r.issued_by || r.officer_name || "—", community_id: r.community_id,
+        created_at: r.created_at, summary: r.incident_type || "—",
+      })),
+      ...(ctR.data || []).map(r => ({
+        id: r.id, typeKey: "fieldContact" as const, typeLabel: "Field Contact",
+        officer: r.officer_name || "—", community_id: r.community_id,
+        created_at: r.created_at, summary: r.contact_name || "—",
+      })),
+      ...(vfiR.data || []).map(r => ({
+        id: r.id, typeKey: "vehicleFI" as const, typeLabel: "Vehicle FI",
+        officer: r.officer_name || "—", community_id: r.community_id,
+        created_at: r.created_at, summary: r.plate ? `Plate: ${r.plate}` : "—",
+      })),
+      ...(pvR.data || []).map(r => ({
+        id: r.id, typeKey: "parking" as const, typeLabel: "Parking Violation",
+        officer: r.officer_name || "—", community_id: r.community_id,
+        created_at: r.created_at, summary: [r.violation_type, r.plate].filter(Boolean).join(" · ") || "—",
+      })),
+      ...(logR.data || []).map(r => ({
+        id: r.id, typeKey: "dailyLog" as const, typeLabel: "Daily Log",
+        officer: r.officer_name || "—", community_id: r.community_id,
+        created_at: r.created_at, summary: "Daily activity log",
+      })),
+      ...(mntR.data || []).map(r => ({
+        id: r.id, typeKey: "maintenance" as const, typeLabel: "Maintenance Report",
+        officer: r.officer_name || "—", community_id: r.community_id,
+        created_at: r.created_at, summary: r.issue_type || "—",
+      })),
+    ]
+    rows.sort((a, b) => new Date(utc(b.created_at)).getTime() - new Date(utc(a.created_at)).getTime())
+    setRecentSubs(rows.slice(0, 15))
+    setRecentSubsLoading(false)
+  }
+
+  async function loadQueue() {
+    setQueueLoading(true)
+    const { data } = await supabase.from("report_queue")
+      .select("*")
+      .in("status", ["pending", "needs_revision"])
+      .order("submitted_at", { ascending: true })
+    setQueue(data || [])
+    setQueueLoading(false)
+  }
+
+  async function approveReport(queueId: string) {
+    setApprovingId(queueId)
+    const res = await fetch("/api/reports/queue/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queueId }),
+    })
+    const data = await res.json()
+    setApprovingId(null)
+    const msg = data.ok
+      ? `✅ Approved and emailed to ${data.recipients?.length ? data.recipients.join(", ") : "no contacts on file"}.`
+      : `Error: ${data.error || "unknown"}`
+    setQueueMsg(prev => ({ ...prev, [queueId]: { ok: data.ok, msg } }))
+    if (data.ok) {
+      setTimeout(() => {
+        setQueue(prev => prev.filter(q => q.id !== queueId))
+        setQueueMsg(prev => { const u = { ...prev }; delete u[queueId]; return u })
+        loadRecentSubmissions()
+      }, 2000)
+    }
+  }
+
+  async function returnReport(queueId: string, notes: string) {
+    if (!notes.trim()) return
+    setReturnSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.from("report_queue").update({
+      status:         "needs_revision",
+      revision_notes: notes.trim(),
+      reviewed_by:    user?.email || null,
+      reviewed_at:    new Date().toISOString(),
+    }).eq("id", queueId)
+    setReturnSaving(false)
+    if (error) { alert("Failed: " + error.message); return }
+    setReturnId(null)
+    setReturnNotes("")
+    loadQueue()
+    loadRecentSubmissions()
   }
 
   async function deleteEntry(v: VisitorLog) {
@@ -653,6 +789,171 @@ export default function ReportsPage() {
           </div>
         </div>
       )}
+
+      {/* ── REVIEW QUEUE (admin + supervisor) ── */}
+      {canApprove && (
+        <Section label={`Review Queue${queue.length > 0 ? ` (${queue.length} pending)` : ""}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs text-gray-400">Reports awaiting supervisor approval before sending to the client</div>
+            <button
+              onClick={loadQueue}
+              disabled={queueLoading}
+              className="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 text-xs rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 border-solid"
+            >
+              {queueLoading ? "Loading…" : "↻ Refresh"}
+            </button>
+          </div>
+
+          {queueLoading ? (
+            <div className="text-gray-400 text-sm animate-pulse py-4">Loading…</div>
+          ) : queue.length === 0 ? (
+            <div className="py-8 text-center text-gray-400 text-sm bg-white border border-gray-200 rounded-xl">
+              No reports pending review.
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {queue.map((q, i) => {
+                const badge  = SUB_BADGE[q.report_type] || "bg-gray-100 text-gray-700"
+                const comm   = communities.find(c => c.id === q.community_id)?.name || "—"
+                const isRet  = q.status === "needs_revision"
+                const msg    = queueMsg[q.id]
+                return (
+                  <div key={q.id} className={`${i < queue.length - 1 ? "border-b border-gray-100" : ""}`}>
+                    <div className="flex items-center gap-3 px-4 py-3">
+                      <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${badge}`}>
+                        {q.report_type.replace(/_/g, " ")}
+                      </span>
+                      {isRet && (
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 flex-shrink-0">
+                          Revision Pending
+                        </span>
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-medium text-gray-800 truncate">{q.summary || "—"}</div>
+                        <div className="text-xs text-gray-500 truncate">{q.officer_name || q.submitted_by || "—"} · {comm}</div>
+                        {isRet && q.revision_comment && (
+                          <div className="text-xs text-amber-700 truncate mt-0.5">Officer note: {q.revision_comment}</div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-2 flex-shrink-0">
+                        <div className="text-xs text-gray-400 text-right mr-1">
+                          <div>{timeAgo(q.submitted_at)}</div>
+                          <div className="text-[10px] text-gray-300">
+                            {new Date(utc(q.submitted_at)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => approveReport(q.id)}
+                          disabled={approvingId === q.id}
+                          className="px-3 py-1.5 bg-green-700 hover:bg-green-800 text-white text-xs font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50"
+                        >
+                          {approvingId === q.id ? "Sending…" : "✅ Approve & Send"}
+                        </button>
+                        <button
+                          onClick={() => { setReturnId(returnId === q.id ? null : q.id); setReturnNotes("") }}
+                          className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-semibold rounded-lg border-none cursor-pointer"
+                        >
+                          🔄 Return
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Approve result message */}
+                    {msg && (
+                      <div className={`px-4 pb-3 text-xs font-semibold ${msg.ok ? "text-green-700" : "text-red-700"}`}>
+                        {msg.msg}
+                      </div>
+                    )}
+
+                    {/* Return-for-revision inline form */}
+                    {returnId === q.id && (
+                      <div className="px-4 pb-4 pt-1 bg-amber-50 border-t border-amber-100">
+                        <div className="text-xs font-semibold text-amber-800 mb-1">Return to officer with notes:</div>
+                        <textarea
+                          value={returnNotes}
+                          onChange={e => setReturnNotes(e.target.value)}
+                          placeholder="What needs to be corrected or added?"
+                          className="w-full px-3 py-2 border border-amber-300 rounded-md text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                          rows={3}
+                        />
+                        <div className="flex gap-2 mt-2">
+                          <button
+                            onClick={() => returnReport(q.id, returnNotes)}
+                            disabled={returnSaving || !returnNotes.trim()}
+                            className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50"
+                          >
+                            {returnSaving ? "Returning…" : "↩ Return for Revision"}
+                          </button>
+                          <button
+                            onClick={() => { setReturnId(null); setReturnNotes("") }}
+                            className="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 text-xs rounded-lg cursor-pointer hover:bg-gray-50"
+                          >
+                            Cancel
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* ── RECENT SUBMISSIONS ── */}
+      <Section label="Recent Report Submissions">
+        <div className="flex items-center justify-between mb-3">
+          <div className="text-xs text-gray-400">Latest reports filed across all communities (last 15)</div>
+          <button
+            onClick={loadRecentSubmissions}
+            disabled={recentSubsLoading}
+            className="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 text-xs rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 border-solid"
+          >
+            {recentSubsLoading ? "Loading…" : "↻ Refresh"}
+          </button>
+        </div>
+        {recentSubsLoading ? (
+          <div className="text-gray-400 text-sm animate-pulse py-4">Loading…</div>
+        ) : recentSubs.length === 0 ? (
+          <div className="text-gray-400 text-sm py-6 text-center">No reports found.</div>
+        ) : (
+          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+            {recentSubs.map((s, i) => {
+              const badge  = SUB_BADGE[s.typeKey] || "bg-gray-100 text-gray-700"
+              const isNew  = Date.now() - new Date(utc(s.created_at)).getTime() < 24 * 3600 * 1000
+              const comm   = communities.find(c => c.id === s.community_id)?.name || "—"
+              return (
+                <div
+                  key={`${s.typeKey}:${s.id}`}
+                  className={`flex items-center gap-3 px-4 py-3 ${i < recentSubs.length - 1 ? "border-b border-gray-100" : ""}`}
+                >
+                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${badge}`}>
+                    {s.typeLabel}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-800 truncate">{s.summary}</div>
+                    <div className="text-xs text-gray-500 truncate">{s.officer} · {comm}</div>
+                  </div>
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {isNew && (
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                        New
+                      </span>
+                    )}
+                    <div className="text-xs text-gray-400 text-right">
+                      <div>{timeAgo(s.created_at)}</div>
+                      <div className="text-[10px] text-gray-300">
+                        {new Date(utc(s.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Section>
 
       {/* ── REPORTS BY COMMUNITY ── */}
       {communities.length > 0 && (
