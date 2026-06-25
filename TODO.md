@@ -3,7 +3,7 @@
 **App:** https://asg-vms.vercel.app/
 **Stack:** Next.js · TypeScript · Supabase · Vercel
 **Supabase project:** ASG-VMS (`xmomsoobriehgrnppewa`)
-**Last updated:** June 24, 2026 (evening)
+**Last updated:** June 25, 2026
 
 > Shared task list for Claude.ai ↔ Claude Code. Keep this file in the repo root as the single source of truth. Companion: `CLAUDE_CODE_HANDOFF.md` (sequenced build plan + migration files).
 
@@ -77,10 +77,56 @@ Make the Watchlist box/widget on the Homepage a hyperlink that goes directly to 
 #### 7b. Property Hub — `property_manager` role (follow-on)
 Vehicle registry shipped with writes admin-gated; dedicated PM role was deferred.
 
+> **Role model — partial (June 24, 2026):** the `user_assignments.role` CHECK constraint was widened in production to allow `null, admin_super, supervisor, property_manager, officer, guest` (migration `widen_user_assignments_role_check`, applied directly via Supabase MCP — record it in repo migration history). New-user setup no longer errors. **Still required = ENFORCEMENT:** RLS policies + UI gating per role (guest read-only, PM writes Hub, supervisor edits others' reports). Roles can be assigned now but are NOT yet enforced at the DB level — do not treat a `guest` account as safe for a client until RLS read-only policies exist.
+
 - Add a `property_manager` role with write access to Property Hub (Community Info, Documents, Vehicles, Rent Roll).
-- Confirm: role flag on existing users vs. new user type. (`user_assignments.role` currently only allows null / `admin_super` — widening it is part of this.)
+- Confirm: role flag on existing users vs. new user type.
 - **Unlocks:** supervisor edit rights for item 29 and the violation-issue stage for item 24.
 - Phased (later): resident self-service portal for vehicle/visitor data.
+
+#### 39. DAR (Daily Activity Report) — add attachments upload
+Add a file/photo attachments upload feature to DAR reports.
+
+- Multi-file upload with thumbnail preview (reuse the shared upload component — items 18, 33, 36).
+- Store in Supabase Storage with references on the DAR record.
+- (Confirm whether "DAR" is the existing Daily Log or a distinct report type.)
+
+#### 40. Reports tab — hyperlink pending-approval reports to the full report
+Under the Reports tab, reports listed as pending approval need a hyperlink to open the full report so a supervisor can review and approve it.
+
+- Each pending-approval row links to the full report detail view.
+- From there the supervisor reviews, (optionally edits, per item 29), and approves → triggers remittal.
+- Refines item 29's review/approval workflow — this is the navigation into the report from the pending queue.
+
+#### 42. Reports tab — hyperlink recent submissions to the full report
+In the Reports tab, recent submissions need a hyperlink to the actual report so they can be reviewed after submittal.
+
+- Each recent-submission row links to the full report detail view (read/review).
+- **Generalizes item 40:** same underlying feature — make report-list rows clickable to open the full report. Item 40 is the pending-approval queue; this is the recent-submissions list. Build the clickable-row → detail view once; both lists use it.
+- Applies across report types (DAR, Incident, Field Contact, Vehicle FI, Parking, Maintenance).
+
+#### 43. Post Orders — configure client report-recipient email(s) per location
+In the Post Orders section, set up the customer/location email recipient(s) who reports are delivered to.
+
+- Per-community/location field(s) for the client report-recipient email address.
+- **Support multiple recipients** (more than one email) — e.g., primary + CC list.
+- Feeds report remittal (item 29, shipped) and Property Maintenance direct-send (item 36, shipped) — this is where remittal looks up "who do reports go to" for a site.
+- Likely overlaps with `community_contacts` (role + email) from item 5; decide whether this is a dedicated "report recipients" list vs. reusing contacts flagged as report recipients. Map report type → recipient where relevant (maintenance → maintenance POC, incident → management).
+- Admin/property-manager editable (role model); officers/guests view-only.
+
+#### 44. Header rename — "Integrated Property Solutions Platform" → "Property Solutions Platform"
+Change the name header on the login and home pages from "Integrated Property Solutions Platform" to just "Property Solutions Platform" (drop "Integrated").
+
+- Update on both the login page and the homepage header.
+- Small text change; check for the string anywhere else it appears (page titles, meta tags).
+
+#### 45. Connect new Vercel domain (asg-psp) to the project
+Connect the new domain name **asg-psp** to the VMS project in Vercel.
+
+- Add the domain in Vercel project settings and configure DNS (records per Vercel's instructions).
+- Confirm SSL provisioning and that the domain resolves to the app.
+- Decide primary vs. redirect: whether asg-psp becomes the primary URL and asg-vms redirects to it (or both serve).
+- Update hardcoded URLs / links / docs (incl. TODO + handoff app URL) once the primary domain is set. "PSP" aligns with the Property Solutions Platform rename (item 44).
 
 #### 19. Visitor Check-In — driver's license scanning (handheld wireless)
 Scan a DL with a wireless handheld scanner to auto-fill check-in.
@@ -107,6 +153,7 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 - [x] ~~**34. Guest user access — view-only privileges**~~ — `guest` role in `user_assignments`; Admin Dashboard Users tab gains Access Level dropdown (Officer / Guest / Admin Super) + independent Community picker; `checkIsGuest()` added to lib/admin.ts; userdash hides all filing tabs/BOLO add/watchlist add/passdown submit/gate check; check-in disables submit; alerts hides Acknowledge (completed June 24, 2026)
 - [x] ~~**38. Watchlist box — hyperlink to Watchlist page**~~ — StatCard extended with optional href prop; Watchlist Active card on homepage links to /userdash (completed June 24, 2026)
 - [x] ~~**37. Post Orders — admin update/edit**~~ — PostOrdersTab gains isAdmin prop with Edit Post Orders link button; admin/post-orders page adds audit logging on save (completed June 24, 2026)
+- [x] ~~**41. Reports — secondary free-text location box**~~ — temporary / unlisted sites; free-text location field across report types (completed June 24, 2026)
 - [x] ~~**36. Property Maintenance report**~~ — new property_maintenance_reports table; 🔧 Maintenance tab in Officer Reports (userdash) with structured location, issue type, description, photos; auto-emails maintenance POC from community_contacts on submit; emerald colour in view reports + dark mode (completed June 24, 2026)
 - [x] ~~**35. Reports page — Reports by Community section**~~ — community dropdown (defaults to user's assigned community), 5 report-type summary cards (Incidents, Field Contacts, Vehicle FIs, Parking Violations, Daily Logs) with count queries; each card expands inline detail panel (up to 200 records, on demand) (completed June 24, 2026)
 - [x] ~~**33. BOLO — add/edit photo attachments in Edit mode**~~ — multi-photo upload (add new + remove existing in edit mode); `bolos.photo_urls text[]` column; legacy `photo_url` (single) initialised into array for backward compat (completed June 23, 2026)
