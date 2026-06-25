@@ -123,7 +123,7 @@ export default function Home() {
           <StatCard label="Contractors"      value={stats.contractors}    accent="violet" />
           <StatCard label="Deliveries"       value={stats.deliveries}     accent="sky" />
           <StatCard label="Employees"        value={stats.employees}      accent="emerald" />
-          <StatCard label="Watchlist Active" value={stats.watchlistCount} accent="red" href="/userdash" />
+          <StatCard label="Watchlist Active" value={stats.watchlistCount} accent="red" href="/userdash?tab=watchlist" />
         </div>
 
         {/* RECENT ENTRY BANNER */}

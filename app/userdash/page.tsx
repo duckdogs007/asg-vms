@@ -3,6 +3,7 @@
 export const dynamic = "force-dynamic"
 
 import { useEffect, useState } from "react"
+import { useSearchParams } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
@@ -77,7 +78,11 @@ type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "mainten
 
 export default function UserDashboard() {
 
-  const [activeTab,   setActiveTab]   = useState<Tab>("reports")
+  const searchParams = useSearchParams()
+  const [activeTab,   setActiveTab]   = useState<Tab>(() => {
+    const t = searchParams?.get("tab")
+    return (t === "watchlist" || t === "onduty" || t === "passdown" || t === "bolo" || t === "gatecheck") ? t : "reports"
+  })
   const [communities, setCommunities] = useState<any[]>([])
   const [communityId, setCommunityId] = useState("")
   const [officerName, setOfficerName] = useState("")
