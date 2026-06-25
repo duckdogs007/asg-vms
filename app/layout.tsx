@@ -1,6 +1,7 @@
 import "./globals.css"
 import type { Metadata } from "next"
 import TopNav from "@/components/TopNav"
+import { Analytics } from '@vercel/analytics/next'
 
 export const metadata: Metadata = {
   title: {
@@ -20,6 +21,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <div className="p-5">
           {children}
         </div>
+        <Analytics />
       </body>
     </html>
   )
