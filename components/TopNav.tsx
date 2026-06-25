@@ -17,6 +17,7 @@ export default function TopNav() {
   const [mobileNavOpen,  setMobileNavOpen]  = useState(false)
   const [userEmail,      setUserEmail]      = useState("")
   const [isAdmin,        setIsAdmin]        = useState(false)
+  const [userRole,       setUserRole]       = useState("")
   const [nightMode,      setNightMode]      = useState(false)
   const [sosOpen,        setSosOpen]        = useState(false)
   const [sosSending,     setSosSending]     = useState(false)
@@ -54,11 +55,28 @@ export default function TopNav() {
     return () => clearInterval(interval)
   }, [])
 
+  async function resolveUserRole(user: { id: string; email?: string }) {
+    const email = user.email || ""
+    if (ADMIN_EMAILS.includes(email)) { setUserRole("Admin"); return }
+    const { data: adminRow } = await supabase
+      .from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle()
+    if (adminRow) { setUserRole("Admin"); return }
+    const { data: assign } = await supabase
+      .from("user_assignments").select("role").eq("user_id", user.id).maybeSingle()
+    const role = assign?.role
+    setUserRole(
+      role === "supervisor" ? "Supervisor" :
+      role === "guest"      ? "Guest"      :
+      role === "admin_super"? "Admin"      : "Officer"
+    )
+  }
+
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setUserEmail(user.email || "")
         setIsAdmin(ADMIN_EMAILS.includes(user.email || ""))
+        resolveUserRole(user)
       }
     })
 
@@ -67,13 +85,14 @@ export default function TopNav() {
       if (user) {
         setUserEmail(user.email || "")
         setIsAdmin(ADMIN_EMAILS.includes(user.email || ""))
+        resolveUserRole(user)
       } else {
-        setUserEmail(""); setIsAdmin(false)
+        setUserEmail(""); setIsAdmin(false); setUserRole("")
       }
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   function markChangelogSeen() {
     const now = new Date().toISOString()
@@ -194,9 +213,35 @@ export default function TopNav() {
             <span className="text-[10px] text-gray-500">▼</span>
 
             {menuOpen && (
-              <div className="absolute top-7 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 min-w-[200px]">
-                <div className="px-3 py-2.5 text-xs text-gray-500 border-b border-gray-100 truncate">{userEmail}</div>
-                <div className="px-3 py-2.5 text-sm cursor-pointer hover:bg-gray-50 text-red-600" onClick={handleLogout}>
+              <div className="absolute top-8 right-0 bg-white border border-gray-200 rounded-xl shadow-xl z-50 w-64">
+                {/* Profile card */}
+                <div className="px-4 py-4 border-b border-gray-100">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-10 h-10 rounded-full bg-blue-700 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
+                      {displayName ? displayName.split(" ").map((w: string) => w[0]).slice(0, 2).join("") : "?"}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="text-sm font-bold text-gray-900 truncate">{displayName || "—"}</div>
+                      <div className="text-xs text-gray-500 truncate">{userEmail}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-gray-400">Access Level</span>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${
+                      userRole === "Admin"      ? "bg-red-100 text-red-700"    :
+                      userRole === "Supervisor" ? "bg-blue-100 text-blue-700"  :
+                      userRole === "Guest"      ? "bg-gray-100 text-gray-600"  :
+                                                  "bg-green-100 text-green-700"
+                    }`}>
+                      {userRole || "…"}
+                    </span>
+                  </div>
+                </div>
+                {/* Actions */}
+                <div
+                  className="px-4 py-3 text-sm cursor-pointer hover:bg-gray-50 text-red-600 font-medium rounded-b-xl flex items-center gap-2"
+                  onClick={handleLogout}
+                >
                   🚪 Logout
                 </div>
               </div>
