@@ -13,7 +13,7 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| 43 | Post Orders — report-recipient emails per location | feeds remittal routing |
+| 7b | Property Hub — property_manager role enforcement (RLS + UI gating) | security prerequisite for client guest access |
 
 ---
 
@@ -65,6 +65,9 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 ---
 
 ## Done
+
+- [x] ~~**43. Post Orders — report delivery recipients**~~ — `report_delivery_recipients` table (community + report_type + email + label); Report Delivery section in /admin/post-orders with per-type recipient lists; approve route checks per-type recipients first, falls back to community_contacts, then supervisor (completed June 25, 2026)
+- [x] ~~**39. DAR (Daily Log) — photo attachments**~~ — `photo_urls text[]` column added to officer_daily_logs; photo picker + thumbnail grid in Daily Log form; upload loop with dal_ prefix in saveDailyLog (completed June 25, 2026)
 
 - [x] ~~**40. Reports — pending-approval rows → full report**~~ — 🔍 View link on every queue row; routes to /vms/reports/[type]/[id] detail page (completed June 25, 2026)
 - [x] ~~**42. Reports — recent-submissions rows → full report**~~ — View → link on every Recent Submissions row; same detail page (completed June 25, 2026)
