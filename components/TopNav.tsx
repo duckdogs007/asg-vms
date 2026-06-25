@@ -229,7 +229,15 @@ export default function TopNav() {
                   <div className="fixed inset-0 z-40" onClick={() => setChangelogOpen(false)} />
                   <div className="absolute top-9 right-0 z-50 bg-white border border-gray-200 rounded-lg shadow-xl w-80 max-h-[28rem] overflow-y-auto">
                     <div className="px-4 py-3 border-b border-gray-100 sticky top-0 bg-white">
-                      <div className="font-bold text-gray-900 text-sm">Latest Developments</div>
+                      <Link
+                        href="/changelog"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={() => setChangelogOpen(false)}
+                        className="font-bold text-blue-700 hover:text-blue-900 text-sm underline-offset-2 hover:underline"
+                      >
+                        Latest Developments ↗
+                      </Link>
                       <div className="text-xs text-gray-400">Recent updates to the VMS platform</div>
                     </div>
                     {changelog.length === 0 ? (
