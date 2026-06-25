@@ -123,7 +123,7 @@ export default function Home() {
           <StatCard label="Contractors"      value={stats.contractors}    accent="violet" />
           <StatCard label="Deliveries"       value={stats.deliveries}     accent="sky" />
           <StatCard label="Employees"        value={stats.employees}      accent="emerald" />
-          <StatCard label="Watchlist Active" value={stats.watchlistCount} accent="red" />
+          <StatCard label="Watchlist Active" value={stats.watchlistCount} accent="red" href="/userdash" />
         </div>
 
         {/* RECENT ENTRY BANNER */}
@@ -224,7 +224,7 @@ export default function Home() {
   )
 }
 
-function StatCard({ label, value, accent }: { label: string; value: number; accent: string }) {
+function StatCard({ label, value, accent, href }: { label: string; value: number; accent: string; href?: string }) {
   const colors: Record<string, string> = {
     blue:    "border-blue-300 text-blue-700",
     indigo:  "border-indigo-300 text-indigo-700",
@@ -233,12 +233,13 @@ function StatCard({ label, value, accent }: { label: string; value: number; acce
     emerald: "border-emerald-300 text-emerald-700",
     red:     "border-red-300 text-red-700",
   }
-  return (
-    <div className={`bg-white border rounded-lg px-3 py-2 ${colors[accent]}`}>
+  const card = (
+    <div className={`bg-white border rounded-lg px-3 py-2 ${colors[accent]} ${href ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}>
       <div className="text-xl font-bold leading-tight">{value}</div>
       <div className="text-[10px] text-gray-500 mt-0.5 uppercase tracking-wider">{label}</div>
     </div>
   )
+  return href ? <Link href={href}>{card}</Link> : card
 }
 
 function ModuleCard({ href, icon, title, desc, color, badge }: {

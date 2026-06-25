@@ -219,6 +219,13 @@ body.dark .text-teal-800  { color: #2dd4bf !important; }
 body.dark .bg-teal-50     { background-color: #04201e !important; }
 body.dark .border-teal-200 { border-color: #0d4f4a !important; }
 
+/* ── DARK MODE: EMERALD (maintenance reports) ── */
+body.dark .text-emerald-800  { color: #6ee7b7 !important; }
+body.dark .bg-emerald-50     { background-color: #022c22 !important; }
+body.dark .bg-emerald-100    { background-color: #064e3b !important; }
+body.dark .border-emerald-200 { border-color: #065f46 !important; }
+body.dark .hover\:bg-emerald-100:hover { background-color: #064e3b !important; }
+
 /* ── DARK MODE: GREEN (status badges, no-match banners) ── */
 body.dark .bg-green-50   { background-color: #0a1a0a !important; }
 body.dark .bg-green-100  { background-color: #0f2b0f !important; }

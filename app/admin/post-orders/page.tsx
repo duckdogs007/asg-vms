@@ -29,8 +29,10 @@ export default function PostOrdersEditorPage() {
   const [savedAt,     setSavedAt]     = useState("")
   const [error,       setError]       = useState("")
   const [isAdmin,     setIsAdmin]     = useState<boolean | null>(null)
+  const [userEmail,   setUserEmail]   = useState("")
 
   useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => setUserEmail(user?.email || ""))
     checkIsAdmin().then(ok => {
       setIsAdmin(ok)
       if (ok) initCommunities()
@@ -77,6 +79,15 @@ export default function PostOrdersEditorPage() {
       setError("Save failed: " + err)
       return
     }
+    const communityName = communities.find(c => c.id === communityId)?.name || communityId
+    supabase.from("audit_logs").insert({
+      user_email:    userEmail,
+      action:        "updated",
+      resource_type: "Post Orders",
+      resource_id:   communityId,
+      detail:        `Updated post orders for ${communityName}`,
+      created_at:    new Date().toISOString(),
+    }).then(({ error: ae }) => { if (ae) console.error("[audit]", ae) })
     setSavedAt(new Date().toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }))
   }
 

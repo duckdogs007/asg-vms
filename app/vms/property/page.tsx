@@ -221,7 +221,7 @@ export default function PropertyHubPage() {
       )}
 
       {/* POST ORDERS */}
-      {tab === "post-orders" && <PostOrdersTab communityId={communityId} />}
+      {tab === "post-orders" && <PostOrdersTab communityId={communityId} isAdmin={isAdmin} />}
 
       {/* UNIT ACTIVITY HISTORY */}
       {tab === "history" && <UnitActivityTab />}

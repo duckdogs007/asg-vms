@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { Community } from "@/lib/types"
 import { PostOrders, loadPostOrders, formatLastUpdated } from "@/lib/postOrders"
@@ -8,7 +9,7 @@ import { PostOrders, loadPostOrders, formatLastUpdated } from "@/lib/postOrders"
 // When `communityId` is passed, the component is "controlled" — it uses that
 // id and hides its own location selector (the Property Hub provides a shared
 // one). With no prop it keeps its original standalone behavior.
-export default function PostOrdersTab({ communityId: controlledId }: { communityId?: string } = {}) {
+export default function PostOrdersTab({ communityId: controlledId, isAdmin }: { communityId?: string; isAdmin?: boolean } = {}) {
 
   const controlled = controlledId !== undefined
 
@@ -89,9 +90,15 @@ export default function PostOrdersTab({ communityId: controlledId }: { community
             </>
           )}
           {orders && (
-            <span className="ml-auto text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
+            <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-full">
               Last updated: {formatLastUpdated(orders.lastUpdated)}
             </span>
+          )}
+          {isAdmin && (
+            <Link href="/admin/post-orders"
+              className="ml-auto px-3 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-lg hover:bg-blue-800 no-underline">
+              ✏️ Edit Post Orders
+            </Link>
           )}
         </div>
       )}
@@ -107,6 +114,14 @@ export default function PostOrdersTab({ communityId: controlledId }: { community
       {!loading && !orders && communityName && (
         <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 p-8 text-center text-sm text-gray-500">
           No post orders configured for <span className="font-semibold text-gray-700">{communityName}</span>.
+          {isAdmin && (
+            <div className="mt-3">
+              <Link href="/admin/post-orders"
+                className="px-3 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-lg hover:bg-blue-800 no-underline">
+                ✏️ Create Post Orders
+              </Link>
+            </div>
+          )}
         </div>
       )}
 

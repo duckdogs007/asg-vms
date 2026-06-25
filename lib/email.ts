@@ -251,12 +251,14 @@ export function buildReportEmailHtml(r: any): string {
     r._type === "Field Contact"     ? "Field Contact Report" :
     r._type === "Vehicle FI"        ? "Vehicle Field Interview" :
     r._type === "Parking Violation" ? "Parking Violation" :
+    r._type === "Maintenance"       ? "Property Maintenance Report" :
                                       "Patrol / Daily Log"
   const accent =
     r._type === "Incident"          ? "#b91c1c" :
     r._type === "Field Contact"     ? "#7c3aed" :
     r._type === "Vehicle FI"        ? "#c2410c" :
-    r._type === "Parking Violation" ? "#b45309" : "#1d4ed8"
+    r._type === "Parking Violation" ? "#b45309" :
+    r._type === "Maintenance"       ? "#065f46" : "#1d4ed8"
 
   const facts: Array<[string, string | null | undefined]> = [
     ["Date",              r.date],
@@ -286,6 +288,7 @@ export function buildReportEmailHtml(r: any): string {
     ["Year",              r.year],
     ["Plate",             r.plate],
     ["State",             r.state],
+    ["Issue Type",        r.issue_type],
     ["Violation Type",    r.violation_type],
     ["Space",             r.space],
     ["Tow Requested",     r.tow_requested ? "Yes" : null],

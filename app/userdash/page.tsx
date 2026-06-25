@@ -54,7 +54,7 @@ const TAB_DESCRIPTIONS: Record<Tab, string> = {
   onduty:    "Officers currently signed on, grouped by assigned property — live status.",
   passdown:  "Shift-to-shift notes so the next officer knows what happened on the prior watch.",
   bolo:      "Be-On-the-Lookout alerts for persons or vehicles of interest at the property.",
-  reports:   "File and review Daily Logs, Incident Reports, Field Contacts, Vehicle FIs, and Parking Violations.",
+  reports:   "File and review Daily Logs, Incident Reports, Field Contacts, Vehicle FIs, Parking Violations, and Maintenance Reports.",
   watchlist: "Persons barred from the property — checked during visitor and ID-scan check-in.",
   gatecheck: "Per-tour security gate inspection — operation, locks, and damage for each numbered gate.",
 }
@@ -73,7 +73,7 @@ interface OfficerOnDuty {
   off_duty_at:  string | null
   is_online:    boolean
 }
-type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "view"
+type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "maintenance" | "view"
 
 export default function UserDashboard() {
 
@@ -204,6 +204,17 @@ export default function UserDashboard() {
   const [pvBoloChecked,   setPvBoloChecked]   = useState(false)
   const [pvRegHits,       setPvRegHits]       = useState<any[]>([])
   const [pvRegChecked,    setPvRegChecked]    = useState(false)
+
+  // Maintenance report
+  const [mntDate,        setMntDate]        = useState(new Date().toISOString().split("T")[0])
+  const [mntTime,        setMntTime]        = useState("")
+  const [mntCommunity,   setMntCommunity]   = useState("")
+  const [mntOfficer,     setMntOfficer]     = useState("")
+  const [mntLoc,         setMntLoc]         = useState<LocationValue>(EMPTY_LOCATION)
+  const [mntIssueType,   setMntIssueType]   = useState("")
+  const [mntIssueOther,  setMntIssueOther]  = useState("")
+  const [mntDesc,        setMntDesc]        = useState("")
+  const [mntPhotoFiles,  setMntPhotoFiles]  = useState<File[]>([])
 
   // Incident report
   const [incDate,        setIncDate]        = useState(new Date().toISOString().split("T")[0])
@@ -543,19 +554,21 @@ export default function UserDashboard() {
   // ── OFFICER REPORTS ──
   async function loadPastReports() {
     setReportsLoading(true)
-    const [{ data: daily }, { data: incidents }, { data: contacts }, { data: vfi }, { data: parking }] = await Promise.all([
+    const [{ data: daily }, { data: incidents }, { data: contacts }, { data: vfi }, { data: parking }, { data: maintenance }] = await Promise.all([
       supabase.from("officer_daily_logs").select("*").order("date", { ascending: false }).limit(20),
       supabase.from("incident_reports").select("*").order("date", { ascending: false }).limit(20),
       supabase.from("contact_history").select("*").order("created_at", { ascending: false }).limit(20),
       supabase.from("vehicle_fi_logs").select("*").order("date", { ascending: false }).limit(20),
       supabase.from("parking_violations").select("*").order("date", { ascending: false }).limit(20),
+      supabase.from("property_maintenance_reports").select("*").order("date", { ascending: false }).limit(20),
     ])
     const combined = [
-      ...(daily     || []).map(r => ({ ...r, _type: "Daily Log"     })),
-      ...(incidents || []).map(r => ({ ...r, _type: "Incident"      })),
-      ...(contacts  || []).map(r => ({ ...r, _type: "Field Contact", date: r.contacted_at?.split("T")[0] || r.created_at?.split("T")[0] })),
-      ...(vfi       || []).map(r => ({ ...r, _type: "Vehicle FI"    })),
-      ...(parking   || []).map(r => ({ ...r, _type: "Parking Violation" })),
+      ...(daily       || []).map(r => ({ ...r, _type: "Daily Log"     })),
+      ...(incidents   || []).map(r => ({ ...r, _type: "Incident"      })),
+      ...(contacts    || []).map(r => ({ ...r, _type: "Field Contact", date: r.contacted_at?.split("T")[0] || r.created_at?.split("T")[0] })),
+      ...(vfi         || []).map(r => ({ ...r, _type: "Vehicle FI"    })),
+      ...(parking     || []).map(r => ({ ...r, _type: "Parking Violation" })),
+      ...(maintenance || []).map(r => ({ ...r, _type: "Maintenance"   })),
     ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime())
     setPastReports(combined)
     setReportsLoading(false)
@@ -966,6 +979,90 @@ export default function UserDashboard() {
     setPvTime("")
   }
 
+  // ── MAINTENANCE REPORT ──
+  async function saveMaintenance() {
+    if (!mntIssueType) { setReportError("Issue type is required."); return }
+    setReportSaving(true); setReportError(""); setReportMessage("")
+
+    const photoUrls: string[] = []
+    for (const f of mntPhotoFiles) {
+      const ext  = f.name.split(".").pop() || "jpg"
+      const path = `mnt_${Date.now()}_${photoUrls.length}.${ext}`
+      const { data: up, error: upErr } = await supabase.storage
+        .from("contact-photos").upload(path, f, { upsert: false })
+      if (!upErr && up) {
+        const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path)
+        photoUrls.push(publicUrl)
+      }
+    }
+
+    const comm       = mntCommunity || communityId
+    const issueLabel = mntIssueType === "Other" && mntIssueOther ? mntIssueOther : mntIssueType
+
+    const { error } = await supabase.from("property_maintenance_reports").insert({
+      community_id:  comm      || null,
+      date:          mntDate,
+      time:          mntTime   || null,
+      officer_name:  mntOfficer || officerName || null,
+      location_type: mntLoc.location_type,
+      building:      mntLoc.building    || null,
+      apartment:     mntLoc.apartment   || null,
+      common_area:   mntLoc.common_area || null,
+      issue_type:    issueLabel,
+      description:   mntDesc   || null,
+      photo_urls:    photoUrls.length ? photoUrls : null,
+      status:        "submitted",
+      created_by:    mntOfficer || officerName || null,
+      created_at:    new Date().toISOString(),
+    })
+    if (error) { setReportError(error.message); setReportSaving(false); return }
+
+    // Email maintenance POC from community_contacts if one is configured
+    if (comm) {
+      const communityName = communities.find(c => c.id === comm)?.name || ""
+      const { data: contacts } = await supabase
+        .from("community_contacts")
+        .select("email, name")
+        .eq("community_id", comm)
+        .ilike("role", "%maintenance%")
+      const recipients = (contacts || []).map((c: any) => c.email).filter(Boolean)
+      const location =
+        mntLoc.location_type === "unit"
+          ? `Bldg ${mntLoc.building || "—"} / Apt ${mntLoc.apartment || "—"}`
+          : mntLoc.common_area || "Common Area"
+      if (recipients.length > 0) {
+        await fetch("/api/reports/email", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            to: recipients,
+            report: {
+              _type:        "Maintenance",
+              date:         mntDate,
+              time:         mntTime || "",
+              officer_name: mntOfficer || officerName || "",
+              community:    communityName,
+              location,
+              issue_type:   issueLabel,
+              description:  mntDesc || "",
+            },
+          }),
+        })
+        setReportMessage(`✅ Maintenance report submitted and emailed to ${recipients.join(", ")}.`)
+      } else {
+        setReportMessage("✅ Maintenance report submitted. (No maintenance contact on file — email skipped.)")
+      }
+    } else {
+      setReportMessage("✅ Maintenance report submitted.")
+    }
+
+    logActivity("created", "Maintenance", "", `Maintenance report — ${issueLabel} (${mntDate})`)
+    setMntDate(new Date().toISOString().split("T")[0])
+    setMntTime(""); setMntCommunity(""); setMntOfficer(""); setMntLoc(EMPTY_LOCATION)
+    setMntIssueType(""); setMntIssueOther(""); setMntDesc(""); setMntPhotoFiles([])
+    setReportSaving(false)
+  }
+
   // ── AUDIT ──
   async function logActivity(action: string, resourceType: string, resourceId: string, detail: string) {
     const { data: { user } } = await supabase.auth.getUser()
@@ -982,6 +1079,7 @@ export default function UserDashboard() {
     "Field Contact":     "contact_history",
     "Vehicle FI":        "vehicle_fi_logs",
     "Parking Violation": "parking_violations",
+    "Maintenance":       "property_maintenance_reports",
   }
 
   async function deleteReport(r: any) {
@@ -1773,8 +1871,9 @@ export default function UserDashboard() {
             <button className={rTabCls("incident")} onClick={() => setReportTab("incident")}>🚨 Incident Report</button>
             <button className={rTabCls("contact")}  onClick={() => setReportTab("contact")}>📋 Field Contact</button>
             <button className={rTabCls("vfi")}      onClick={() => setReportTab("vfi")}>🚗 Vehicle FI</button>
-            <button className={rTabCls("parking")}  onClick={() => setReportTab("parking")}>🅿️ Parking Violation</button>
-            <button className={rTabCls("view")}     onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
+            <button className={rTabCls("parking")}     onClick={() => setReportTab("parking")}>🅿️ Parking Violation</button>
+            <button className={rTabCls("maintenance")} onClick={() => setReportTab("maintenance")}>🔧 Maintenance</button>
+            <button className={rTabCls("view")}        onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
           </div>
 
           {reportError   && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{reportError}</div>}
@@ -2257,6 +2356,89 @@ export default function UserDashboard() {
             </div>
           )}
 
+          {/* MAINTENANCE REPORT */}
+          {reportTab === "maintenance" && (
+            <div className="max-w-2xl">
+              <h3 className="text-lg font-bold mb-4 text-gray-800">Property Maintenance Report</h3>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+                <div><label className={labelCls}>Date</label>
+                  <input type="date" value={mntDate} onChange={e => setMntDate(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Time</label>
+                  <input type="time" value={mntTime} onChange={e => setMntTime(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Officer Name</label>
+                  <input value={mntOfficer} onChange={e => setMntOfficer(e.target.value)} className={inputCls} /></div>
+                <div><label className={labelCls}>Community</label>
+                  <select value={mntCommunity} onChange={e => { setMntCommunity(e.target.value); setMntLoc(EMPTY_LOCATION) }} className={inputCls}>
+                    {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                  </select></div>
+                <div className="sm:col-span-2"><label className={labelCls}>Location</label>
+                  <LocationField communityId={mntCommunity || communityId} value={mntLoc} onChange={setMntLoc} inputCls={inputCls} /></div>
+                <div className="sm:col-span-2"><label className={labelCls}>Issue Type <span className="text-red-500">*</span></label>
+                  <select value={mntIssueType} onChange={e => setMntIssueType(e.target.value)} className={inputCls}>
+                    <option value="">— Select issue type —</option>
+                    <option>Lights Out</option>
+                    <option>Fence / Gate Damage</option>
+                    <option>Sprinkler Issue</option>
+                    <option>Building Door Issue</option>
+                    <option>Elevator Issue</option>
+                    <option>Plumbing / Water Issue</option>
+                    <option>Trash / Debris</option>
+                    <option>Vandalism / Graffiti</option>
+                    <option>Other</option>
+                  </select></div>
+                {mntIssueType === "Other" && (
+                  <div className="sm:col-span-2"><label className={labelCls}>Describe Issue</label>
+                    <input value={mntIssueOther} onChange={e => setMntIssueOther(e.target.value)}
+                      placeholder="Describe the maintenance issue" className={inputCls} /></div>
+                )}
+              </div>
+
+              <div className="mb-4">
+                <label className={labelCls}>Description / Notes</label>
+                <textarea rows={4} value={mntDesc} onChange={e => setMntDesc(e.target.value)}
+                  placeholder="Describe the issue in detail — location, severity, any immediate hazards..."
+                  className={textareaCls} />
+              </div>
+
+              <div className="mb-5">
+                <label className={labelCls}>Photos</label>
+                <input type="file" accept="image/*" multiple
+                  onChange={e => {
+                    const added = Array.from(e.target.files || [])
+                    setMntPhotoFiles(prev => [...prev, ...added])
+                    e.target.value = ""
+                  }}
+                  className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900 cursor-pointer" />
+                <p className="text-xs text-gray-400 mt-1">JPG, PNG. Select multiple or open picker again to add more.</p>
+                {mntPhotoFiles.length > 0 && (
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {mntPhotoFiles.map((f, i) => (
+                      <div key={i} className="relative w-20 h-24 flex-shrink-0">
+                        <div className="w-full h-full bg-gray-100 rounded-lg overflow-hidden border border-gray-300">
+                          <img src={URL.createObjectURL(f)} alt={f.name} className="w-full h-full object-cover" />
+                        </div>
+                        <button type="button"
+                          onClick={() => setMntPhotoFiles(prev => prev.filter((_, j) => j !== i))}
+                          className="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-600 text-white rounded-full text-xs leading-none border-none cursor-pointer flex items-center justify-center hover:bg-red-700">
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-800">
+                <strong>📧 Auto-remit:</strong> Maintenance reports are emailed directly to the property maintenance contact on file upon submission.
+              </div>
+
+              <button onClick={saveMaintenance} disabled={reportSaving}
+                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                {reportSaving ? "Submitting..." : "Submit Maintenance Report"}
+              </button>
+            </div>
+          )}
+
           {/* VIEW REPORTS */}
           {reportTab === "view" && (
             <div>
@@ -2284,29 +2466,34 @@ export default function UserDashboard() {
                   r._type === "Field Contact"     ? "bg-purple-100 text-purple-700" :
                   r._type === "Vehicle FI"        ? "bg-orange-100 text-orange-700" :
                   r._type === "Parking Violation" ? "bg-amber-100 text-amber-800" :
+                  r._type === "Maintenance"       ? "bg-emerald-100 text-emerald-800" :
                                                     "bg-blue-100 text-blue-700"
                 const rowBg =
                   r._type === "Incident"          ? "bg-red-50 hover:bg-red-100" :
                   r._type === "Field Contact"     ? "bg-purple-50 hover:bg-purple-100" :
                   r._type === "Vehicle FI"        ? "bg-orange-50 hover:bg-orange-100" :
                   r._type === "Parking Violation" ? "bg-amber-50 hover:bg-amber-100" :
+                  r._type === "Maintenance"       ? "bg-emerald-50 hover:bg-emerald-100" :
                                                     "bg-white hover:bg-gray-50"
                 const borderCls =
                   r._type === "Incident"          ? "border-red-200" :
                   r._type === "Field Contact"     ? "border-purple-200" :
                   r._type === "Vehicle FI"        ? "border-orange-200" :
                   r._type === "Parking Violation" ? "border-amber-200" :
+                  r._type === "Maintenance"       ? "border-emerald-200" :
                                                     "border-gray-200"
                 const badge =
                   r._type === "Incident"          ? "🚨 Incident" :
                   r._type === "Field Contact"     ? "👤 Field Contact" :
                   r._type === "Vehicle FI"        ? "🚗 Vehicle FI" :
                   r._type === "Parking Violation" ? "🅿️ Parking" :
+                  r._type === "Maintenance"       ? "🔧 Maintenance" :
                                                     "📝 Daily Log"
                 const summary =
                   r._type === "Field Contact"     ? `${r.first_name || ""} ${r.last_name || ""}`.trim() || r.reason || "No name" :
                   r._type === "Vehicle FI"        ? [r.year, r.color, r.make, r.model, r.plate ? `· ${displayPlate(r.plate)}` : ""].filter(Boolean).join(" ") || r.reason || "No vehicle" :
                   r._type === "Parking Violation" ? [r.violation_type, r.plate ? `· ${displayPlate(r.plate)}` : ""].filter(Boolean).join(" ") || "Parking violation" :
+                  r._type === "Maintenance"       ? r.issue_type || "Maintenance issue" :
                   (r.narrative || r.description || r.notes || "No description").slice(0, 80)
                 const followUp = r.follow_up_required || r.follow_up
                 return (
