@@ -118,7 +118,7 @@ export default function Home() {
 
         {/* STAT CARDS */}
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
-          <StatCard label="Today's Entries"  value={stats.todayTotal}     accent="blue" />
+          <StatCard label="Today's Entries"  value={stats.todayTotal}     accent="blue" href="/vms/reports" />
           <StatCard label="Visitors"         value={stats.visitors}       accent="indigo" />
           <StatCard label="Contractors"      value={stats.contractors}    accent="violet" />
           <StatCard label="Deliveries"       value={stats.deliveries}     accent="sky" />
