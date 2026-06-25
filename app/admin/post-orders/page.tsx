@@ -20,12 +20,12 @@ const EMPTY_PROCEDURE: PostOrderProcedure     = { title: "", icon: "📌", items
 const EMPTY_EXAMPLE:   PostOrderReportExample = { title: "", body: "" }
 
 const REPORT_TYPES = [
+  { key: "daily_log",     label: "Daily Activity Log (DAR)" },
+  { key: "maintenance",   label: "Maintenance Reports" },
   { key: "incident",      label: "Incident Reports" },
   { key: "field_contact", label: "Field Contact" },
   { key: "vehicle_fi",    label: "Vehicle FI" },
   { key: "parking",       label: "Parking Violations" },
-  { key: "daily_log",     label: "Daily Activity Log" },
-  { key: "maintenance",   label: "Maintenance Reports" },
 ]
 
 type DeliveryRecipient = { email: string; label: string }
