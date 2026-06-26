@@ -221,16 +221,16 @@ export default function PropertyHubPage() {
       )}
 
       {/* POST ORDERS */}
-      {tab === "post-orders" && <PostOrdersTab communityId={communityId} canEdit={canEdit} />}
+      {tab === "post-orders" && <PostOrdersTab communityId={communityId} isAdmin={canEdit} />}
 
       {/* UNIT ACTIVITY HISTORY */}
       {tab === "history" && <UnitActivityTab />}
 
       {/* LEASE VIOLATIONS */}
-      {tab === "violations" && <LeaseViolationsTab communityId={communityId} communityName={community?.name} canEdit={canEdit} />}
+      {tab === "violations" && <LeaseViolationsTab communityId={communityId} communityName={community?.name} isAdmin={canEdit} />}
 
       {/* RENT ROLL */}
-      {tab === "rentroll" && <RentRollTab communityId={communityId} communityName={community?.name} canEdit={canEdit} />}
+      {tab === "rentroll" && <RentRollTab communityId={communityId} communityName={community?.name} isAdmin={canEdit} />}
 
       {/* COMMUNITY INFO */}
       {tab === "info" && (
