@@ -13,21 +13,11 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| 7b | Property Hub — property_manager role enforcement (RLS + UI gating) | security prerequisite for client guest access |
+| 19 | Visitor Check-In — DL scanning (handheld wedge scanner) | AAMVA PDF417 parse → auto-fill check-in form |
 
 ---
 
 ## Open items
-
-#### 7b. Property Hub — `property_manager` role (follow-on)
-Vehicle registry shipped with writes admin-gated; dedicated PM role was deferred.
-
-> **Role model — partial (June 24, 2026):** the `user_assignments.role` CHECK constraint was widened in production to allow `null, admin_super, supervisor, property_manager, officer, guest` (migration `widen_user_assignments_role_check`, applied directly via Supabase MCP — record it in repo migration history). New-user setup no longer errors. **Still required = ENFORCEMENT:** RLS policies + UI gating per role (guest read-only, PM writes Hub, supervisor edits others' reports). Roles can be assigned now but are NOT yet enforced at the DB level — do not treat a `guest` account as safe for a client until RLS read-only policies exist.
-
-- Add a `property_manager` role with write access to Property Hub (Community Info, Documents, Vehicles, Rent Roll).
-- Confirm: role flag on existing users vs. new user type.
-- **Unlocks:** supervisor edit rights for item 29 and the violation-issue stage for item 24.
-- Phased (later): resident self-service portal for vehicle/visitor data.
 
 #### 39. DAR (Daily Activity Report) — add attachments upload
 Add a file/photo attachments upload feature to DAR reports.
@@ -66,6 +56,7 @@ Scan a DL with a wireless handheld scanner to auto-fill check-in.
 
 ## Done
 
+- [x] ~~**7b. Property Hub — property_manager role enforcement**~~ — `is_guest()`, `is_admin_or_pm()` DB functions; RLS policies across ~20 tables (guests read-only, PMs write Property Hub); `checkCanEditPropertyHub()` in lib/admin.ts; property/page.tsx gated to PM+admin; migration `2026-06-25_7b_role_enforcement.sql` (completed June 25, 2026)
 - [x] ~~**43. Post Orders — report delivery recipients**~~ — `report_delivery_recipients` table (community + report_type + email + label); Report Delivery section in /admin/post-orders with per-type recipient lists; approve route checks per-type recipients first, falls back to community_contacts, then supervisor (completed June 25, 2026)
 - [x] ~~**39. DAR (Daily Log) — photo attachments**~~ — `photo_urls text[]` column added to officer_daily_logs; photo picker + thumbnail grid in Daily Log form; upload loop with dal_ prefix in saveDailyLog (completed June 25, 2026)
 
