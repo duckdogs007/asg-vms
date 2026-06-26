@@ -2,22 +2,25 @@
 
 export const dynamic = "force-dynamic"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { ADMIN_EMAILS, checkIsGuest } from "@/lib/admin"
+import type { RealtimeChannel } from "@supabase/supabase-js"
 
 interface AlertRow {
   id:           string
   type:         string
   severity:     string
   community_id: string | null
-  payload:      Record<string, any>
+  payload:      Record<string, unknown>
   recipients:   string[]
   triggered_by: string | null
   sent_at:      string
   status:       string
   ack_at:       string | null
   ack_by:       string | null
+  ack_note:     string | null
   error:        string | null
 }
 
@@ -46,7 +49,6 @@ const SEVERITY_BADGE: Record<string, string> = {
   medium:   "bg-yellow-700 text-white",
 }
 
-// Acknowledged alerts older than this (by sent_at) are eligible for bulk cleanup.
 const CLEANUP_DAYS = 30
 
 function normTs(ts: string): string {
@@ -60,40 +62,110 @@ function tsMs(ts: string | null): number {
 function fmt(ts: string | null): string {
   if (!ts) return "—"
   return new Date(normTs(ts)).toLocaleString("en-US", {
-    month: "short", day: "numeric", hour: "numeric", minute: "2-digit"
+    month: "short", day: "numeric", hour: "numeric", minute: "2-digit",
+  })
+}
+
+function playAlertSound(urgency: "critical" | "high" | "medium") {
+  try {
+    const ctx   = new AudioContext()
+    const beeps = urgency === "critical" ? 3 : urgency === "high" ? 2 : 1
+    const freq  = urgency === "critical" ? 960 : 720
+    for (let i = 0; i < beeps; i++) {
+      const osc  = ctx.createOscillator()
+      const gain = ctx.createGain()
+      osc.connect(gain)
+      gain.connect(ctx.destination)
+      osc.frequency.value = freq
+      osc.type = "sine"
+      const t = ctx.currentTime + i * 0.32
+      gain.gain.setValueAtTime(0, t)
+      gain.gain.linearRampToValueAtTime(0.35, t + 0.05)
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.26)
+      osc.start(t)
+      osc.stop(t + 0.26)
+    }
+  } catch { /* AudioContext blocked until user gesture — silently ignore */ }
+}
+
+function fireNotification(a: AlertRow) {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return
+  const p = a.payload as Record<string, string>
+  new Notification(TYPE_LABEL[a.type] || a.type, {
+    body: [p?.Name, p?.Community].filter(Boolean).join(" · ") || a.severity,
+    icon: "/asg-logo.gif",
   })
 }
 
 export default function AlertsPage() {
+  const [alerts,      setAlerts]      = useState<AlertRow[]>([])
+  const [denied,      setDenied]      = useState<DeniedRow[]>([])
+  const [loading,     setLoading]     = useState(true)
+  const [filter,      setFilter]      = useState<"open" | "all" | "watchlist" | "incident" | "sos">("open")
+  const [userEmail,   setUserEmail]   = useState("")
+  const [isAdmin,     setIsAdmin]     = useState(false)
+  const [isGuest,     setIsGuest]     = useState(false)
+  const [ackingId,    setAckingId]    = useState<string | null>(null)
+  const [ackNote,     setAckNote]     = useState("")
+  const [rtConnected, setRtConnected] = useState(false)
+  const [notifOk,     setNotifOk]     = useState(false)
 
-  const [alerts,  setAlerts]  = useState<AlertRow[]>([])
-  const [denied,  setDenied]  = useState<DeniedRow[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filter,  setFilter]  = useState<"open" | "all" | "watchlist" | "incident" | "sos">("open")
-  const [userEmail, setUserEmail] = useState("")
-  const [isAdmin,   setIsAdmin]   = useState(false)
-  const [isGuest,   setIsGuest]   = useState(false)
+  const rtRef = useRef<RealtimeChannel | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
       setUserEmail(user?.email || "")
       setIsAdmin(ADMIN_EMAILS.includes(user?.email || ""))
     })
-    checkIsGuest().then(ok => setIsGuest(ok)).catch(() => setIsGuest(false))
+    checkIsGuest().then(setIsGuest).catch(() => setIsGuest(false))
     loadAll()
-    const t = setInterval(loadAll, 30000)
-    return () => clearInterval(t)
+
+    // Request browser notification permission once
+    if (typeof Notification !== "undefined") {
+      if (Notification.permission === "default") {
+        Notification.requestPermission().then(p => setNotifOk(p === "granted"))
+      } else {
+        setNotifOk(Notification.permission === "granted")
+      }
+    }
+
+    // Realtime: new/updated alerts + new denied entries (no more 30s polling)
+    const ch = supabase
+      .channel("alerts-page-rt")
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "alerts" }, payload => {
+        const a = payload.new as AlertRow
+        setAlerts(prev => [a, ...prev])
+        const urgency: "critical" | "high" | "medium" =
+          a.type === "panic_sos" || a.severity === "critical" ? "critical"
+          : a.severity === "high" ? "high" : "medium"
+        playAlertSound(urgency)
+        fireNotification(a)
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "alerts" }, payload => {
+        const a = payload.new as AlertRow
+        setAlerts(prev => prev.map(r => r.id === a.id ? a : r))
+      })
+      .on("postgres_changes", { event: "INSERT", schema: "public", table: "denied_entries" }, payload => {
+        setDenied(prev => [payload.new as DeniedRow, ...prev].slice(0, 50))
+      })
+      .subscribe(status => setRtConnected(status === "SUBSCRIBED"))
+
+    rtRef.current = ch
+    return () => { supabase.removeChannel(ch) }
   }, [])
+
+  // Dynamic tab title showing open alert count
+  const openCount   = alerts.filter(a => !a.ack_at && a.status === "sent").length
+  useEffect(() => {
+    document.title = openCount > 0 ? `(${openCount}) Alerts` : "Alerts"
+    return () => { document.title = "Alerts" }
+  }, [openCount])
 
   async function loadAll() {
     setLoading(true)
-    // Alerts: no time filter — open (unacked) alerts must stay visible
-    // regardless of age. limit(200) keeps the query bounded.
-    // Denied Entries: keep the 7-day window (panel is labeled "Past 7 Days").
     const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()
     const [{ data: a }, { data: d }] = await Promise.all([
-      supabase.from("alerts").select("*")
-        .order("sent_at", { ascending: false }).limit(200),
+      supabase.from("alerts").select("*").order("sent_at", { ascending: false }).limit(200),
       supabase.from("denied_entries").select("*").gte("attempted_at", since)
         .order("attempted_at", { ascending: false }).limit(50),
     ])
@@ -104,26 +176,38 @@ export default function AlertsPage() {
 
   async function ack(a: AlertRow) {
     const { error } = await supabase.from("alerts").update({
-      ack_at: new Date().toISOString(),
-      ack_by: userEmail || null,
-      status: "acked",
+      ack_at:   new Date().toISOString(),
+      ack_by:   userEmail || null,
+      ack_note: ackNote.trim() || null,
+      status:   "acked",
     }).eq("id", a.id)
     if (error) { alert("Ack failed: " + error.message); return }
-    loadAll()
+    setAckingId(null)
+    setAckNote("")
   }
 
-  // Admin-only: delete a single alert. RLS (admin_delete_alerts) enforces the
-  // gate server-side; the UI is hidden for non-admins as a courtesy.
+  async function ackAll() {
+    const open = alerts.filter(a => !a.ack_at && a.status === "sent")
+    if (!open.length) return
+    if (!confirm(`Acknowledge all ${open.length} open alert${open.length === 1 ? "" : "s"}?`)) return
+    const now = new Date().toISOString()
+    const { error } = await supabase.from("alerts").update({
+      ack_at: now, ack_by: userEmail || null, status: "acked",
+    }).in("id", open.map(a => a.id))
+    if (error) { alert("Ack all failed: " + error.message); return }
+  }
+
   async function deleteAlert(a: AlertRow) {
     if (!confirm("Delete this alert? This cannot be undone.")) return
     const { error } = await supabase.from("alerts").delete().eq("id", a.id)
     if (error) { alert("Delete failed: " + error.message); return }
-    loadAll()
+    setAlerts(prev => prev.filter(r => r.id !== a.id))
   }
 
-  // Admin-only: bulk-delete acknowledged alerts older than `days` (cleanup of
-  // old, handled alerts). Never touches open/unacked alerts.
-  const ackedOldCount = alerts.filter(a => a.ack_at && tsMs(a.sent_at) < Date.now() - CLEANUP_DAYS * 86400000).length
+  const ackedOldCount = alerts.filter(
+    a => a.ack_at && tsMs(a.sent_at) < Date.now() - CLEANUP_DAYS * 86400000,
+  ).length
+
   async function deleteAckedOld() {
     if (!ackedOldCount) return
     if (!confirm(`Delete ${ackedOldCount} acknowledged alert${ackedOldCount === 1 ? "" : "s"} older than ${CLEANUP_DAYS} days? This cannot be undone.`)) return
@@ -142,21 +226,39 @@ export default function AlertsPage() {
     return true
   })
 
-  const openCount    = alerts.filter(a => !a.ack_at && a.status === "sent").length
-  const watchlistCt  = alerts.filter(a => a.type === "watchlist_hit").length
-  const incidentCt   = alerts.filter(a => a.type === "incident_high_priority").length
-  const sosCt        = alerts.filter(a => a.type === "panic_sos").length
+  const watchlistCt = alerts.filter(a => a.type === "watchlist_hit").length
+  const incidentCt  = alerts.filter(a => a.type === "incident_high_priority").length
+  const sosCt       = alerts.filter(a => a.type === "panic_sos").length
 
   return (
     <div className="p-4 sm:p-6 max-w-7xl mx-auto">
+
+      {/* HEADER */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
-        <h1 className="text-2xl font-bold">🔔 Alerts & Notify</h1>
-        <div className="flex items-center gap-2">
+        <div>
+          <h1 className="text-2xl font-bold">🔔 Alerts & Notify</h1>
+          <div className="flex items-center gap-1.5 mt-1">
+            <span className={`w-2 h-2 rounded-full ${rtConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
+            <span className="text-xs text-gray-500">
+              {rtConnected ? "Live" : "Connecting…"}
+              {" · "}
+              {notifOk ? "Browser notifications on" : "Browser notifications off"}
+            </span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          {isAdmin && !isGuest && openCount > 1 && (
+            <button
+              onClick={ackAll}
+              className="px-3 py-1.5 bg-green-700 hover:bg-green-800 text-white text-sm rounded-md border-none cursor-pointer"
+            >
+              ✓ Ack All ({openCount})
+            </button>
+          )}
           {isAdmin && (
             <button
               onClick={deleteAckedOld}
               disabled={loading || ackedOldCount === 0}
-              title={`Delete acknowledged alerts older than ${CLEANUP_DAYS} days`}
               className="px-3 py-1.5 bg-red-700 hover:bg-red-800 text-white text-sm rounded-md border-none cursor-pointer disabled:opacity-40"
             >
               🗑 Clear old ({ackedOldCount})
@@ -174,11 +276,11 @@ export default function AlertsPage() {
 
       {/* STATS */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
-        <Stat label="Open"        value={openCount}       accent="red" />
-        <Stat label="Watchlist"   value={watchlistCt}     accent="orange" />
-        <Stat label="Incidents"   value={incidentCt}      accent="yellow" />
-        <Stat label="SOS"         value={sosCt}           accent="rose" />
-        <Stat label="Denied (7d)" value={denied.length}   accent="slate" />
+        <Stat label="Open"        value={openCount}     accent="red" />
+        <Stat label="Watchlist"   value={watchlistCt}   accent="orange" />
+        <Stat label="Incidents"   value={incidentCt}    accent="yellow" />
+        <Stat label="SOS"         value={sosCt}         accent="rose" />
+        <Stat label="Denied (7d)" value={denied.length} accent="slate" />
       </div>
 
       {/* FILTER TABS */}
@@ -194,9 +296,7 @@ export default function AlertsPage() {
             key={k}
             onClick={() => setFilter(k)}
             className={`px-3 py-2 text-sm font-medium border-none cursor-pointer rounded-t-md transition-colors ${
-              filter === k
-                ? "bg-blue-800 text-white"
-                : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              filter === k ? "bg-blue-800 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
           >
             {label}
@@ -216,7 +316,13 @@ export default function AlertsPage() {
         ) : (
           <ul className="divide-y divide-gray-100">
             {filtered.map(a => (
-              <li key={a.id} className="p-4 flex flex-col gap-2 hover:bg-gray-50">
+              <li
+                key={a.id}
+                className={`p-4 flex flex-col gap-2 hover:bg-gray-50 ${
+                  !a.ack_at && a.status === "sent" ? "border-l-4 border-l-red-500" : "border-l-4 border-l-transparent"
+                }`}
+              >
+                {/* Top row */}
                 <div className="flex justify-between items-start gap-3 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded ${SEVERITY_BADGE[a.severity] || "bg-gray-700 text-white"}`}>
@@ -241,38 +347,65 @@ export default function AlertsPage() {
                   <div className="text-xs text-gray-500 shrink-0">{fmt(a.sent_at)}</div>
                 </div>
 
-                <div className="text-sm text-gray-700 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-                  {Object.entries(a.payload || {})
-                    .filter(([k, v]) => k !== "Community" && v !== undefined && v !== null && v !== "")
-                    .slice(0, 8)
-                    .map(([k, v]) => (
-                      <div key={k}>
-                        <span className="text-gray-500 font-medium">{k}:</span> <span>{String(v)}</span>
-                      </div>
-                    ))
-                  }
-                </div>
+                {/* Type-specific payload */}
+                <AlertPayload alert={a} />
 
+                {/* Footer row */}
                 <div className="flex items-center justify-between gap-2 text-xs text-gray-500 flex-wrap">
-                  <div>
-                    Triggered by <span className="font-semibold text-gray-700">{a.triggered_by || "—"}</span>
+                  <div className="space-y-0.5">
+                    <div>
+                      Triggered by <span className="font-semibold text-gray-700">{a.triggered_by || "—"}</span>
+                    </div>
                     {a.ack_at && (
-                      <> · acked by <span className="font-semibold text-gray-700">{a.ack_by || "—"}</span> at <span className="font-mono">{fmt(a.ack_at)}</span></>
+                      <div>
+                        Acked by <span className="font-semibold text-gray-700">{a.ack_by || "—"}</span>
+                        {" "}at <span className="font-mono">{fmt(a.ack_at)}</span>
+                        {a.ack_note && <span className="ml-1 italic text-gray-600">· &ldquo;{a.ack_note}&rdquo;</span>}
+                      </div>
                     )}
                   </div>
+
                   <div className="flex items-center gap-2">
                     {!isGuest && !a.ack_at && a.status === "sent" && (
-                      <button
-                        onClick={() => ack(a)}
-                        className="px-3 py-1 bg-green-700 hover:bg-green-800 text-white text-xs font-semibold rounded border-none cursor-pointer"
-                      >
-                        ✓ Acknowledge
-                      </button>
+                      ackingId === a.id ? (
+                        <div className="flex items-center gap-2">
+                          <input
+                            autoFocus
+                            type="text"
+                            value={ackNote}
+                            onChange={e => setAckNote(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === "Enter")  ack(a)
+                              if (e.key === "Escape") { setAckingId(null); setAckNote("") }
+                            }}
+                            placeholder="Note (optional)…"
+                            className="px-2 py-1 text-xs border border-gray-300 rounded w-40 focus:outline-none focus:ring-1 focus:ring-green-500"
+                          />
+                          <button
+                            onClick={() => ack(a)}
+                            className="px-3 py-1 bg-green-700 hover:bg-green-800 text-white text-xs font-semibold rounded border-none cursor-pointer"
+                          >
+                            ✓ Confirm
+                          </button>
+                          <button
+                            onClick={() => { setAckingId(null); setAckNote("") }}
+                            className="px-2 py-1 bg-gray-200 text-gray-700 text-xs rounded border-none cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setAckingId(a.id)}
+                          className="px-3 py-1 bg-green-700 hover:bg-green-800 text-white text-xs font-semibold rounded border-none cursor-pointer"
+                        >
+                          ✓ Acknowledge
+                        </button>
+                      )
                     )}
                     {isAdmin && (
                       <button
                         onClick={() => deleteAlert(a)}
-                        title="Delete alert (admin)"
                         className="px-3 py-1 bg-gray-200 hover:bg-red-600 hover:text-white text-gray-700 text-xs font-semibold rounded border-none cursor-pointer"
                       >
                         🗑 Delete
@@ -300,34 +433,112 @@ export default function AlertsPage() {
         {denied.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-sm">No denied entries.</div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-gray-50 text-xs uppercase text-gray-500">
-              <tr>
-                <th className="px-4 py-2 text-left">When</th>
-                <th className="px-4 py-2 text-left">Visitor</th>
-                <th className="px-4 py-2 text-left">DOB</th>
-                <th className="px-4 py-2 text-left">Location</th>
-                <th className="px-4 py-2 text-left">Unit</th>
-                <th className="px-4 py-2 text-left">Reason</th>
-                <th className="px-4 py-2 text-left">Guard</th>
-              </tr>
-            </thead>
-            <tbody>
-              {denied.map(d => (
-                <tr key={d.id} className="border-t border-gray-100 hover:bg-gray-50">
-                  <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{fmt(d.attempted_at)}</td>
-                  <td className="px-4 py-2 font-semibold">{d.first_name} {d.last_name}</td>
-                  <td className="px-4 py-2 text-gray-600">{d.dob || "—"}</td>
-                  <td className="px-4 py-2 text-gray-700">{d.community_name || "—"}</td>
-                  <td className="px-4 py-2 text-gray-600">{d.unit_number || "—"}</td>
-                  <td className="px-4 py-2 text-gray-600">{d.reason || "—"}</td>
-                  <td className="px-4 py-2 text-gray-500 text-xs">{d.guard_email || "—"}</td>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="bg-gray-50 text-xs uppercase text-gray-500">
+                <tr>
+                  <th className="px-4 py-2 text-left">When</th>
+                  <th className="px-4 py-2 text-left">Visitor</th>
+                  <th className="px-4 py-2 text-left">DOB</th>
+                  <th className="px-4 py-2 text-left">Location</th>
+                  <th className="px-4 py-2 text-left">Unit</th>
+                  <th className="px-4 py-2 text-left">Reason</th>
+                  <th className="px-4 py-2 text-left">Guard</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {denied.map(d => (
+                  <tr key={d.id} className="border-t border-gray-100 hover:bg-gray-50">
+                    <td className="px-4 py-2 text-gray-700 whitespace-nowrap">{fmt(d.attempted_at)}</td>
+                    <td className="px-4 py-2 font-semibold">
+                      <Link
+                        href={`/vms/intel?q=${encodeURIComponent(d.first_name + " " + d.last_name)}`}
+                        className="text-blue-700 hover:underline"
+                      >
+                        {d.first_name} {d.last_name}
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2 text-gray-600">{d.dob || "—"}</td>
+                    <td className="px-4 py-2 text-gray-700">{d.community_name || "—"}</td>
+                    <td className="px-4 py-2 text-gray-600">{d.unit_number || "—"}</td>
+                    <td className="px-4 py-2 text-gray-600">{d.reason || "—"}</td>
+                    <td className="px-4 py-2 text-gray-500 text-xs">{d.guard_email || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
       </div>
+
+    </div>
+  )
+}
+
+// ---------- Sub-components ----------
+
+function AlertPayload({ alert: a }: { alert: AlertRow }) {
+  const p = a.payload as Record<string, string>
+
+  if (a.type === "watchlist_hit") {
+    return (
+      <div className="bg-red-50 border border-red-200 rounded-lg px-3 py-2 text-sm grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+        {p.Name     && <PField label="Name"     value={p.Name}     bold />}
+        {p.DOB      && <PField label="DOB"      value={p.DOB} />}
+        {p.Reason   && <PField label="Reason"   value={p.Reason} />}
+        {p.Match    && <PField label="Match"    value={p.Match} />}
+        {p.Unit     && <PField label="Unit"     value={p.Unit} />}
+        {p.Resident && <PField label="Resident" value={p.Resident} />}
+      </div>
+    )
+  }
+
+  if (a.type === "incident_high_priority") {
+    return (
+      <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-sm grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+        {p["Report Type"] && <PField label="Type"    value={p["Report Type"]} bold />}
+        {p.Unit           && <PField label="Unit"    value={p.Unit} />}
+        {p.Officer        && <PField label="Officer" value={p.Officer} />}
+        {p.Narrative      && (
+          <div className="sm:col-span-2 text-gray-700">
+            <span className="text-gray-500 font-medium">Narrative: </span>{p.Narrative}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  if (a.type === "panic_sos") {
+    return (
+      <div className="bg-rose-50 border border-rose-300 rounded-lg px-3 py-2 text-sm grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+        {p.Officer  && <PField label="Officer"  value={p.Officer}  bold />}
+        {p.Location && <PField label="Location" value={p.Location} />}
+        {p.Message  && (
+          <div className="sm:col-span-2 text-gray-700">
+            <span className="text-gray-500 font-medium">Message: </span>{p.Message}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Fallback: generic key/value grid
+  const entries = Object.entries(p)
+    .filter(([k, v]) => k !== "Community" && v !== undefined && v !== null && v !== "")
+    .slice(0, 8)
+  if (!entries.length) return null
+  return (
+    <div className="text-sm text-gray-700 grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
+      {entries.map(([k, v]) => <PField key={k} label={k} value={String(v)} />)}
+    </div>
+  )
+}
+
+function PField({ label, value, bold }: { label: string; value: string; bold?: boolean }) {
+  return (
+    <div>
+      <span className="text-gray-500 font-medium">{label}:</span>{" "}
+      <span className={bold ? "font-semibold text-gray-900" : ""}>{value}</span>
     </div>
   )
 }
