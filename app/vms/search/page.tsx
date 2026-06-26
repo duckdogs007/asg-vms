@@ -5,7 +5,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { Community } from "@/lib/types"
 
-type ResultType = "Visitor" | "Resident" | "Watchlist" | "Vehicle Alert"
+type ResultType = "Visitor" | "Resident" | "Watchlist" | "Vehicle Alert" | "BOLO" | "Parking" | "Vehicle FI" | "Denied Entry"
 
 interface SearchResult {
   type:     ResultType
@@ -14,20 +14,29 @@ interface SearchResult {
   location: string
   date?:    string | null
   firearm?: boolean
+  link?:    string
 }
 
 const TYPE_BADGE: Record<ResultType, string> = {
-  "Visitor":       "bg-indigo-100 text-indigo-800",
-  "Resident":      "bg-green-100  text-green-800",
-  "Watchlist":     "bg-red-100    text-red-800",
-  "Vehicle Alert": "bg-orange-100 text-orange-800",
+  "Visitor":      "bg-indigo-100 text-indigo-800",
+  "Resident":     "bg-green-100  text-green-800",
+  "Watchlist":    "bg-red-100    text-red-800",
+  "Vehicle Alert":"bg-orange-100 text-orange-800",
+  "BOLO":         "bg-amber-100  text-amber-800",
+  "Parking":      "bg-yellow-100 text-yellow-800",
+  "Vehicle FI":   "bg-purple-100 text-purple-800",
+  "Denied Entry": "bg-rose-100   text-rose-800",
 }
 
 const TYPE_ICON: Record<ResultType, string> = {
-  "Visitor":       "🛂",
-  "Resident":      "🏠",
-  "Watchlist":     "🚨",
-  "Vehicle Alert": "🚗",
+  "Visitor":      "🛂",
+  "Resident":     "🏠",
+  "Watchlist":    "🚨",
+  "Vehicle Alert":"🚗",
+  "BOLO":         "📋",
+  "Parking":      "🅿️",
+  "Vehicle FI":   "🔍",
+  "Denied Entry": "⛔",
 }
 
 function fmtDate(ts: string | null | undefined): string {
@@ -62,8 +71,7 @@ export default function VmsSearchPage() {
     setHasSearched(true)
     const output: SearchResult[] = []
 
-    // VISITORS — pull visitor_logs (each row has community_id), dedupe per
-    // person to most-recent visit since logs are ordered desc.
+    // VISITORS — dedupe per person to most-recent visit
     const { data: logs } = await supabase
       .from("visitor_logs")
       .select("first_name, last_name, unit_number, community_id, created_at")
@@ -123,7 +131,7 @@ export default function VmsSearchPage() {
       })
     }
 
-    // VEHICLE WATCHLIST — no community_id; alerts are global
+    // VEHICLE WATCHLIST — global, no community_id
     const { data: vehicles } = await supabase
       .from("vehicle_watchlist")
       .select("plate, state, reason")
@@ -140,6 +148,88 @@ export default function VmsSearchPage() {
       })
     }
 
+    // BOLOs — search name, plate, vehicle description
+    const { data: bolos } = await supabase
+      .from("bolos")
+      .select("id, name, vehicle, reason, plate, plate_state, active, community_id")
+      .or(`name.ilike.%${q}%,plate.ilike.%${q}%,vehicle.ilike.%${q}%,reason.ilike.%${q}%`)
+      .order("created_at", { ascending: false })
+      .limit(50)
+    if (bolos) {
+      bolos.forEach(b => {
+        const label = [b.name, b.plate ? `Plate: ${b.plate}${b.plate_state ? ` (${b.plate_state})` : ""}` : null]
+          .filter(Boolean).join(" · ")
+        output.push({
+          type:     "BOLO",
+          name:     label || "BOLO",
+          detail:   [b.vehicle, b.reason].filter(Boolean).join(" · ") || "—",
+          location: locationName(b.community_id),
+          link:     `/vms/intel/bolo/${b.id}`,
+        })
+      })
+    }
+
+    // PARKING VIOLATIONS — search plate and HOH name
+    const { data: parking } = await supabase
+      .from("parking_violations")
+      .select("id, plate, state, violation_type, community_id, date, hoh_name")
+      .or(`plate.ilike.%${q}%,hoh_name.ilike.%${q}%`)
+      .order("date", { ascending: false })
+      .limit(50)
+    if (parking) {
+      parking.forEach(p => {
+        const plateLabel = p.plate ? `${p.plate}${p.state ? ` (${p.state})` : ""}` : "—"
+        output.push({
+          type:     "Parking",
+          name:     plateLabel,
+          detail:   [p.violation_type, p.hoh_name ? `HOH: ${p.hoh_name}` : null].filter(Boolean).join(" · ") || "—",
+          location: locationName(p.community_id),
+          date:     p.date,
+          link:     `/vms/reports/parking/${p.id}`,
+        })
+      })
+    }
+
+    // VEHICLE FI LOGS — search plate and HOH name
+    const { data: vfi } = await supabase
+      .from("vehicle_fi_logs")
+      .select("id, plate, state, reason, community_id, date, hoh_name")
+      .or(`plate.ilike.%${q}%,hoh_name.ilike.%${q}%`)
+      .order("date", { ascending: false })
+      .limit(50)
+    if (vfi) {
+      vfi.forEach(v => {
+        const plateLabel = v.plate ? `${v.plate}${v.state ? ` (${v.state})` : ""}` : "—"
+        output.push({
+          type:     "Vehicle FI",
+          name:     plateLabel,
+          detail:   [v.reason, v.hoh_name ? `HOH: ${v.hoh_name}` : null].filter(Boolean).join(" · ") || "—",
+          location: locationName(v.community_id),
+          date:     v.date,
+          link:     `/vms/reports/vehicle_fi/${v.id}`,
+        })
+      })
+    }
+
+    // DENIED ENTRIES — search name and OLN
+    const { data: denied } = await supabase
+      .from("denied_entries")
+      .select("first_name, last_name, oln, reason, community_name, attempted_at")
+      .or(`first_name.ilike.%${q}%,last_name.ilike.%${q}%,oln.ilike.%${q}%`)
+      .order("attempted_at", { ascending: false })
+      .limit(50)
+    if (denied) {
+      denied.forEach(d => {
+        output.push({
+          type:     "Denied Entry",
+          name:     `${d.first_name || ""} ${d.last_name || ""}`.trim() || "Unknown",
+          detail:   d.reason || "—",
+          location: d.community_name || "—",
+          date:     d.attempted_at,
+        })
+      })
+    }
+
     setResults(output)
     setLoading(false)
   }
@@ -152,7 +242,9 @@ export default function VmsSearchPage() {
     <div className="p-4 sm:p-5 pb-16 max-w-5xl">
 
       <h1 className="text-2xl font-bold mb-1">Search</h1>
-      <p className="text-sm text-gray-500 mb-5">Cross-location lookup — visitors, residents, watchlist, and vehicle alerts.</p>
+      <p className="text-sm text-gray-500 mb-5">
+        Cross-location lookup — visitors, residents, watchlist, BOLOs, vehicle alerts, parking, and denied entries.
+      </p>
 
       {/* SEARCH BAR */}
       <div className="flex flex-col sm:flex-row gap-2 mb-6">
@@ -193,37 +285,47 @@ export default function VmsSearchPage() {
             {results.length} result{results.length === 1 ? "" : "s"}
           </div>
           <div className="flex flex-col gap-2">
-            {results.map((r, i) => (
-              <div
-                key={i}
-                className={`bg-white border rounded-lg px-4 py-3 transition-colors ${
-                  r.firearm ? "border-red-300 bg-red-50" : "border-gray-200 hover:border-gray-300"
-                }`}
-              >
-                <div className="flex justify-between items-start gap-3 flex-wrap">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${TYPE_BADGE[r.type]}`}>
-                        {TYPE_ICON[r.type]} {r.type}
-                      </span>
-                      <span className="font-bold text-gray-900 capitalize">{r.name}</span>
-                      {r.firearm && (
-                        <span className="px-2 py-0.5 bg-red-700 text-white rounded text-[10px] font-bold uppercase animate-pulse">
-                          🔫 Firearm
+            {results.map((r, i) => {
+              const card = (
+                <div
+                  className={`bg-white border rounded-lg px-4 py-3 transition-colors ${
+                    r.firearm
+                      ? "border-red-300 bg-red-50"
+                      : r.link
+                      ? "border-gray-200 hover:border-blue-300 cursor-pointer"
+                      : "border-gray-200 hover:border-gray-300"
+                  }`}
+                >
+                  <div className="flex justify-between items-start gap-3 flex-wrap">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${TYPE_BADGE[r.type]}`}>
+                          {TYPE_ICON[r.type]} {r.type}
                         </span>
+                        <span className="font-bold text-gray-900 capitalize">{r.name}</span>
+                        {r.firearm && (
+                          <span className="px-2 py-0.5 bg-red-700 text-white rounded text-[10px] font-bold uppercase animate-pulse">
+                            🔫 Firearm
+                          </span>
+                        )}
+                      </div>
+                      {r.detail && (
+                        <div className="text-sm text-gray-600 mt-1 truncate">{r.detail}</div>
                       )}
                     </div>
-                    {r.detail && (
-                      <div className="text-sm text-gray-600 mt-1 truncate">{r.detail}</div>
-                    )}
-                  </div>
-                  <div className="text-right text-xs text-gray-500 shrink-0">
-                    <div className="font-semibold text-gray-700">📍 {r.location}</div>
-                    {r.date && <div className="text-gray-400 mt-0.5">Last seen {fmtDate(r.date)}</div>}
+                    <div className="text-right text-xs text-gray-500 shrink-0">
+                      <div className="font-semibold text-gray-700">📍 {r.location}</div>
+                      {r.date && <div className="text-gray-400 mt-0.5">
+                        {r.type === "Denied Entry" ? "Attempted" : "Last seen"} {fmtDate(r.date)}
+                      </div>}
+                    </div>
                   </div>
                 </div>
-              </div>
-            ))}
+              )
+              return r.link
+                ? <Link key={i} href={r.link}>{card}</Link>
+                : <div key={i}>{card}</div>
+            })}
           </div>
         </>
       )}

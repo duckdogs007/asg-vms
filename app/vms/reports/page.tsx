@@ -9,12 +9,13 @@ import { displayPlate, isNoPlate } from "@/components/VehicleFields"
 
 // Recent-submissions typeKey → URL slug for /vms/reports/[type]/[id]
 const SUB_TYPE_SLUG: Record<string, string> = {
-  incident:     "incident",
-  fieldContact: "field-contact",
-  vehicleFI:    "vehicle-fi",
-  parking:      "parking",
-  dailyLog:     "daily-log",
-  maintenance:  "maintenance",
+  incident:      "incident",
+  fieldContact:  "field-contact",
+  vehicleFI:     "vehicle-fi",
+  parking:       "parking",
+  dailyLog:      "daily-log",
+  maintenance:   "maintenance",
+  gateChecklist: "gate-checklist",
 }
 
 // report_queue.report_type → URL slug
@@ -136,7 +137,7 @@ const EMPTY_STATS: Stats = {
 
 interface SubmissionRow {
   id: string
-  typeKey: "incident" | "fieldContact" | "vehicleFI" | "parking" | "dailyLog" | "maintenance"
+  typeKey: "incident" | "fieldContact" | "vehicleFI" | "parking" | "dailyLog" | "maintenance" | "gateChecklist"
   typeLabel: string
   officer: string
   community_id: string | null
@@ -145,22 +146,25 @@ interface SubmissionRow {
 }
 
 const REPORT_TYPES = [
-  { key: "incidents",     label: "Incident Reports",   color: "red",    table: "incident_reports",   dateCol: "date" },
-  { key: "fieldContacts", label: "Field Contacts",     color: "purple", table: "contact_history",    dateCol: "created_at" },
-  { key: "vehicleFIs",    label: "Vehicle FIs",        color: "orange", table: "vehicle_fi_logs",    dateCol: "date" },
-  { key: "parking",       label: "Parking Violations", color: "amber",  table: "parking_violations", dateCol: "date" },
-  { key: "dailyLogs",     label: "Daily Logs",         color: "teal",   table: "officer_daily_logs", dateCol: "date" },
+  { key: "incidents",      label: "Incident Reports",   color: "red",     table: "incident_reports",             dateCol: "date"       },
+  { key: "fieldContacts",  label: "Field Contacts",     color: "purple",  table: "contact_history",              dateCol: "created_at" },
+  { key: "vehicleFIs",     label: "Vehicle FIs",        color: "orange",  table: "vehicle_fi_logs",              dateCol: "date"       },
+  { key: "parking",        label: "Parking Violations", color: "amber",   table: "parking_violations",           dateCol: "date"       },
+  { key: "dailyLogs",      label: "Daily Logs",         color: "teal",    table: "officer_daily_logs",           dateCol: "date"       },
+  { key: "maintenance",    label: "Maintenance",        color: "emerald", table: "property_maintenance_reports", dateCol: "created_at" },
+  { key: "gateChecklists", label: "Gate Checklists",   color: "slate",   table: "gate_checklists",              dateCol: "checklist_date" },
 ] as const
 type RptTypeKey = typeof REPORT_TYPES[number]["key"]
 
 const SUB_BADGE: Record<string, string> = {
   // camelCase keys — Recent Submissions (s.typeKey)
-  incident:     "bg-red-100 text-red-700",
-  fieldContact: "bg-purple-100 text-purple-700",
-  vehicleFI:    "bg-orange-100 text-orange-700",
-  parking:      "bg-amber-100 text-amber-700",
-  dailyLog:     "bg-teal-100 text-teal-700",
-  maintenance:  "bg-emerald-100 text-emerald-700",
+  incident:      "bg-red-100 text-red-700",
+  fieldContact:  "bg-purple-100 text-purple-700",
+  vehicleFI:     "bg-orange-100 text-orange-700",
+  parking:       "bg-amber-100 text-amber-700",
+  dailyLog:      "bg-teal-100 text-teal-700",
+  maintenance:   "bg-emerald-100 text-emerald-700",
+  gateChecklist: "bg-slate-100 text-slate-700",
   // snake_case keys — Review Queue (q.report_type)
   field_contact: "bg-purple-100 text-purple-700",
   vehicle_fi:    "bg-orange-100 text-orange-700",
@@ -168,11 +172,13 @@ const SUB_BADGE: Record<string, string> = {
 }
 
 const RPT_COLORS: Record<string, { idle: string; open: string; title: string; val: string }> = {
-  red:    { idle: "bg-red-50 border-red-200",       open: "bg-red-100 border-red-300",       title: "text-red-700",    val: "text-red-800" },
-  purple: { idle: "bg-purple-50 border-purple-200", open: "bg-purple-100 border-purple-300", title: "text-purple-700", val: "text-purple-800" },
-  orange: { idle: "bg-orange-50 border-orange-200", open: "bg-orange-100 border-orange-300", title: "text-orange-700", val: "text-orange-800" },
-  amber:  { idle: "bg-amber-50 border-amber-200",   open: "bg-amber-100 border-amber-300",   title: "text-amber-700",  val: "text-amber-800" },
-  teal:   { idle: "bg-teal-50 border-teal-200",     open: "bg-teal-100 border-teal-300",     title: "text-teal-700",   val: "text-teal-800" },
+  red:     { idle: "bg-red-50 border-red-200",       open: "bg-red-100 border-red-300",       title: "text-red-700",     val: "text-red-800"     },
+  purple:  { idle: "bg-purple-50 border-purple-200", open: "bg-purple-100 border-purple-300", title: "text-purple-700",  val: "text-purple-800"  },
+  orange:  { idle: "bg-orange-50 border-orange-200", open: "bg-orange-100 border-orange-300", title: "text-orange-700",  val: "text-orange-800"  },
+  amber:   { idle: "bg-amber-50 border-amber-200",   open: "bg-amber-100 border-amber-300",   title: "text-amber-700",   val: "text-amber-800"   },
+  teal:    { idle: "bg-teal-50 border-teal-200",     open: "bg-teal-100 border-teal-300",     title: "text-teal-700",    val: "text-teal-800"    },
+  emerald: { idle: "bg-emerald-50 border-emerald-200", open: "bg-emerald-100 border-emerald-300", title: "text-emerald-700", val: "text-emerald-800" },
+  slate:   { idle: "bg-slate-50 border-slate-200",   open: "bg-slate-100 border-slate-300",   title: "text-slate-700",   val: "text-slate-800"   },
 }
 
 export default function ReportsPage() {
@@ -192,7 +198,7 @@ export default function ReportsPage() {
   const [deleting,       setDeleting]       = useState<string | null>(null)
   const [entryLogSearch, setEntryLogSearch] = useState("")
   const [priorTotal,     setPriorTotal]     = useState<number | null>(null)
-  const EMPTY_RPT: Record<RptTypeKey, number> = { incidents: 0, fieldContacts: 0, vehicleFIs: 0, parking: 0, dailyLogs: 0 }
+  const EMPTY_RPT: Record<RptTypeKey, number> = { incidents: 0, fieldContacts: 0, vehicleFIs: 0, parking: 0, dailyLogs: 0, maintenance: 0, gateChecklists: 0 }
   const [rptCommunity,     setRptCommunity]     = useState("")
   const [rptSummary,       setRptSummary]       = useState<Record<RptTypeKey, number>>(EMPTY_RPT)
   const [rptSummaryLoading,setRptSummaryLoading]= useState(false)
@@ -359,19 +365,23 @@ export default function ReportsPage() {
   async function loadRptSummary() {
     if (!rptCommunity) return
     setRptSummaryLoading(true)
-    const [incR, ctR, vfiR, pvR, logR] = await Promise.all([
+    const [incR, ctR, vfiR, pvR, logR, mntR, gcR] = await Promise.all([
       supabase.from("incident_reports").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
       supabase.from("contact_history").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59"),
       supabase.from("vehicle_fi_logs").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
       supabase.from("parking_violations").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
       supabase.from("officer_daily_logs").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
+      supabase.from("property_maintenance_reports").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59"),
+      supabase.from("gate_checklists").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("checklist_date", dateFrom).lte("checklist_date", dateTo),
     ])
     setRptSummary({
-      incidents:     incR.count  || 0,
-      fieldContacts: ctR.count   || 0,
-      vehicleFIs:    vfiR.count  || 0,
-      parking:       pvR.count   || 0,
-      dailyLogs:     logR.count  || 0,
+      incidents:      incR.count  || 0,
+      fieldContacts:  ctR.count   || 0,
+      vehicleFIs:     vfiR.count  || 0,
+      parking:        pvR.count   || 0,
+      dailyLogs:      logR.count  || 0,
+      maintenance:    mntR.count  || 0,
+      gateChecklists: gcR.count   || 0,
     })
     setRptSummaryLoading(false)
   }
@@ -474,13 +484,14 @@ export default function ReportsPage() {
   async function loadRecentSubmissions() {
     setRecentSubsLoading(true)
     const N = 20
-    const [incR, ctR, vfiR, pvR, logR, mntR] = await Promise.all([
+    const [incR, ctR, vfiR, pvR, logR, mntR, gcR] = await Promise.all([
       supabase.from("incident_reports").select("id,community_id,created_at,incident_type,officer_name,issued_by").order("created_at", { ascending: false }).limit(N),
       supabase.from("contact_history").select("id,community_id,created_at,officer_name,contact_name").order("created_at", { ascending: false }).limit(N),
       supabase.from("vehicle_fi_logs").select("id,community_id,created_at,officer_name,plate").order("created_at", { ascending: false }).limit(N),
       supabase.from("parking_violations").select("id,community_id,created_at,officer_name,plate,violation_type").order("created_at", { ascending: false }).limit(N),
       supabase.from("officer_daily_logs").select("id,community_id,created_at,officer_name").order("created_at", { ascending: false }).limit(N),
       supabase.from("property_maintenance_reports").select("id,community_id,created_at,officer_name,issue_type").order("created_at", { ascending: false }).limit(N),
+      supabase.from("gate_checklists").select("id,community_id,created_at,checklist_date,guard_name,shift").order("created_at", { ascending: false }).limit(N),
     ])
     const rows: SubmissionRow[] = [
       ...(incR.data || []).map(r => ({
@@ -512,6 +523,11 @@ export default function ReportsPage() {
         id: r.id, typeKey: "maintenance" as const, typeLabel: "Maintenance Report",
         officer: r.officer_name || "—", community_id: r.community_id,
         created_at: r.created_at, summary: r.issue_type || "—",
+      })),
+      ...(gcR.data || []).map(r => ({
+        id: r.id, typeKey: "gateChecklist" as const, typeLabel: "Gate Checklist",
+        officer: r.guard_name || "—", community_id: r.community_id,
+        created_at: r.created_at, summary: [r.checklist_date, r.shift].filter(Boolean).join(" · ") || "—",
       })),
     ]
     rows.sort((a, b) => new Date(utc(b.created_at)).getTime() - new Date(utc(a.created_at)).getTime())

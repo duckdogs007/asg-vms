@@ -8,12 +8,13 @@ import { SignedImage } from "@/components/SignedImage"
 import { checkCanApprove } from "@/lib/admin"
 
 const TYPE_CONFIG: Record<string, { table: string; label: string; color: string }> = {
-  "incident":      { table: "incident_reports",             label: "Incident Report",    color: "red"     },
-  "field-contact": { table: "contact_history",              label: "Field Contact",      color: "purple"  },
-  "vehicle-fi":    { table: "vehicle_fi_logs",              label: "Vehicle FI",         color: "orange"  },
-  "parking":       { table: "parking_violations",           label: "Parking Violation",  color: "amber"   },
-  "daily-log":     { table: "officer_daily_logs",           label: "Daily Activity Log", color: "blue"    },
-  "maintenance":   { table: "property_maintenance_reports", label: "Maintenance Report", color: "emerald" },
+  "incident":       { table: "incident_reports",             label: "Incident Report",    color: "red"     },
+  "field-contact":  { table: "contact_history",              label: "Field Contact",      color: "purple"  },
+  "vehicle-fi":     { table: "vehicle_fi_logs",              label: "Vehicle FI",         color: "orange"  },
+  "parking":        { table: "parking_violations",           label: "Parking Violation",  color: "amber"   },
+  "daily-log":      { table: "officer_daily_logs",           label: "Daily Activity Log", color: "blue"    },
+  "maintenance":    { table: "property_maintenance_reports", label: "Maintenance Report", color: "emerald" },
+  "gate-checklist": { table: "gate_checklists",              label: "Gate Checklist",     color: "slate"   },
 }
 
 // URL slug → report_queue report_type value
@@ -33,6 +34,7 @@ const TYPE_BADGE: Record<string, string> = {
   amber:   "bg-amber-100 text-amber-800 border-amber-200",
   blue:    "bg-blue-100 text-blue-700 border-blue-200",
   emerald: "bg-emerald-100 text-emerald-800 border-emerald-200",
+  slate:   "bg-slate-100 text-slate-700 border-slate-200",
 }
 
 function Field({ label, value }: { label: string; value?: string | number | null }) {
@@ -54,20 +56,33 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
+// Kind slug → summary API kind param
+const SLUG_TO_KIND: Record<string, string> = {
+  "incident":      "incident",
+  "field-contact": "contact",
+  "vehicle-fi":    "vehicle_fi",
+  "parking":       "parking",
+  "daily-log":     "daily",
+  "maintenance":   "maintenance",
+}
+
 export default function ReportDetailPage() {
   const params = useParams()
   const type   = params.type as string
   const id     = params.id   as string
   const config = TYPE_CONFIG[type]
 
-  const [report,        setReport]        = useState<Record<string, any> | null>(null)
-  const [queue,         setQueue]         = useState<Record<string, any> | null>(null)
-  const [communityName, setCommunityName] = useState("")
-  const [loading,       setLoading]       = useState(true)
-  const [notFound,      setNotFound]      = useState(false)
-  const [canEmail,      setCanEmail]      = useState(false)
-  const [emailSending,  setEmailSending]  = useState(false)
-  const [emailResult,   setEmailResult]   = useState<{ ok: boolean; msg: string } | null>(null)
+  const [report,          setReport]          = useState<Record<string, any> | null>(null)
+  const [queue,           setQueue]           = useState<Record<string, any> | null>(null)
+  const [communityName,   setCommunityName]   = useState("")
+  const [loading,         setLoading]         = useState(true)
+  const [notFound,        setNotFound]        = useState(false)
+  const [canEmail,        setCanEmail]        = useState(false)
+  const [emailSending,    setEmailSending]    = useState(false)
+  const [emailResult,     setEmailResult]     = useState<{ ok: boolean; msg: string } | null>(null)
+  const [summary,         setSummary]         = useState<string | null>(null)
+  const [summaryLoading,  setSummaryLoading]  = useState(false)
+  const [summaryError,    setSummaryError]    = useState<string | null>(null)
 
   useEffect(() => { checkCanApprove().then(setCanEmail) }, [])
 
@@ -90,8 +105,45 @@ export default function ReportDetailPage() {
           .then(({ data: c }) => setCommunityName(c?.name ?? ""))
       }
       setLoading(false)
+      // Auto-generate summary if there is narrative content
+      const narrative = [rec.narrative, rec.description, rec.notes, rec.action_taken].filter(Boolean).join("\n\n")
+      if (narrative.trim()) fetchSummary(rec, narrative)
     })
   }, [type, id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  async function fetchSummary(rec: Record<string, any>, narrative: string) {
+    setSummaryLoading(true)
+    setSummaryError(null)
+    setSummary(null)
+    try {
+      const fields: Record<string, any> = {}
+      if (rec.incident_type)  fields.incident_type  = rec.incident_type
+      if (rec.violation_type) fields.violation_type = rec.violation_type
+      if (rec.issue_type)     fields.issue_type      = rec.issue_type
+      if (rec.location)       fields.location        = rec.location
+      if (rec.hoh_name)       fields.hoh             = rec.hoh_name
+      if (rec.persons_involved) fields.persons_involved = rec.persons_involved
+      if (rec.follow_up_required) fields.follow_up_required = "Yes"
+      if (rec.firearm_flag)   fields.firearm_involved = "Yes"
+      if (rec.bolo_match)     fields.bolo_match       = "Yes"
+      if (rec.reliant_case_no) fields.reliant_case_no = rec.reliant_case_no
+      if (rec.reliant_notified === false && rec.reliant_not_notified_reason)
+        fields.reliant_not_notified = rec.reliant_not_notified_reason
+
+      const res  = await fetch("/api/ai/summary", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind: SLUG_TO_KIND[type], fields, narrative }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSummaryError(data.error || "Summary failed."); return }
+      setSummary(data.summary)
+    } catch (e: any) {
+      setSummaryError(e?.message || "Summary request failed.")
+    } finally {
+      setSummaryLoading(false)
+    }
+  }
 
   async function resendEmail() {
     setEmailSending(true); setEmailResult(null)
@@ -119,7 +171,8 @@ export default function ReportDetailPage() {
   )
 
   const r      = report!
-  const photos: string[] = r.photo_urls ?? (r.photo_url ? [r.photo_url] : [])
+  const isGateChecklist = type === "gate-checklist"
+  const photos: string[] = r.photo_urls ?? r.general_photo_urls ?? (r.photo_url ? [r.photo_url] : [])
 
   const qStatus = queue?.status as string | undefined
   const qBadge  =
@@ -173,6 +226,42 @@ export default function ReportDetailPage() {
         )}
       </div>
 
+      {/* Summary — Highlights / Followup */}
+      {(summaryLoading || summary || summaryError) && (
+        <div className={`mb-5 rounded-xl border px-4 py-3 ${
+          summaryLoading ? "bg-gray-50 border-gray-200" :
+          summaryError   ? "bg-amber-50 border-amber-200" :
+                           "bg-blue-50 border-blue-200"
+        }`}>
+          <div className="flex items-center justify-between gap-2 mb-1.5">
+            <div className="text-xs font-bold text-gray-700 uppercase tracking-wider">Summary — Highlights / Followup</div>
+            <div className="flex items-center gap-2">
+              {!summaryLoading && report && (
+                <button
+                  onClick={() => {
+                    const narrative = [report.narrative, report.description, report.notes, report.action_taken].filter(Boolean).join("\n\n")
+                    fetchSummary(report, narrative)
+                  }}
+                  className="text-[10px] text-blue-600 hover:text-blue-800 font-medium"
+                >
+                  ↺ Regenerate
+                </button>
+              )}
+              <span className="text-[10px] text-gray-400 italic">AI-generated</span>
+            </div>
+          </div>
+          {summaryLoading && <div className="text-xs text-gray-400 animate-pulse">Generating summary…</div>}
+          {summaryError   && <div className="text-xs text-amber-700">{summaryError}</div>}
+          {summary && (
+            <div className="text-sm text-gray-800 space-y-1">
+              {summary.split("\n").filter(Boolean).map((line, i) => (
+                <div key={i}>{line}</div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Type + status badges — visible in print */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
         <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${TYPE_BADGE[config.color] ?? "bg-gray-100 text-gray-700 border-gray-200"}`}>
@@ -200,10 +289,10 @@ export default function ReportDetailPage() {
       {/* Core info */}
       <Section title="Report Details">
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-          <Field label="Date"           value={r.date} />
-          <Field label="Time"           value={r.time} />
+          <Field label="Date"           value={isGateChecklist ? r.checklist_date : r.date} />
+          <Field label="Time"           value={isGateChecklist ? [r.start_time, r.end_time].filter(Boolean).join(" – ") : r.time} />
           <Field label="Shift"          value={r.shift} />
-          <Field label="Officer"        value={r.officer_name || r.officer || r.created_by} />
+          <Field label="Officer"        value={isGateChecklist ? (r.guard_name || r.officer_name) : (r.officer_name || r.officer || r.created_by)} />
           <Field label="Community"      value={communityName} />
           {locationLine && <Field label="Location"  value={locationLine} />}
           <Field label="Incident Type"  value={r.incident_type} />
@@ -213,6 +302,12 @@ export default function ReportDetailPage() {
           <Field label="Weather"        value={r.weather} />
           <Field label="Status"         value={r.status} />
         </div>
+        {isGateChecklist && r.additional_notes && (
+          <div className="mt-4">
+            <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Additional Notes</div>
+            <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{r.additional_notes}</div>
+          </div>
+        )}
       </Section>
 
       {/* Persons */}

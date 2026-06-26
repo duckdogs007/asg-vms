@@ -126,21 +126,6 @@ export default function Home() {
             color="gray"
           />
 
-          {isAdmin && (
-            <ModuleCard
-              href="/admin/system"
-              icon="⚙️"
-              title="Admin Dashboard"
-              desc="Manage communities, users, notification recipients, and system settings."
-              color="indigo"
-            />
-          )}
-
-        </div>
-
-        {/* MODULES — secondary */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
-
           <ModuleCard
             href="/vms/property"
             icon="🏢"
@@ -148,6 +133,11 @@ export default function Home() {
             desc="Rent roll, lease violations, unit activity, community contacts, and registered vehicles."
             color="indigo"
           />
+
+        </div>
+
+        {/* MODULES — secondary */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-3">
 
           <ModuleCard
             href="/alerts"
@@ -157,6 +147,16 @@ export default function Home() {
             color="red"
             badge={stats.openAlerts > 0 ? `${stats.openAlerts} open` : undefined}
           />
+
+          {isAdmin && (
+            <ModuleCard
+              href="/admin/system"
+              icon="⚙️"
+              title="Admin Dashboard"
+              desc="Manage communities, users, notification recipients, and system settings."
+              color="indigo"
+            />
+          )}
 
         </div>
 

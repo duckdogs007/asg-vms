@@ -17,6 +17,15 @@
 
 ---
 
+## Recently completed (June 26, 2026)
+
+- [x] **#53** — VMS Search: added BOLOs, parking violations, vehicle FI logs, denied entries; plate `90572F` now returns results
+- [x] **#47** — Report detail page: "Summary — Highlights / Followup" AI box auto-generates on open (Gemini, `/api/ai/summary`)
+- [x] **#49** — Reports page: Gate Checklists + Maintenance added to Recent Submissions, Reports by Community counts + detail rows, and detail page (`/vms/reports/gate-checklist/[id]`)
+- [x] **#48** — Homepage tab order rotated: Property Hub now in dashboards row alongside User Dashboard; Alerts + Admin moved to secondary row
+
+---
+
 ## Open items
 
 #### 39. DAR (Daily Activity Report) — add attachments upload
@@ -45,7 +54,7 @@ Single-person add already exists and works → watchlist writes go through a **s
 - Context: watchlist RLS shows INSERT/UPDATE/DELETE = `is_admin()`, reads = authenticated — but writes evidently bypass RLS via service role, so RLS is a backstop, not the live gate.
 - **Recommendation:** keep DELETE/overwrite admin-only in the app; add explicit admin check on CSV-import endpoint; exclude guest on single-add endpoint.
 
-#### 47. Officer reports — "Summary — Highlights / Followup" at top of report
+#### ~~47. Officer reports — "Summary — Highlights / Followup" at top of report~~ ✓ Done June 26
 For officer reports (Daily Logs, Incident Reports, etc.), generate a short summary headed **"Summary — Highlights / Followup"** displayed at the **TOP of the report, above the Narrative box**.
 
 - **What it surfaces:** not a recap — flags items needing attention: unresolved issues, safety concerns, required follow-up actions, repeat/pattern flags.
@@ -55,7 +64,7 @@ For officer reports (Daily Logs, Incident Reports, etc.), generate a short summa
 - **High value on review side:** supervisor sees concern summary first (ties to items 29/40/42 review flow).
 - Consider: generate on submit/view; whether stored on record or on demand; PII sent to model.
 
-#### 48. Homepage tab order — rotate Property Hub / Alerts / Admin
+#### ~~48. Homepage tab order — rotate Property Hub / Alerts / Admin~~ ✓ Done June 26
 Reorder the homepage nav tabs. Leading tabs stay as-is; rotate the Alerts ↔ Property Hub ↔ Admin trio:
 
 - **Property Hub** → move to where **Admin Dashboard** currently is.
@@ -63,7 +72,7 @@ Reorder the homepage nav tabs. Leading tabs stay as-is; rotate the Alerts ↔ Pr
 - **Admin Dashboard** → move to where **Alerts** currently is.
 - Confirm against live current order first — recent tab changes (items 23, 32) may have shifted positions.
 
-#### 49. Reports page — ensure ALL report types appear and are linkable
+#### ~~49. Reports page — ensure ALL report types appear and are linkable~~ ✓ Done June 26
 Not every report type is surfacing in the Reports views. Known gap: **Gate Checklist logs** don't appear.
 
 - **Audit every report type:** Incident, Daily Log/DAR, Field Contact, Vehicle FI, Parking Violation, Property Maintenance, Gate Checklist, and any others — confirm each shows in both **View Reports** and **Reports-by-location summary**.
@@ -100,7 +109,7 @@ St Luke Daily Logs should include standard items on **every** report — Yes/No 
 - **Reporting:** capture answers as structured fields so a "No" can be surfaced/flagged — fits item 50 and item 47.
 - Confirm the full final list of items with the site before building.
 
-#### 53. VMS page Search — search ALL entry points (vehicle/plate gap)
+#### ~~53. VMS page Search — search ALL entry points (vehicle/plate gap)~~ ✓ Done June 26
 The VMS page Search window isn't searching every data source. **Bug:** searching plate `90572F` returns empty even though it's listed on the BOLO page.
 
 - **Audit global search** to cover every place a vehicle/plate (and person) can appear: BOLOs, watchlist, parking violations, vehicle FI logs, visitor check-ins, registered vehicles, denied entries, incident reports.
