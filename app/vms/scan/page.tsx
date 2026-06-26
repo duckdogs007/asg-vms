@@ -128,14 +128,26 @@ export default function ScanID(){
       }
       const selectedRes = residents.find(r => r.id === residentId)
       const { error: logErr } = await supabase.from("visitor_logs").insert({
-        visitor_id:    visitorId,
-        first_name:    person.first_name,
-        last_name:     person.last_name,
-        person_type:   personType,
-        community_id:  communityId || null,
-        unit_number:   unitId || null,
-        resident_name: selectedRes?.name || null,
-        created_at:    new Date().toISOString(),
+        visitor_id:     visitorId,
+        first_name:     person.first_name,
+        last_name:      person.last_name,
+        middle_name:    person.middle_name || null,
+        person_type:    personType,
+        community_id:   communityId || null,
+        unit_number:    unitId || null,
+        resident_name:  selectedRes?.name || null,
+        // DL scan fields — full AAMVA record
+        dl_scanned:     true,
+        dob:            parseDOBToISO(person.dob),
+        oln:            person.oln || null,
+        address:        person.address || null,
+        city:           person.city || null,
+        state_of_issue: person.state || null,
+        zip:            person.zip || null,
+        sex:            person.sex || null,
+        height:         person.height || null,
+        eye_color:      person.eye_color || null,
+        created_at:     new Date().toISOString(),
       })
       if (logErr) { setSaveError("Save failed: " + logErr.message); return }
       // Brief confirmation, then reset for next scan
@@ -501,12 +513,19 @@ export default function ScanID(){
           </button>
 
           <div className="mt-4 pt-3 border-t border-gray-100">
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">License Data</div>
+            <div className="flex items-center justify-between mb-2">
+              <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">License Data</div>
+              <span className="text-[10px] bg-green-100 text-green-700 font-semibold px-2 py-0.5 rounded-full">
+                Full record stored
+              </span>
+            </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-800">
-              <div><span className="text-gray-500">Name:</span> {displayName || "—"}</div>
+              <div><span className="text-gray-500">Name:</span> {[person.first_name, person.middle_name, person.last_name].filter(Boolean).join(" ") || "—"}</div>
               <div><span className="text-gray-500">DOB:</span> {formatDOB(person.dob) || "—"}</div>
-              <div><span className="text-gray-500">License:</span> {person.oln || "—"}</div>
+              <div><span className="text-gray-500">License #:</span> {person.oln || "—"}</div>
               <div><span className="text-gray-500">Sex:</span> {person.sex || "—"}</div>
+              {person.height   && <div><span className="text-gray-500">Height:</span> {person.height}</div>}
+              {person.eye_color && <div><span className="text-gray-500">Eyes:</span> {person.eye_color}</div>}
               {(person.address || person.city || person.state || person.zip) && (
                 <div className="sm:col-span-2">
                   <span className="text-gray-500">Address:</span>{" "}
@@ -527,10 +546,12 @@ export default function ScanID(){
         <div className="mt-4 max-w-xl bg-white border border-gray-200 rounded-xl p-4">
           <div className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-2">License Data</div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1 text-sm text-gray-800">
-            <div><span className="text-gray-500">Name:</span> {displayName || "—"}</div>
+            <div><span className="text-gray-500">Name:</span> {[person.first_name, person.middle_name, person.last_name].filter(Boolean).join(" ") || "—"}</div>
             <div><span className="text-gray-500">DOB:</span> {formatDOB(person.dob) || "—"}</div>
-            <div><span className="text-gray-500">License:</span> {person.oln || "—"}</div>
+            <div><span className="text-gray-500">License #:</span> {person.oln || "—"}</div>
             <div><span className="text-gray-500">Sex:</span> {person.sex || "—"}</div>
+            {person.height    && <div><span className="text-gray-500">Height:</span> {person.height}</div>}
+            {person.eye_color && <div><span className="text-gray-500">Eyes:</span> {person.eye_color}</div>}
             {(person.address || person.city || person.state || person.zip) && (
               <div className="sm:col-span-2">
                 <span className="text-gray-500">Address:</span>{" "}

@@ -13,7 +13,7 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| 19 | Visitor Check-In — DL scanning (handheld wedge scanner) | AAMVA PDF417 parse → auto-fill check-in form |
+| 46 | Watchlist — confirm app-layer gating | single-add vs CSV import; code audit |
 
 ---
 
@@ -23,6 +23,7 @@
 - [x] **#47** — Report detail page: "Summary — Highlights / Followup" AI box auto-generates on open (Gemini, `/api/ai/summary`)
 - [x] **#49** — Reports page: Gate Checklists + Maintenance added to Recent Submissions, Reports by Community counts + detail rows, and detail page (`/vms/reports/gate-checklist/[id]`)
 - [x] **#48** — Homepage tab order rotated: Property Hub now in dashboards row alongside User Dashboard; Alerts + Admin moved to secondary row
+- [x] **#19** — DL scanning: full AAMVA record now stored to visitor_logs (middle_name, dob, oln, address, city, state_of_issue, zip, sex, height, eye_color, dl_scanned); migration `2026-06-26_19_dl_scan_fields.sql` applied to prod; visitor_logs UPDATE tightened to admin-only; anon revoked
 
 ---
 
