@@ -388,7 +388,7 @@ export default function AlertsPage() {
                     <span className="font-semibold text-gray-900">
                       {TYPE_LABEL[a.type] || a.type}
                     </span>
-                    {a.payload?.Community && (
+                    {!!a.payload?.Community && (
                       <span className="text-sm text-gray-600">📍 {String(a.payload.Community)}</span>
                     )}
                     {!a.ack_at && a.status === "sent" && (
