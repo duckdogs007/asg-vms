@@ -571,6 +571,7 @@ export default function UserDashboard() {
   }
 
   async function handleWatchlistCSV(file: File) {
+    if (!isAdmin) { setWlError("Admin access required."); return }
     const text = await file.text()
     for (let row of text.split("\n").slice(1)) {
       const [first_name, last_name, dob, reason] = row.split(",")
@@ -1704,7 +1705,7 @@ export default function UserDashboard() {
                   {showAddWatchlist ? "✕ Cancel" : "+ Add Person"}
                 </button>
               )}
-              {!isGuest && (
+              {isAdmin && (
                 <label className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-lg hover:bg-gray-200 cursor-pointer">
                   ⬆ Import CSV
                   <input type="file" accept=".csv" className="hidden"

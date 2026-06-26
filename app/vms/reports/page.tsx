@@ -145,6 +145,11 @@ interface SubmissionRow {
   summary: string
 }
 
+interface RunnerRow {
+  id: string; typeKey: string; typeLabel: string; color: string
+  date: string; summary: string; officer: string; slug: string
+}
+
 const REPORT_TYPES = [
   { key: "incidents",      label: "Incident Reports",   color: "red",     table: "incident_reports",             dateCol: "date"       },
   { key: "fieldContacts",  label: "Field Contacts",     color: "purple",  table: "contact_history",              dateCol: "created_at" },
@@ -155,6 +160,26 @@ const REPORT_TYPES = [
   { key: "gateChecklists", label: "Gate Checklists",   color: "slate",   table: "gate_checklists",              dateCol: "checklist_date" },
 ] as const
 type RptTypeKey = typeof REPORT_TYPES[number]["key"]
+
+const RUNNER_SLUG: Record<string, string> = {
+  incidents:      "incident",
+  fieldContacts:  "field-contact",
+  vehicleFIs:     "vehicle-fi",
+  parking:        "parking",
+  dailyLogs:      "daily-log",
+  maintenance:    "maintenance",
+  gateChecklists: "gate-checklist",
+}
+
+const RUNNER_BADGE_KEY: Record<string, string> = {
+  incidents:      "incident",
+  fieldContacts:  "fieldContact",
+  vehicleFIs:     "vehicleFI",
+  parking:        "parking",
+  dailyLogs:      "dailyLog",
+  maintenance:    "maintenance",
+  gateChecklists: "gateChecklist",
+}
 
 const SUB_BADGE: Record<string, string> = {
   // camelCase keys — Recent Submissions (s.typeKey)
@@ -205,6 +230,11 @@ export default function ReportsPage() {
   const [rptOpenDetail,    setRptOpenDetail]    = useState<RptTypeKey | null>(null)
   const [rptDetailRows,    setRptDetailRows]    = useState<any[]>([])
   const [rptDetailLoading, setRptDetailLoading] = useState(false)
+
+  const [runnerType,    setRunnerType]    = useState("all")
+  const [runnerRows,    setRunnerRows]    = useState<RunnerRow[]>([])
+  const [runnerLoading, setRunnerLoading] = useState(false)
+  const [runnerRan,     setRunnerRan]     = useState(false)
 
   const [stats, setStats] = useState<Stats>(EMPTY_STATS)
   // Parking violations for the selected community + date range (filtered by the
@@ -607,6 +637,78 @@ export default function ReportsPage() {
       return u
     })
     setDeleting(null)
+  }
+
+  async function runReport() {
+    if (!rptCommunity) return
+    setRunnerLoading(true); setRunnerRan(false); setRunnerRows([])
+    const typesToRun = runnerType === "all" ? REPORT_TYPES : REPORT_TYPES.filter(rt => rt.key === runnerType)
+    const results = await Promise.all(typesToRun.map(async rt => {
+      let q = (supabase.from(rt.table) as any).select("*").eq("community_id", rptCommunity)
+      if (rt.dateCol === "created_at") q = q.gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59")
+      else q = q.gte(rt.dateCol, dateFrom).lte(rt.dateCol, dateTo)
+      const { data } = await q.order(rt.dateCol, { ascending: false }).limit(500)
+      return { rt, rows: (data || []) as any[] }
+    }))
+    const rows: RunnerRow[] = []
+    for (const { rt, rows: data } of results) {
+      for (const r of data) {
+        let date = "", summary = "", officer = ""
+        if (rt.key === "incidents") {
+          date = r.date || ""; officer = r.issued_by || r.officer_name || "—"
+          summary = [r.incident_type, r.description?.substring(0, 120)].filter(Boolean).join(" · ")
+        } else if (rt.key === "fieldContacts") {
+          date = r.created_at ? new Date(utc(r.created_at)).toLocaleDateString("en-CA") : ""; officer = r.officer_name || "—"
+          summary = r.contact_name || r.subject_name || "—"
+        } else if (rt.key === "vehicleFIs") {
+          date = r.date || ""; officer = r.officer_name || "—"
+          summary = [displayPlate(r.plate), [r.year, r.color, r.make, r.model].filter(Boolean).join(" ")].filter(Boolean).join(" · ")
+        } else if (rt.key === "parking") {
+          date = r.date || ""; officer = r.officer_name || "—"
+          summary = [r.violation_type, displayPlate(r.plate), r.location].filter(Boolean).join(" · ")
+        } else if (rt.key === "dailyLogs") {
+          date = r.date || ""; officer = r.officer_name || "—"
+          summary = [r.shift, r.log_type, r.narrative?.substring(0, 120)].filter(Boolean).join(" · ")
+        } else if (rt.key === "maintenance") {
+          date = r.created_at ? new Date(utc(r.created_at)).toLocaleDateString("en-CA") : ""; officer = r.officer_name || "—"
+          summary = [r.issue_type, r.description?.substring(0, 120)].filter(Boolean).join(" · ")
+        } else if (rt.key === "gateChecklists") {
+          date = r.checklist_date || (r.created_at ? new Date(utc(r.created_at)).toLocaleDateString("en-CA") : ""); officer = r.guard_name || "—"
+          summary = [r.shift, r.guard_name ? `Guard: ${r.guard_name}` : null].filter(Boolean).join(" · ")
+        }
+        rows.push({ id: r.id, typeKey: rt.key, typeLabel: rt.label, color: rt.color,
+          date, summary: summary || "—", officer, slug: RUNNER_SLUG[rt.key] || rt.key })
+      }
+    }
+    rows.sort((a, b) => b.date.localeCompare(a.date))
+    setRunnerRows(rows); setRunnerLoading(false); setRunnerRan(true)
+  }
+
+  function exportRunnerCSV() {
+    const communityLabel = communities.find(c => c.id === rptCommunity)?.name || ""
+    const header = ["Date", "Type", "Details", "Officer", "Community", "ID"]
+    const data = runnerRows.map(r => [r.date, r.typeLabel, r.summary, r.officer, communityLabel, r.id])
+    const csv = [header, ...data].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a"); a.href = url
+    a.download = `report-runner-${communityLabel.replace(/\s+/g, "-").toLowerCase()}-${dateFrom}-to-${dateTo}.csv`
+    a.click(); URL.revokeObjectURL(url)
+  }
+
+  function printRunnerReport() {
+    const communityLabel = communities.find(c => c.id === rptCommunity)?.name || ""
+    const typeLabel = runnerType === "all" ? "All Report Types" : (REPORT_TYPES.find(rt => rt.key === runnerType)?.label || runnerType)
+    const html = `<!DOCTYPE html><html><head><title>Report Summary — ${communityLabel}</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px}h1{font-size:16px;margin-bottom:4px}.meta{color:#666;font-size:11px;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;text-align:left;padding:6px 8px;font-size:11px;border-bottom:2px solid #d1d5db}td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:11px}.badge{font-size:10px;font-weight:bold;text-transform:uppercase;white-space:nowrap}</style>
+</head><body>
+<h1>Report Summary — ${communityLabel}</h1>
+<div class="meta">${typeLabel} · ${dateFrom} to ${dateTo} · ${runnerRows.length} record${runnerRows.length !== 1 ? "s" : ""} · Printed ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>
+<table><thead><tr><th>Date</th><th>Type</th><th>Details</th><th>Officer</th></tr></thead><tbody>
+${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.typeLabel}</td><td>${r.summary}</td><td>${r.officer}</td></tr>`).join("\n")}
+</tbody></table></body></html>`
+    const w = window.open("", "_blank")
+    if (w) { w.document.write(html); w.document.close(); w.print() }
   }
 
   function exportCSV() {
@@ -1152,6 +1254,94 @@ export default function ReportsPage() {
                     </div>
                   )
                 })()}
+              </>
+            )
+          )}
+        </Section>
+      )}
+
+      {/* ── REPORT RUNNER ── */}
+      {communities.length > 0 && (
+        <Section label="Report Runner">
+          <div className="text-xs text-gray-400 mb-4">
+            Select a community and report type, then run to see all matching reports for the selected date range above.
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-wrap gap-3 items-end mb-4">
+            <div className="flex flex-col gap-1 w-64">
+              <label className="text-xs font-semibold text-gray-500">Community</label>
+              <select value={rptCommunity} onChange={e => { setRptCommunity(e.target.value); setRunnerRan(false) }}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+                <option value="">Select a community…</option>
+                {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1 w-52">
+              <label className="text-xs font-semibold text-gray-500">Report Type</label>
+              <select value={runnerType} onChange={e => { setRunnerType(e.target.value); setRunnerRan(false) }}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+                <option value="all">All types</option>
+                {REPORT_TYPES.map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
+              </select>
+            </div>
+            <button
+              onClick={runReport}
+              disabled={!rptCommunity || runnerLoading}
+              className="px-5 py-2 bg-blue-700 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer disabled:opacity-40"
+            >
+              {runnerLoading ? "Running…" : "▶ Run Report"}
+            </button>
+            {runnerRan && runnerRows.length > 0 && (
+              <>
+                <button onClick={exportRunnerCSV}
+                  className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 border-none cursor-pointer">
+                  ⬇ Export CSV
+                </button>
+                <button onClick={printRunnerReport}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 cursor-pointer">
+                  🖨 Print
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Results */}
+          {runnerLoading && <div className="text-gray-400 text-sm animate-pulse py-6">Running report…</div>}
+
+          {runnerRan && !runnerLoading && (
+            runnerRows.length === 0 ? (
+              <div className="text-gray-400 text-sm py-8 text-center bg-white border border-gray-200 rounded-xl">
+                No reports found for this community + date range.
+              </div>
+            ) : (
+              <>
+                <div className="text-xs text-gray-500 mb-2 font-semibold">
+                  {runnerRows.length} record{runnerRows.length !== 1 ? "s" : ""} ·&nbsp;
+                  {communities.find(c => c.id === rptCommunity)?.name} ·&nbsp;
+                  {dateFrom} to {dateTo}
+                </div>
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  {runnerRows.map((r, i) => {
+                    return (
+                      <div key={`${r.typeKey}:${r.id}`}
+                        className={`flex items-center gap-3 px-4 py-3 ${i < runnerRows.length - 1 ? "border-b border-gray-100" : ""}`}>
+                        <div className="text-xs text-gray-400 w-20 flex-shrink-0 font-mono">{r.date || "—"}</div>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${SUB_BADGE[RUNNER_BADGE_KEY[r.typeKey]] || "bg-gray-100 text-gray-700"}`}>
+                          {r.typeLabel}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-gray-800 truncate">{r.summary}</div>
+                          <div className="text-xs text-gray-400 truncate">{r.officer}</div>
+                        </div>
+                        <Link href={`/vms/reports/${r.slug}/${r.id}`}
+                          className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium flex-shrink-0">
+                          View →
+                        </Link>
+                      </div>
+                    )
+                  })}
+                </div>
               </>
             )
           )}
