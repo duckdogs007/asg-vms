@@ -156,7 +156,9 @@ export default function UserDashboard() {
   const [dailyWeather,   setDailyWeather]   = useState("")
   const [dailyNarrative, setDailyNarrative] = useState("")
   const [dailyNotes,     setDailyNotes]     = useState("")
-  const [dailyPhotoFiles, setDailyPhotoFiles] = useState<File[]>([])
+  const [dailyPhotoFiles,  setDailyPhotoFiles]  = useState<File[]>([])
+  const [shiftTemplate,    setShiftTemplate]    = useState<{ id: string; question: string; bad_answer: string }[]>([])
+  const [checklistAnswers, setChecklistAnswers] = useState<{ id: string; question: string; bad_answer: string; answer: string; explanation: string }[]>([])
 
   // Field contact
   const [ctFirstName,   setCtFirstName]   = useState("")
@@ -345,6 +347,21 @@ export default function UserDashboard() {
     if (reportTab === "parking"     && !pvNotes)          setPvNotes(ts)
     if (reportTab === "maintenance" && !mntDesc)          setMntDesc(ts)
   }, [reportTab]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Load shift verification checklist template whenever the daily log community changes
+  useEffect(() => {
+    if (!dailyCommunity) { setShiftTemplate([]); setChecklistAnswers([]); return }
+    supabase.from("shift_checklist_templates")
+      .select("id,question,bad_answer,item_order")
+      .eq("community_id", dailyCommunity)
+      .eq("active", true)
+      .order("item_order")
+      .then(({ data }) => {
+        const items = (data || []) as { id: string; question: string; bad_answer: string }[]
+        setShiftTemplate(items)
+        setChecklistAnswers(items.map(i => ({ id: i.id, question: i.question, bad_answer: i.bad_answer, answer: "", explanation: "" })))
+      })
+  }, [dailyCommunity]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadOfficersOnDuty() {
     setOfficersLoading(true); setOfficersError("")
@@ -621,11 +638,15 @@ export default function UserDashboard() {
         photoUrls.push(publicUrl)
       }
     }
+    const shiftChecklistPayload = checklistAnswers.length > 0
+      ? checklistAnswers.map(a => ({ question: a.question, answer: a.answer, explanation: a.explanation || null }))
+      : null
     const { data: ins, error } = await supabase.from("officer_daily_logs").insert({
       date: dailyDate, shift: dailyShift, community_id: dailyCommunity,
       officer_name: dailyOfficer, weather: dailyWeather,
       narrative: dailyNarrative, notes: dailyNotes,
       photo_urls: photoUrls.length ? photoUrls : null,
+      shift_checklist: shiftChecklistPayload,
       created_at: new Date().toISOString()
     }).select("id").single()
     setReportSaving(false)
@@ -633,6 +654,7 @@ export default function UserDashboard() {
     if (ins?.id) enqueueReport("daily_log", ins.id, dailyCommunity, dailyOfficer || officerName, `Daily Log — ${dailyDate}`)
     setReportMessage("✅ Daily log submitted — pending supervisor review.")
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather(""); setDailyPhotoFiles([])
+    setChecklistAnswers(prev => prev.map(a => ({ ...a, answer: "", explanation: "" })))
     logActivity("created", "Daily Log", "", `Daily log submitted — ${dailyDate}`)
   }
 
@@ -1966,6 +1988,46 @@ export default function UserDashboard() {
                   placeholder="Shift handoff notes, maintenance issues, follow-ups..."
                   className={textareaCls} />
               </div>
+              {/* SHIFT VERIFICATION */}
+              {shiftTemplate.length > 0 && (
+                <div className="mb-5 border border-blue-200 rounded-xl bg-blue-50 p-4">
+                  <div className="text-sm font-bold text-blue-800 mb-3">Shift Verification</div>
+                  <div className="space-y-4">
+                    {checklistAnswers.map((item, idx) => (
+                      <div key={item.id}>
+                        <div className="text-sm text-gray-800 mb-2">{item.question}</div>
+                        <div className="flex gap-2">
+                          {(["yes", "no"] as const).map(opt => (
+                            <button key={opt} type="button"
+                              onClick={() => setChecklistAnswers(prev => prev.map((a, i) =>
+                                i === idx ? { ...a, answer: opt, explanation: opt !== item.bad_answer ? "" : a.explanation } : a
+                              ))}
+                              className={`px-5 py-1.5 text-sm font-semibold rounded-lg border-none cursor-pointer transition-colors ${
+                                item.answer === opt
+                                  ? opt === item.bad_answer ? "bg-red-600 text-white" : "bg-green-700 text-white"
+                                  : "bg-white text-gray-600 border border-gray-300 hover:bg-gray-50"
+                              }`}>
+                              {opt === "yes" ? "Yes" : "No"}
+                            </button>
+                          ))}
+                        </div>
+                        {item.answer === item.bad_answer && (
+                          <textarea
+                            value={item.explanation}
+                            onChange={e => setChecklistAnswers(prev => prev.map((a, i) =>
+                              i === idx ? { ...a, explanation: e.target.value } : a
+                            ))}
+                            placeholder="Please explain…"
+                            rows={2}
+                            className="mt-2 w-full px-3 py-2 border border-red-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-red-400 bg-white resize-none"
+                          />
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="mb-5">
                 <label className={labelCls}>Photos / Attachments</label>
                 <input type="file" accept="image/*" multiple

@@ -1111,6 +1111,22 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
         )}
       </Section>
 
+      {/* ── MONTHLY REPORTS ── */}
+      {communities.length > 0 && (
+        <Section label="Monthly Reports">
+          <div className="flex flex-wrap gap-3">
+            <Link href="/vms/reports/gate-checklist-report"
+              className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-slate-400 transition-all group">
+              <span className="text-xl">📋</span>
+              <div>
+                <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700">Gate Checklist Monthly Report</div>
+                <div className="text-xs text-gray-400">Full gate-by-gate detail by location · Print / PDF</div>
+              </div>
+            </Link>
+          </div>
+        </Section>
+      )}
+
       {/* ── REPORTS BY COMMUNITY ── */}
       {communities.length > 0 && (
         <Section label="Reports by Community">

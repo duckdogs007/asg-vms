@@ -397,6 +397,30 @@ export default function ReportDetailPage() {
         </Section>
       )}
 
+      {/* Shift Verification (#52) */}
+      {Array.isArray(r.shift_checklist) && r.shift_checklist.length > 0 && (
+        <Section title="Shift Verification">
+          <div className="space-y-3">
+            {(r.shift_checklist as { question: string; answer: string; explanation?: string }[]).map((item, idx) => (
+              <div key={idx} className="flex flex-col gap-1">
+                <div className="text-sm text-gray-800">{item.question}</div>
+                <div className="flex items-center gap-3 flex-wrap">
+                  <span className={`inline-flex items-center px-2.5 py-1 rounded-lg text-xs font-bold ${
+                    !item.answer        ? "bg-gray-100 text-gray-500" :
+                    item.answer === "yes" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                  }`}>
+                    {!item.answer ? "—" : item.answer === "yes" ? "✓ Yes" : "✗ No"}
+                  </span>
+                  {item.explanation && (
+                    <span className="text-xs text-gray-600 italic">{item.explanation}</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {/* Photos */}
       {photos.length > 0 && (
         <Section title={`Photos (${photos.length})`}>

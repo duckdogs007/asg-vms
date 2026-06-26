@@ -13,12 +13,14 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| 52 | Daily Logs — shift-verification checklist | St Luke; confirm final item list before building |
+| — | Gate Checklist Monthly Report | by location; summary counts + full detail; print/PDF |
 
 ---
 
 ## Recently completed (June 26, 2026)
 
+- [x] **#52** — Daily Logs shift-verification checklist: `shift_checklist_templates` table (per-community, configurable, Yes/No + bad-answer explanation); `shift_checklist jsonb` column on `officer_daily_logs`; Shift Verification section in Daily Log form loads template for selected community; answers rendered on report detail page; migration applied to prod + seeded 3 St Luke items
+- [x] **Gate Checklist Monthly Report** — `/vms/reports/gate-checklist-report`: location + month picker → summary banner (shifts/officers/gate checks/flagged items) + per-checklist gate table (Op V/P, Locks V/P, Dmg V/P) with flag highlighting; Print/PDF generates formatted HTML document; linked from Reports & Analytics "Monthly Reports" section
 - [x] **#51** — Unit History: Bldg/Apt + HOH now prominent header on each card; type badge + timestamp demoted to secondary; every entry links to `/vms/reports/[type]/[id]` via `source_table` → slug mapping (incidents, parking, vehicle FI, field contacts, daily logs, maintenance, gate checklists)
 - [x] **#46** — Watchlist gating: CSV import now admin-only (UI `isAdmin` gate + explicit function guard); single-add INSERT policy relaxed to non-guest authenticated (migration `2026-06-26_46_watchlist_insert_policy.sql` applied to prod); UPDATE/DELETE remain admin-only
 - [x] **#50** — Report Runner on Reports & Analytics: community + type filter + date range → combined list of all matching reports with View links, Export CSV, and Print (opens formatted print window)
@@ -32,18 +34,6 @@
 ---
 
 ## Open items
-
-#### 52. Daily Logs — standard shift-verification items (St Luke; per-community)
-St Luke Daily Logs should include standard items on **every** report — Yes/No with required explanation if "No".
-
-- **Items so far (more to come):**
-  - Was a gate checklist completed during your shift? — Yes/No (if No, explain)
-  - Were the site radios received in good condition? — Yes/No (if No, explain)
-  - Were the site keys in good condition / accounted for? — Yes/No (if No, explain)
-- **Pattern:** Yes/No toggle + conditional free-text that appears/is required when "No".
-- **Per-community / configurable:** St Luke-specific; model as a configurable checklist template per community (lookup/template table so items can be added/edited without code).
-- **Reporting:** capture answers as structured fields so a "No" can be surfaced/flagged — fits item 50 and item 47.
-- Confirm the full final list of items with the site before building.
 
 ---
 
