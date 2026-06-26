@@ -13,12 +13,13 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| 51 | Unit History | make Bldg/HOH prominent header, entries linkable, tie to #50 |
+| 52 | Daily Logs — shift-verification checklist | St Luke; confirm final item list before building |
 
 ---
 
 ## Recently completed (June 26, 2026)
 
+- [x] **#51** — Unit History: Bldg/Apt + HOH now prominent header on each card; type badge + timestamp demoted to secondary; every entry links to `/vms/reports/[type]/[id]` via `source_table` → slug mapping (incidents, parking, vehicle FI, field contacts, daily logs, maintenance, gate checklists)
 - [x] **#46** — Watchlist gating: CSV import now admin-only (UI `isAdmin` gate + explicit function guard); single-add INSERT policy relaxed to non-guest authenticated (migration `2026-06-26_46_watchlist_insert_policy.sql` applied to prod); UPDATE/DELETE remain admin-only
 - [x] **#50** — Report Runner on Reports & Analytics: community + type filter + date range → combined list of all matching reports with View links, Export CSV, and Print (opens formatted print window)
 
@@ -31,14 +32,6 @@
 ---
 
 ## Open items
-
-#### 51. Unit History — emphasize address + name, make entries linkable, tie into reporting
-The Unit History list buries Building #/Unit # in event details. Raise emphasis and make entries drill-through.
-
-- **Emphasis:** make **Building #/Apartment #** and **HOH name** the prominent header of each entry; event type/date become secondary.
-- **Linkable:** each entry hyperlinks to the full detail of that event/report (same clickable-row → detail build as items 40/42).
-- **Tie into reporting:** from a unit's history, run/filter the report summary for that location (item 50).
-- Cross-refs: item 25 (`unit_activity`), items 40/42, item 50.
 
 #### 52. Daily Logs — standard shift-verification items (St Luke; per-community)
 St Luke Daily Logs should include standard items on **every** report — Yes/No with required explanation if "No".

@@ -1,13 +1,19 @@
 "use client"
 
-// Unit Activity History (#25): a per-unit cross-record timeline that reads the
-// `public.unit_activity` database view. The view unions incident_reports,
-// parking_violations, vehicle_fi_logs and visitor_logs into a single
-// chronological feed, each event attributed to the Head of Household at the
-// time it occurred. Self-contained: drives its own community/building/apartment
-// /date filters off the shared "asg-current-community-id" localStorage key.
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
+
+// source_table → URL slug for /vms/reports/[type]/[id]
+const SOURCE_SLUG: Record<string, string> = {
+  incident_reports:             "incident",
+  parking_violations:           "parking",
+  vehicle_fi_logs:              "vehicle-fi",
+  contact_history:              "field-contact",
+  officer_daily_logs:           "daily-log",
+  property_maintenance_reports: "maintenance",
+  gate_checklists:              "gate-checklist",
+}
 
 const inputCls = "w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
 const labelCls = "block text-xs font-medium text-gray-600 mb-1"
@@ -218,37 +224,67 @@ export default function UnitActivityTab() {
                     r.asg_report_no   ? { label: "ASG",     val: r.asg_report_no }   : null,
                   ].filter(Boolean) as { label: string; val: string }[]
 
-                  const loc = [r.building, r.apartment].filter(Boolean).join(" / ")
+                  const bldg = r.building  ? `Bldg ${r.building}`  : null
+                  const apt  = r.apartment ? `Apt ${r.apartment}`  : null
+                  const loc  = [bldg, apt].filter(Boolean).join(" · ")
+                  const slug = SOURCE_SLUG[r.source_table]
 
-                  return (
+                  const card = (
                     <div key={`${r.source_table}-${r.source_id}`}
-                      className="bg-white border border-gray-300 rounded-md p-3 flex flex-col gap-1.5">
+                      className={`bg-white border border-gray-200 rounded-xl p-4 flex flex-col gap-2 ${slug ? "hover:shadow-sm transition-shadow" : ""}`}>
+
+                      {/* Header row: Bldg/HOH prominent + View link */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <div className="text-sm font-bold text-gray-900 leading-tight">
+                            {loc || <span className="text-gray-400 font-normal">Location not recorded</span>}
+                          </div>
+                          {r.hoh_name && (
+                            <div className="text-sm font-semibold text-gray-700 mt-0.5">{r.hoh_name}</div>
+                          )}
+                        </div>
+                        {slug && r.source_id && (
+                          <Link
+                            href={`/vms/reports/${slug}/${r.source_id}`}
+                            className="text-xs text-blue-700 hover:underline font-semibold whitespace-nowrap flex-shrink-0 mt-0.5"
+                            onClick={e => e.stopPropagation()}
+                          >
+                            View →
+                          </Link>
+                        )}
+                      </div>
+
+                      {/* Type badge + time (secondary) */}
                       <div className="flex items-center flex-wrap gap-2">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-md text-xs font-semibold ${TYPE_BADGE[r.record_type] || "bg-gray-100 text-gray-700 border border-gray-200"}`}>
                           {r.record_type}
                         </span>
-                        <span className="text-xs text-gray-500">{fmtDateTime(r.event_at)}</span>
-                        {loc && <span className="text-xs text-gray-600 font-medium">{loc}</span>}
+                        <span className="text-xs text-gray-400">{fmtDateTime(r.event_at)}</span>
                         {r.record_source && r.record_source !== "officer" && (
-                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide bg-gray-100 text-gray-600 border border-gray-200">
+                          <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wide bg-gray-100 text-gray-500 border border-gray-200">
                             {r.record_source}
                           </span>
                         )}
                       </div>
 
-                      {r.detail && <div className="text-sm text-gray-800">{r.detail}</div>}
+                      {/* Detail */}
+                      {r.detail && <div className="text-sm text-gray-700">{r.detail}</div>}
 
-                      <div className="flex items-center flex-wrap gap-2">
-                        {r.hoh_name && <span className="text-xs text-gray-600">HOH: {r.hoh_name}</span>}
-                        {refs.map(ref => (
-                          <span key={ref.label}
-                            className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-50 border border-gray-200 text-[11px] font-mono text-gray-700">
-                            {ref.label} {ref.val}
-                          </span>
-                        ))}
-                      </div>
+                      {/* Reference numbers */}
+                      {refs.length > 0 && (
+                        <div className="flex items-center flex-wrap gap-2">
+                          {refs.map(ref => (
+                            <span key={ref.label}
+                              className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-50 border border-gray-200 text-[11px] font-mono text-gray-600">
+                              {ref.label} {ref.val}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )
+
+                  return card
                 })}
               </div>
             </div>
