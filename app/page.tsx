@@ -7,23 +7,13 @@ import { ADMIN_EMAILS } from "@/lib/admin"
 import pkg from "../package.json"
 
 interface Stats {
-  todayTotal: number
-  visitors: number
-  contractors: number
-  deliveries: number
-  employees: number
   watchlistCount: number
-  recentEntry: string
   openAlerts: number
 }
 
 export default function Home() {
 
-  const [stats, setStats] = useState<Stats>({
-    todayTotal: 0, visitors: 0, contractors: 0,
-    deliveries: 0, employees: 0, watchlistCount: 0, recentEntry: "",
-    openAlerts: 0,
-  })
+  const [stats, setStats] = useState<Stats>({ watchlistCount: 0, openAlerts: 0 })
   const [time, setTime] = useState("")
   const [isAdmin, setIsAdmin] = useState(false)
 
@@ -49,39 +39,11 @@ export default function Home() {
   }, [])
 
   async function loadStats() {
-    const today = new Date().toISOString().split("T")[0]
-
-    const { data: logs } = await supabase
-      .from("visitor_logs")
-      .select("person_type, created_at, first_name, last_name")
-      .gte("created_at", today + "T00:00:00")
-      .order("created_at", { ascending: false })
-
-    const { count: watchlistCount } = await supabase
-      .from("watchlist")
-      .select("*", { count: "exact", head: true })
-
-    const { count: openAlerts } = await supabase
-      .from("alerts")
-      .select("*", { count: "exact", head: true })
-      .is("ack_at", null)
-      .eq("status", "sent")
-
-    const entries = logs || []
-    const recent = entries[0]
-      ? `${entries[0].first_name} ${entries[0].last_name}`
-      : "None yet today"
-
-    setStats({
-      todayTotal:     entries.length,
-      visitors:       entries.filter(e => e.person_type?.toLowerCase() === "visitor").length,
-      contractors:    entries.filter(e => e.person_type?.toLowerCase() === "contractor").length,
-      deliveries:     entries.filter(e => e.person_type?.toLowerCase().startsWith("delivery")).length,
-      employees:      entries.filter(e => e.person_type?.toLowerCase() === "employee").length,
-      watchlistCount: watchlistCount || 0,
-      recentEntry:    recent,
-      openAlerts:     openAlerts || 0,
-    })
+    const [{ count: watchlistCount }, { count: openAlerts }] = await Promise.all([
+      supabase.from("watchlist").select("*", { count: "exact", head: true }),
+      supabase.from("alerts").select("*", { count: "exact", head: true }).is("ack_at", null).eq("status", "sent"),
+    ])
+    setStats({ watchlistCount: watchlistCount || 0, openAlerts: openAlerts || 0 })
   }
 
   return (
@@ -116,20 +78,12 @@ export default function Home() {
 
       <div className="max-w-6xl mx-auto px-4 sm:px-10 py-3 sm:py-4">
 
-        {/* STAT CARDS */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-2 mb-3">
-          <StatCard label="Today's Entries"  value={stats.todayTotal}     accent="blue" href="/vms/reports" />
-          <StatCard label="Visitors"         value={stats.visitors}       accent="indigo" />
-          <StatCard label="Contractors"      value={stats.contractors}    accent="violet" />
-          <StatCard label="Deliveries"       value={stats.deliveries}     accent="sky" />
-          <StatCard label="Employees"        value={stats.employees}      accent="emerald" />
-          <StatCard label="Watchlist Active" value={stats.watchlistCount} accent="red" href="/userdash?tab=watchlist" />
-        </div>
-
-        {/* RECENT ENTRY BANNER */}
-        <div className="bg-white border border-gray-200 rounded-lg px-4 py-2 mb-3 flex items-center gap-3">
-          <span className="text-gray-500 text-xs">Most Recent Entry:</span>
-          <span className="text-gray-900 font-semibold text-sm">{stats.recentEntry}</span>
+        {/* STATUS STRIP — watchlist + alerts only */}
+        <div className="flex gap-2 mb-3">
+          <StatCard label="Watchlist Active" value={stats.watchlistCount} accent="red"    href="/userdash?tab=watchlist" />
+          {stats.openAlerts > 0 && (
+            <StatCard label="Open Alerts" value={stats.openAlerts} accent="orange" href="/alerts" />
+          )}
         </div>
 
         {/* NAV MODULES — operational */}
@@ -232,6 +186,7 @@ function StatCard({ label, value, accent, href }: { label: string; value: number
     sky:     "border-sky-300 text-sky-700",
     emerald: "border-emerald-300 text-emerald-700",
     red:     "border-red-300 text-red-700",
+    orange:  "border-orange-300 text-orange-700",
   }
   const card = (
     <div className={`bg-white border rounded-lg px-3 py-2 ${colors[accent]} ${href ? "cursor-pointer hover:shadow-md transition-shadow" : ""}`}>
