@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic"
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
-import { checkIsAdmin } from "@/lib/admin"
+import { checkCanEditPropertyHub } from "@/lib/admin"
 import PostOrdersTab from "@/components/PostOrdersTab"
 import RentRollTab from "@/components/RentRollTab"
 import UnitActivityTab from "@/components/UnitActivityTab"
@@ -39,7 +39,7 @@ export default function PropertyHubPage() {
   const [communities, setCommunities] = useState<Community[]>([])
   const [communityId, setCommunityId] = useState("")
   const [tab,         setTab]         = useState<Tab>("post-orders")
-  const [isAdmin,     setIsAdmin]     = useState(false)
+  const [canEdit,     setCanEdit]     = useState(false)
   const [userEmail,   setUserEmail]   = useState("")
   const [msg,         setMsg]         = useState("")
 
@@ -66,7 +66,7 @@ export default function PropertyHubPage() {
   const community = communities.find(c => c.id === communityId)
 
   useEffect(() => {
-    checkIsAdmin().then(setIsAdmin).catch(() => setIsAdmin(false))
+    checkCanEditPropertyHub().then(setCanEdit).catch(() => setCanEdit(false))
     supabase.auth.getUser().then(({ data: { user } }) => setUserEmail(user?.email || ""))
     supabase.from("communities").select("id, name, address, phone, jurisdiction").order("name").then(({ data }) => {
       const list = (data as Community[]) || []
@@ -216,21 +216,21 @@ export default function PropertyHubPage() {
       </div>
 
       {msg && <div className="mb-4 text-sm px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">{msg}</div>}
-      {!isAdmin && tab !== "post-orders" && tab !== "history" && tab !== "violations" && (
-        <div className="mb-4 text-xs text-gray-500">View-only — contact an admin to make changes.</div>
+      {!canEdit && tab !== "post-orders" && tab !== "history" && tab !== "violations" && (
+        <div className="mb-4 text-xs text-gray-500">View-only — contact an admin or property manager to make changes.</div>
       )}
 
       {/* POST ORDERS */}
-      {tab === "post-orders" && <PostOrdersTab communityId={communityId} isAdmin={isAdmin} />}
+      {tab === "post-orders" && <PostOrdersTab communityId={communityId} canEdit={canEdit} />}
 
       {/* UNIT ACTIVITY HISTORY */}
       {tab === "history" && <UnitActivityTab />}
 
       {/* LEASE VIOLATIONS */}
-      {tab === "violations" && <LeaseViolationsTab communityId={communityId} communityName={community?.name} isAdmin={isAdmin} />}
+      {tab === "violations" && <LeaseViolationsTab communityId={communityId} communityName={community?.name} canEdit={canEdit} />}
 
       {/* RENT ROLL */}
-      {tab === "rentroll" && <RentRollTab communityId={communityId} communityName={community?.name} isAdmin={isAdmin} />}
+      {tab === "rentroll" && <RentRollTab communityId={communityId} communityName={community?.name} canEdit={canEdit} />}
 
       {/* COMMUNITY INFO */}
       {tab === "info" && (
@@ -238,7 +238,7 @@ export default function PropertyHubPage() {
           <div className="bg-white border border-gray-200 rounded-xl p-5 mb-6">
             <div className="flex items-center justify-between mb-3">
               <h3 className="font-bold text-gray-800">{community?.name}</h3>
-              {isAdmin && !editInfo && <button className={btnGhost} onClick={() => setEditInfo(true)}>✏️ Edit</button>}
+              {canEdit && !editInfo && <button className={btnGhost} onClick={() => setEditInfo(true)}>✏️ Edit</button>}
             </div>
             {editInfo ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -274,11 +274,11 @@ export default function PropertyHubPage() {
                   <div className="font-semibold text-gray-900">{c.name || "—"}</div>
                   <div className="text-xs text-gray-500">{[c.phone, c.email].filter(Boolean).join(" · ") || "—"}</div>
                 </div>
-                {isAdmin && <button className={btnDanger} onClick={() => deleteContact(c.id)}>Remove</button>}
+                {canEdit && <button className={btnDanger} onClick={() => deleteContact(c.id)}>Remove</button>}
               </div>
             ))}
           </div>
-          {isAdmin && (
+          {canEdit && (
             <div className="mt-3 grid grid-cols-1 sm:grid-cols-4 gap-2 items-end">
               <input value={newContact.role}  onChange={e => setNewContact(f => ({ ...f, role: e.target.value }))}  placeholder="Role (e.g. Management)" className={inputCls} />
               <input value={newContact.name}  onChange={e => setNewContact(f => ({ ...f, name: e.target.value }))}  placeholder="Name" className={inputCls} />
@@ -295,7 +295,7 @@ export default function PropertyHubPage() {
       {/* DOCUMENTS */}
       {tab === "documents" && (
         <div className="max-w-2xl">
-          {isAdmin && (
+          {canEdit && (
             <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div><label className={labelCls}>Title</label>
                 <input value={docTitle} onChange={e => setDocTitle(e.target.value)} placeholder="e.g. 2026 Lease, House Rules" className={inputCls} /></div>
@@ -318,7 +318,7 @@ export default function PropertyHubPage() {
                   <SignedLink href={d.file_url} bucket="community-docs" className="font-semibold text-blue-700 hover:text-blue-900 truncate block">{d.title || "Untitled"}</SignedLink>
                   <div className="text-xs text-gray-500">{d.doc_type || "—"} · {new Date(d.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</div>
                 </div>
-                {isAdmin && <button className={btnDanger} onClick={() => deleteDoc(d.id)}>Delete</button>}
+                {canEdit && <button className={btnDanger} onClick={() => deleteDoc(d.id)}>Delete</button>}
               </div>
             ))}
           </div>
@@ -331,10 +331,10 @@ export default function PropertyHubPage() {
           <div className="flex items-center gap-2 mb-4 flex-wrap">
             <button className={`${btnGhost} ${vKind === "resident" ? "ring-2 ring-blue-500" : ""}`} onClick={() => { setVKind("resident"); setShowVForm(false) }}>🏠 Resident</button>
             <button className={`${btnGhost} ${vKind === "visitor"  ? "ring-2 ring-blue-500" : ""}`} onClick={() => { setVKind("visitor"); setShowVForm(false) }}>👋 Visitor</button>
-            {isAdmin && <button className={`${btnPrimary} ml-auto`} onClick={startAddVehicle}>+ Add {vKind === "resident" ? "Resident" : "Visitor"} Vehicle</button>}
+            {canEdit && <button className={`${btnPrimary} ml-auto`} onClick={startAddVehicle}>+ Add {vKind === "resident" ? "Resident" : "Visitor"} Vehicle</button>}
           </div>
 
-          {isAdmin && showVForm && (
+          {canEdit && showVForm && (
             <div className="bg-white border border-gray-200 rounded-xl p-4 mb-5">
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div><label className={labelCls}>Plate</label>
@@ -403,7 +403,7 @@ export default function PropertyHubPage() {
                     </div>
                   </div>
                   {expired && <span className="px-2 py-0.5 bg-amber-100 text-amber-800 text-xs font-bold rounded-full shrink-0">expired</span>}
-                  {isAdmin && (
+                  {canEdit && (
                     <div className="flex gap-1.5 shrink-0">
                       <button className={btnGhost} onClick={() => startEditVehicle(v)}>Edit</button>
                       <button className={btnDanger} onClick={() => deleteVehicle(v.id)}>Remove</button>

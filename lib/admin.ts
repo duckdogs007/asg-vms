@@ -53,3 +53,18 @@ export async function checkIsGuest(): Promise<boolean> {
     .maybeSingle()
   return !error && !!data
 }
+
+// Returns true if the current user can edit Property Hub data
+// (admin_users hardlist OR role admin_super/property_manager).
+export async function checkCanEditPropertyHub(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+  if (ADMIN_EMAILS.includes(user.email || "")) return true
+  const { data } = await supabase
+    .from("user_assignments")
+    .select("role")
+    .eq("user_id", user.id)
+    .in("role", ["admin_super", "property_manager"])
+    .maybeSingle()
+  return !!data
+}
