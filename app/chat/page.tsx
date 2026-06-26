@@ -200,8 +200,8 @@ export default function ChatPage() {
   return (
     <div className="flex" style={{ height: "calc(100vh - 57px)" }}>
 
-      {/* LEFT: Users Online */}
-      <div className="w-48 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col overflow-hidden">
+      {/* LEFT: Users Online — hidden on mobile */}
+      <div className="hidden sm:flex w-48 flex-shrink-0 bg-white border-r border-gray-200 flex-col overflow-hidden">
         <div className="px-3 py-3 border-b border-gray-100">
           <div className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Online Now</div>
           <div className="text-xs text-gray-500 mt-0.5 font-medium">{onlineUsers.length} active</div>
@@ -282,7 +282,10 @@ export default function ChatPage() {
               🏢 {communityName}
             </button>
           )}
-          <span className="ml-auto text-xs text-gray-400 font-mono"># {channelLabel}</span>
+          <span className="ml-auto text-xs text-gray-400 font-mono hidden sm:inline"># {channelLabel}</span>
+          {onlineUsers.length > 0 && (
+            <span className="ml-auto sm:hidden text-xs text-green-700 font-semibold">{onlineUsers.length} online</span>
+          )}
         </div>
 
         {/* Messages */}
@@ -354,18 +357,24 @@ export default function ChatPage() {
             <textarea
               ref={textareaRef}
               value={draft}
-              onChange={e => setDraft(e.target.value)}
+              onChange={e => {
+                setDraft(e.target.value)
+                const el = e.target
+                el.style.height = "auto"
+                el.style.height = Math.min(el.scrollHeight, 120) + "px"
+              }}
               onKeyDown={handleKeyDown}
               placeholder={`Message # ${channelLabel}…`}
               rows={1}
               disabled={!userEmail}
-              className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
-              style={{ minHeight: 40, maxHeight: 120 }}
+              className="flex-1 resize-none border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent disabled:bg-gray-50 disabled:text-gray-400"
+              style={{ minHeight: 44, maxHeight: 120 }}
             />
             <button
               onClick={sendMessage}
               disabled={!draft.trim() || sending || !userEmail}
-              className="px-4 py-2 bg-blue-800 text-white text-sm font-semibold rounded-lg border-none cursor-pointer hover:bg-blue-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 h-10"
+              className="px-4 bg-blue-800 text-white text-sm font-semibold rounded-lg border-none cursor-pointer hover:bg-blue-900 disabled:opacity-40 disabled:cursor-not-allowed transition-colors flex-shrink-0 self-end"
+              style={{ height: 44 }}
             >
               {sending ? "…" : "Send"}
             </button>
