@@ -107,6 +107,8 @@ export default function AlertsPage() {
   const [isGuest,     setIsGuest]     = useState(false)
   const [ackingId,    setAckingId]    = useState<string | null>(null)
   const [ackNote,     setAckNote]     = useState("")
+  const [resending,   setResending]   = useState<string | null>(null)
+  const [showChart,   setShowChart]   = useState(false)
   const [rtConnected, setRtConnected] = useState(false)
   const [notifOk,     setNotifOk]     = useState(false)
 
@@ -120,7 +122,6 @@ export default function AlertsPage() {
     checkIsGuest().then(setIsGuest).catch(() => setIsGuest(false))
     loadAll()
 
-    // Request browser notification permission once
     if (typeof Notification !== "undefined") {
       if (Notification.permission === "default") {
         Notification.requestPermission().then(p => setNotifOk(p === "granted"))
@@ -129,7 +130,6 @@ export default function AlertsPage() {
       }
     }
 
-    // Realtime: new/updated alerts + new denied entries (no more 30s polling)
     const ch = supabase
       .channel("alerts-page-rt")
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "alerts" }, payload => {
@@ -154,8 +154,8 @@ export default function AlertsPage() {
     return () => { supabase.removeChannel(ch) }
   }, [])
 
-  // Dynamic tab title showing open alert count
-  const openCount   = alerts.filter(a => !a.ack_at && a.status === "sent").length
+  const openCount = alerts.filter(a => !a.ack_at && a.status === "sent").length
+
   useEffect(() => {
     document.title = openCount > 0 ? `(${openCount}) Alerts` : "Alerts"
     return () => { document.title = "Alerts" }
@@ -190,11 +190,25 @@ export default function AlertsPage() {
     const open = alerts.filter(a => !a.ack_at && a.status === "sent")
     if (!open.length) return
     if (!confirm(`Acknowledge all ${open.length} open alert${open.length === 1 ? "" : "s"}?`)) return
-    const now = new Date().toISOString()
     const { error } = await supabase.from("alerts").update({
-      ack_at: now, ack_by: userEmail || null, status: "acked",
+      ack_at: new Date().toISOString(), ack_by: userEmail || null, status: "acked",
     }).in("id", open.map(a => a.id))
-    if (error) { alert("Ack all failed: " + error.message); return }
+    if (error) { alert("Ack all failed: " + error.message) }
+  }
+
+  async function renotify(a: AlertRow) {
+    if (!confirm("Re-send Teams & email notification for this alert?")) return
+    setResending(a.id)
+    const res = await fetch("/api/alerts/resend", {
+      method:  "POST",
+      headers: { "Content-Type": "application/json" },
+      body:    JSON.stringify({ alertId: a.id }),
+    })
+    setResending(null)
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as { error?: string }
+      alert("Re-notify failed: " + (err.error || res.status))
+    }
   }
 
   async function deleteAlert(a: AlertRow) {
@@ -226,6 +240,29 @@ export default function AlertsPage() {
     return true
   })
 
+  function exportCSV() {
+    const headers = ["Date", "Type", "Severity", "Community", "Status", "Triggered By", "Acked By", "Ack Note", "Payload"]
+    const lines = filtered.map(a => [
+      fmt(a.sent_at),
+      a.type,
+      a.severity,
+      String(a.payload?.Community || ""),
+      a.status,
+      a.triggered_by || "",
+      a.ack_by        || "",
+      a.ack_note      || "",
+      JSON.stringify(a.payload),
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(","))
+    const csv  = [headers.join(","), ...lines].join("\n")
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url  = URL.createObjectURL(blob)
+    const el   = document.createElement("a")
+    el.href     = url
+    el.download = `alerts-${new Date().toISOString().split("T")[0]}.csv`
+    el.click()
+    URL.revokeObjectURL(url)
+  }
+
   const watchlistCt = alerts.filter(a => a.type === "watchlist_hit").length
   const incidentCt  = alerts.filter(a => a.type === "incident_high_priority").length
   const sosCt       = alerts.filter(a => a.type === "panic_sos").length
@@ -247,7 +284,7 @@ export default function AlertsPage() {
           </div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
-          {isAdmin && !isGuest && openCount > 1 && (
+          {!isGuest && isAdmin && openCount > 1 && (
             <button
               onClick={ackAll}
               className="px-3 py-1.5 bg-green-700 hover:bg-green-800 text-white text-sm rounded-md border-none cursor-pointer"
@@ -265,6 +302,21 @@ export default function AlertsPage() {
             </button>
           )}
           <button
+            onClick={() => setShowChart(s => !s)}
+            className={`px-3 py-1.5 text-sm rounded-md border-none cursor-pointer transition-colors ${
+              showChart ? "bg-blue-800 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+            }`}
+          >
+            📊 Chart
+          </button>
+          <button
+            onClick={exportCSV}
+            disabled={!filtered.length}
+            className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-md border-none cursor-pointer disabled:opacity-40"
+          >
+            ⬇ CSV
+          </button>
+          <button
             onClick={loadAll}
             disabled={loading}
             className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-sm rounded-md border-none cursor-pointer disabled:opacity-50"
@@ -275,13 +327,16 @@ export default function AlertsPage() {
       </div>
 
       {/* STATS */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-4">
         <Stat label="Open"        value={openCount}     accent="red" />
         <Stat label="Watchlist"   value={watchlistCt}   accent="orange" />
         <Stat label="Incidents"   value={incidentCt}    accent="yellow" />
         <Stat label="SOS"         value={sosCt}         accent="rose" />
         <Stat label="Denied (7d)" value={denied.length} accent="slate" />
       </div>
+
+      {/* CHART */}
+      {showChart && <AlertChart alerts={alerts} />}
 
       {/* FILTER TABS */}
       <div className="flex gap-1 mb-4 border-b border-gray-300 overflow-x-auto">
@@ -319,7 +374,9 @@ export default function AlertsPage() {
               <li
                 key={a.id}
                 className={`p-4 flex flex-col gap-2 hover:bg-gray-50 ${
-                  !a.ack_at && a.status === "sent" ? "border-l-4 border-l-red-500" : "border-l-4 border-l-transparent"
+                  !a.ack_at && a.status === "sent"
+                    ? "border-l-4 border-l-red-500"
+                    : "border-l-4 border-l-transparent"
                 }`}
               >
                 {/* Top row */}
@@ -365,7 +422,8 @@ export default function AlertsPage() {
                     )}
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Acknowledge (with optional note) */}
                     {!isGuest && !a.ack_at && a.status === "sent" && (
                       ackingId === a.id ? (
                         <div className="flex items-center gap-2">
@@ -403,6 +461,18 @@ export default function AlertsPage() {
                         </button>
                       )
                     )}
+                    {/* Re-notify (admin only) */}
+                    {isAdmin && (
+                      <button
+                        onClick={() => renotify(a)}
+                        disabled={resending === a.id}
+                        title="Re-send Teams & email notification"
+                        className="px-3 py-1 bg-gray-100 hover:bg-blue-600 hover:text-white text-gray-700 text-xs font-semibold rounded border-none cursor-pointer disabled:opacity-40"
+                      >
+                        {resending === a.id ? "Sending…" : "↺ Re-notify"}
+                      </button>
+                    )}
+                    {/* Delete (admin only) */}
                     {isAdmin && (
                       <button
                         onClick={() => deleteAlert(a)}
@@ -476,6 +546,94 @@ export default function AlertsPage() {
 }
 
 // ---------- Sub-components ----------
+
+function AlertChart({ alerts }: { alerts: AlertRow[] }) {
+  const BAR_H = 80
+
+  // Build 14-day UTC-consistent day labels
+  const days = Array.from({ length: 14 }, (_, i) => {
+    const d = new Date()
+    d.setUTCHours(0, 0, 0, 0)
+    d.setUTCDate(d.getUTCDate() - (13 - i))
+    return d.toISOString().split("T")[0]
+  })
+
+  const data = days.map(day => {
+    const da  = alerts.filter(a => new Date(normTs(a.sent_at)).toISOString().startsWith(day))
+    const w   = da.filter(a => a.type === "watchlist_hit").length
+    const inc = da.filter(a => a.type === "incident_high_priority").length
+    const s   = da.filter(a => a.type === "panic_sos").length
+    const label = new Date(day + "T12:00:00Z").toLocaleDateString("en-US", { month: "short", day: "numeric" })
+    return { day, label, watchlist: w, incident: inc, sos: s, total: w + inc + s }
+  })
+
+  const max = Math.max(1, ...data.map(d => d.total))
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
+      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
+        Alert Volume — Last 14 Days
+      </div>
+      <div className="flex items-end gap-1">
+        {data.map(d => {
+          // Each segment height in px, proportional to max total
+          const wh  = Math.round((d.watchlist / max) * BAR_H)
+          const ih  = Math.round((d.incident  / max) * BAR_H)
+          const sh  = Math.round((d.sos       / max) * BAR_H)
+          const [mo, dy] = d.label.split(" ")
+
+          return (
+            <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group relative">
+              {/* Bar */}
+              <div className="w-full relative bg-gray-100 rounded-sm" style={{ height: BAR_H }}>
+                {d.total > 0 && (
+                  <>
+                    {wh > 0 && (
+                      <div
+                        className="absolute left-0 right-0 bg-orange-400"
+                        style={{ bottom: 0, height: wh }}
+                      />
+                    )}
+                    {ih > 0 && (
+                      <div
+                        className="absolute left-0 right-0 bg-yellow-400"
+                        style={{ bottom: wh, height: ih }}
+                      />
+                    )}
+                    {sh > 0 && (
+                      <div
+                        className="absolute left-0 right-0 bg-rose-500"
+                        style={{ bottom: wh + ih, height: sh }}
+                      />
+                    )}
+                  </>
+                )}
+              </div>
+              {/* Day label */}
+              <div className="text-[8px] text-gray-400 text-center leading-none">
+                {dy}<br />{mo}
+              </div>
+              {/* Hover tooltip */}
+              {d.total > 0 && (
+                <div className="absolute bottom-10 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-[10px] px-2 py-1.5 rounded opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-10 leading-relaxed">
+                  <div className="font-semibold">{d.total} alert{d.total !== 1 ? "s" : ""}</div>
+                  {d.watchlist > 0 && <div>🚨 {d.watchlist} watchlist</div>}
+                  {d.incident  > 0 && <div>⚠️ {d.incident} incident</div>}
+                  {d.sos       > 0 && <div>🆘 {d.sos} SOS</div>}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </div>
+      <div className="flex gap-4 mt-3 text-[10px] text-gray-500">
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-orange-400 mr-1 align-middle" />Watchlist</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-yellow-400 mr-1 align-middle" />Incident</span>
+        <span><span className="inline-block w-2 h-2 rounded-sm bg-rose-500   mr-1 align-middle" />SOS</span>
+      </div>
+    </div>
+  )
+}
 
 function AlertPayload({ alert: a }: { alert: AlertRow }) {
   const p = a.payload as Record<string, string>
