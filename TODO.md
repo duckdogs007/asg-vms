@@ -3,7 +3,7 @@
 **App:** https://asg-vms.vercel.app/
 **Stack:** Next.js · TypeScript · Supabase · Vercel
 **Supabase project:** ASG-VMS (`xmomsoobriehgrnppewa`)
-**Last updated:** June 25, 2026
+**Last updated:** June 26, 2026
 
 > Shared task list for Claude.ai ↔ Claude Code. Keep this file in the repo root as the single source of truth. Companion: `CLAUDE_CODE_HANDOFF.md` (sequenced build plan + migration files).
 
@@ -36,6 +36,77 @@ In the Post Orders section, set up the customer/location email recipient(s) who 
 - Admin/property-manager editable (role model); officers/guests view-only.
 
 
+
+#### 46. Watchlist — confirm app-layer gating: single-add (all but guest) vs. CSV import (admin only)
+Single-person add already exists and works → watchlist writes go through a **server route / service-role key that bypasses RLS** (the `is_admin()` INSERT policy isn't the actual gate). So these rules are enforced in **app code**, not the database:
+
+- **Single "add person":** allowed for everyone **except guest**. Confirm the add route/UI excludes guests (since service-role writes skip the RLS guest checks).
+- **CSV import (bulk, overwrites everything):** **admin only.** Confirm the import route checks `is_admin()` AND the UI hides the import link for non-admins.
+- Context: watchlist RLS shows INSERT/UPDATE/DELETE = `is_admin()`, reads = authenticated — but writes evidently bypass RLS via service role, so RLS is a backstop, not the live gate.
+- **Recommendation:** keep DELETE/overwrite admin-only in the app; add explicit admin check on CSV-import endpoint; exclude guest on single-add endpoint.
+
+#### 47. Officer reports — "Summary — Highlights / Followup" at top of report
+For officer reports (Daily Logs, Incident Reports, etc.), generate a short summary headed **"Summary — Highlights / Followup"** displayed at the **TOP of the report, above the Narrative box**.
+
+- **What it surfaces:** not a recap — flags items needing attention: unresolved issues, safety concerns, required follow-up actions, repeat/pattern flags.
+- **Placement:** banner/box at the top of the report, above the Narrative field.
+- **Short:** 1–3 sentences or a few bullets; scannable at a glance. Header reads "Summary" — no "AI" prefix.
+- **Builds on item 28 (AI narratives, done):** 28 drafts the narrative; this reads the report (narrative + structured fields) and pulls out concern/follow-up highlights.
+- **High value on review side:** supervisor sees concern summary first (ties to items 29/40/42 review flow).
+- Consider: generate on submit/view; whether stored on record or on demand; PII sent to model.
+
+#### 48. Homepage tab order — rotate Property Hub / Alerts / Admin
+Reorder the homepage nav tabs. Leading tabs stay as-is; rotate the Alerts ↔ Property Hub ↔ Admin trio:
+
+- **Property Hub** → move to where **Admin Dashboard** currently is.
+- **Alerts / Notify** → move to where **Property Hub** currently is.
+- **Admin Dashboard** → move to where **Alerts** currently is.
+- Confirm against live current order first — recent tab changes (items 23, 32) may have shifted positions.
+
+#### 49. Reports page — ensure ALL report types appear and are linkable
+Not every report type is surfacing in the Reports views. Known gap: **Gate Checklist logs** don't appear.
+
+- **Audit every report type:** Incident, Daily Log/DAR, Field Contact, Vehicle FI, Parking Violation, Property Maintenance, Gate Checklist, and any others — confirm each shows in both **View Reports** and **Reports-by-location summary**.
+- Each report row must be **linkable** to the full report (ties to items 40/42).
+- Likely cause: Reports page queries a subset of report tables; needs to include all sources.
+- Pairs with item 35 (organize by community).
+
+#### 50. Reports & Analytics — run report summary by customer/location + date range
+On the Reports & Analytics page, add a report **runner**: select a customer/location and any date range to produce a summary of all reports for that location/timeframe.
+
+- **Filters:** community/location, date range (any), and report type(s) — all types or a specific one.
+- **Example use:** "St Luke · Gate Checklists · this month" → all gate checklist reports for that month.
+- **Output:** summary list of matching reports, each linkable (items 40/42); counts/totals by type.
+- **Exportable:** printable / PDF / email for client delivery (monthly client packages, e.g., Envolve/St Luke).
+- Builds on item 49 (all report types) + item 25 (`unit_activity` union pattern) + item 35 (by community).
+
+#### 51. Unit History — emphasize address + name, make entries linkable, tie into reporting
+The Unit History list buries Building #/Unit # in event details. Raise emphasis and make entries drill-through.
+
+- **Emphasis:** make **Building #/Apartment #** and **HOH name** the prominent header of each entry; event type/date become secondary.
+- **Linkable:** each entry hyperlinks to the full detail of that event/report (same clickable-row → detail build as items 40/42).
+- **Tie into reporting:** from a unit's history, run/filter the report summary for that location (item 50).
+- Cross-refs: item 25 (`unit_activity`), items 40/42, item 50.
+
+#### 52. Daily Logs — standard shift-verification items (St Luke; per-community)
+St Luke Daily Logs should include standard items on **every** report — Yes/No with required explanation if "No".
+
+- **Items so far (more to come):**
+  - Was a gate checklist completed during your shift? — Yes/No (if No, explain)
+  - Were the site radios received in good condition? — Yes/No (if No, explain)
+  - Were the site keys in good condition / accounted for? — Yes/No (if No, explain)
+- **Pattern:** Yes/No toggle + conditional free-text that appears/is required when "No".
+- **Per-community / configurable:** St Luke-specific; model as a configurable checklist template per community (lookup/template table so items can be added/edited without code).
+- **Reporting:** capture answers as structured fields so a "No" can be surfaced/flagged — fits item 50 and item 47.
+- Confirm the full final list of items with the site before building.
+
+#### 53. VMS page Search — search ALL entry points (vehicle/plate gap)
+The VMS page Search window isn't searching every data source. **Bug:** searching plate `90572F` returns empty even though it's listed on the BOLO page.
+
+- **Audit global search** to cover every place a vehicle/plate (and person) can appear: BOLOs, watchlist, parking violations, vehicle FI logs, visitor check-ins, registered vehicles, denied entries, incident reports.
+- **Known gap:** BOLO records aren't included (the `90572F` example).
+- Confirm partial/normalized plate matching (case, spaces, O/0) so near-matches still hit.
+- Search results must be linkable (ties to items 40/42/49).
 
 #### 19. Visitor Check-In — driver's license scanning (handheld wireless)
 Scan a DL with a wireless handheld scanner to auto-fill check-in.
