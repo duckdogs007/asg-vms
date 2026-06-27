@@ -170,6 +170,7 @@ const RUNNER_SLUG: Record<string, string> = {
   dailyLogs:      "daily-log",
   maintenance:    "maintenance",
   gateChecklists: "gate-checklist",
+  visitorLogs:    "visitor-log",
 }
 
 const RUNNER_BADGE_KEY: Record<string, string> = {
@@ -180,6 +181,7 @@ const RUNNER_BADGE_KEY: Record<string, string> = {
   dailyLogs:      "dailyLog",
   maintenance:    "maintenance",
   gateChecklists: "gateChecklist",
+  visitorLogs:    "visitorLog",
 }
 
 const SUB_BADGE: Record<string, string> = {
@@ -191,6 +193,7 @@ const SUB_BADGE: Record<string, string> = {
   dailyLog:      "bg-teal-100 text-teal-700",
   maintenance:   "bg-emerald-100 text-emerald-700",
   gateChecklist: "bg-slate-100 text-slate-700",
+  visitorLog:    "bg-indigo-100 text-indigo-700",
   // snake_case keys — Review Queue (q.report_type)
   field_contact: "bg-purple-100 text-purple-700",
   vehicle_fi:    "bg-orange-100 text-orange-700",
@@ -226,7 +229,8 @@ export default function ReportsPage() {
   const [entryLogSearch, setEntryLogSearch] = useState("")
   const [priorTotal,     setPriorTotal]     = useState<number | null>(null)
   const EMPTY_RPT: Record<RptTypeKey, number> = { incidents: 0, fieldContacts: 0, vehicleFIs: 0, parking: 0, dailyLogs: 0, maintenance: 0, gateChecklists: 0, visitorLogs: 0 }
-  const [rptCommunity,     setRptCommunity]     = useState("")
+  // rptCommunity is derived from the top-level community filter — one picker controls everything
+  const rptCommunity = community
   const [rptSummary,       setRptSummary]       = useState<Record<RptTypeKey, number>>(EMPTY_RPT)
   const [rptSummaryLoading,setRptSummaryLoading]= useState(false)
   const [rptOpenDetail,    setRptOpenDetail]    = useState<RptTypeKey | null>(null)
@@ -285,7 +289,6 @@ export default function ReportsPage() {
       const chosen     = savedMatch || stLuke || data[0]
       if (chosen) {
         setCommunity(chosen.id)
-        setRptCommunity(chosen.id)
       }
     })
   }, [])
@@ -303,7 +306,7 @@ export default function ReportsPage() {
   useEffect(() => { if (community) loadData() }, [community, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  useEffect(() => { if (rptCommunity) { setRptOpenDetail(null); setRptDetailRows([]); loadRptSummary() } }, [rptCommunity, dateFrom, dateTo])
+  useEffect(() => { if (community) { setRptOpenDetail(null); setRptDetailRows([]); loadRptSummary() } }, [community, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!community) return
@@ -647,7 +650,7 @@ export default function ReportsPage() {
     if (!rptCommunity) return
     setRunnerLoading(true); setRunnerRan(false); setRunnerRows([])
     const typesToRun = runnerType === "all"
-      ? REPORT_TYPES.filter(rt => rt.key !== "visitorLogs")
+      ? REPORT_TYPES
       : REPORT_TYPES.filter(rt => rt.key === runnerType)
     const results = await Promise.all(typesToRun.map(async rt => {
       let q = (supabase.from(rt.table) as any).select("*").eq("community_id", rptCommunity)
@@ -681,6 +684,11 @@ export default function ReportsPage() {
         } else if (rt.key === "gateChecklists") {
           date = r.checklist_date || (r.created_at ? new Date(utc(r.created_at)).toLocaleDateString("en-CA") : ""); officer = r.guard_name || "—"
           summary = [r.shift, r.guard_name ? `Guard: ${r.guard_name}` : null].filter(Boolean).join(" · ")
+        } else if (rt.key === "visitorLogs") {
+          date = r.created_at ? new Date(utc(r.created_at)).toLocaleDateString("en-CA") : ""
+          officer = r.person_type || "visitor"
+          const name = [r.dl_first_name || r.first_name, r.dl_last_name || r.last_name].filter(Boolean).join(" ")
+          summary = [name, r.unit_number && `Unit ${r.unit_number}`, r.resident_name && `→ ${r.resident_name}`, r.status === "denied" && "DENIED"].filter(Boolean).join(" · ")
         }
         rows.push({ id: r.id, typeKey: rt.key, typeLabel: rt.label, color: rt.color,
           date, summary: summary || "—", officer, slug: RUNNER_SLUG[rt.key] || rt.key })
@@ -1117,36 +1125,14 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
         )}
       </Section>
 
-      {/* ── MONTHLY REPORTS ── */}
-      {communities.length > 0 && (
-        <Section label="Monthly Reports">
-          <div className="flex flex-wrap gap-3">
-            <Link href="/vms/reports/gate-checklist-report"
-              className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-slate-400 transition-all group">
-              <span className="text-xl">📋</span>
-              <div>
-                <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700">Gate Checklist Monthly Report</div>
-                <div className="text-xs text-gray-400">Full gate-by-gate detail by location · Print / PDF</div>
-              </div>
-            </Link>
-          </div>
-        </Section>
-      )}
-
       {/* ── REPORTS BY COMMUNITY ── */}
       {communities.length > 0 && (
         <Section label="Reports by Community">
-          {/* Community picker — scoped to communities accessible to this user */}
-          <div className="mb-4">
-            <select
-              value={rptCommunity}
-              onChange={e => setRptCommunity(e.target.value)}
-              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white w-72"
-            >
-              <option value="">Select a community…</option>
-              {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-            </select>
-          </div>
+          {communityName && (
+            <div className="mb-3 text-xs text-gray-500">
+              Showing data for <span className="font-semibold text-gray-800">{communityName}</span> · {dateFrom} to {dateTo}. Use the filter bar above to change community or date range.
+            </div>
+          )}
 
           {rptCommunity && (
             rptSummaryLoading ? (
@@ -1329,26 +1315,32 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       {/* ── REPORT RUNNER ── */}
       {communities.length > 0 && (
         <Section label="Report Runner">
-          <div className="text-xs text-gray-400 mb-4">
-            Select a community and report type, then run to see all matching reports for the selected date range above.
+          {communityName && (
+            <div className="text-xs text-gray-400 mb-4">
+              Showing results for <span className="font-semibold text-gray-700">{communityName}</span> · {dateFrom} to {dateTo}. Use the filter bar above to change community or date range.
+            </div>
+          )}
+
+          {/* Monthly Reports quick-links */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            <Link href="/vms/reports/gate-checklist-report"
+              className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-slate-400 transition-all group">
+              <span className="text-xl">📋</span>
+              <div>
+                <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700">Gate Checklist Monthly Report</div>
+                <div className="text-xs text-gray-400">Full gate-by-gate detail by location · Print / PDF</div>
+              </div>
+            </Link>
           </div>
 
           {/* Controls */}
           <div className="flex flex-wrap gap-3 items-end mb-4">
-            <div className="flex flex-col gap-1 w-64">
-              <label className="text-xs font-semibold text-gray-500">Community</label>
-              <select value={rptCommunity} onChange={e => { setRptCommunity(e.target.value); setRunnerRan(false) }}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
-                <option value="">Select a community…</option>
-                {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </select>
-            </div>
             <div className="flex flex-col gap-1 w-52">
               <label className="text-xs font-semibold text-gray-500">Report Type</label>
               <select value={runnerType} onChange={e => { setRunnerType(e.target.value); setRunnerRan(false) }}
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
                 <option value="all">All types</option>
-                {REPORT_TYPES.filter(rt => rt.key !== "visitorLogs").map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
+                {REPORT_TYPES.map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
               </select>
             </div>
             <button
@@ -1418,6 +1410,75 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
 
       {hasData && (
         <>
+          {/* ── ENTRY LOG ── */}
+          <Section label={`Entry Log${
+            entryLogSearch.trim()
+              ? ` — ${filteredEntries.length} match${filteredEntries.length === 1 ? "" : "es"} of ${visits.length}`
+              : visits.length > logLimit ? ` (showing ${logLimit} of ${visits.length})` : ` (${visits.length})`
+          }`}>
+            <div className="mb-3 flex gap-2">
+              <input
+                type="text"
+                value={entryLogSearch}
+                onChange={e => setEntryLogSearch(e.target.value)}
+                placeholder="Search by name, unit, type, or resident..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+              {entryLogSearch && (
+                <button
+                  onClick={() => setEntryLogSearch("")}
+                  className="px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md border-none cursor-pointer"
+                >
+                  ✕ Clear
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {filteredEntries.slice(0, logLimit).map((v) => (
+                <div key={v.id}
+                  className="bg-white border border-gray-200 px-4 py-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-50 hover:border-blue-300 transition-colors group"
+                  onClick={() => window.location.href = `/vms/intel?search=${encodeURIComponent(`${v.first_name} ${v.last_name}`)}`}
+                >
+                  <div>
+                    <div className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                      {v.first_name} {v.last_name}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      <span className="capitalize">{v.person_type}</span>
+                      {v.unit_number && ` · Unit ${v.unit_number}`}
+                      {v.resident_name && ` · Visiting: ${v.resident_name}`}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                    <div className="text-right">
+                      <div className="text-sm text-gray-700">{formatTime(v.created_at)}</div>
+                      <div className="text-xs text-gray-400">{timeAgo(v.created_at)}</div>
+                    </div>
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteEntry(v) }}
+                        disabled={deleting === v.id}
+                        title="Delete entry (admin)"
+                        className="px-2 py-1 bg-red-700 hover:bg-red-800 text-white text-xs font-semibold rounded border-none cursor-pointer disabled:opacity-50"
+                      >
+                        {deleting === v.id ? "…" : "🗑"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {entryLogSearch.trim() && filteredEntries.length === 0 && (
+                <div className="text-gray-400 text-sm py-6 text-center">No entries match your search.</div>
+              )}
+            </div>
+            {filteredEntries.length > logLimit && (
+              <button onClick={() => setLogLimit(l => l + 50)}
+                className="mt-3 w-full py-2.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white">
+                Show more ({filteredEntries.length - logLimit} remaining)
+              </button>
+            )}
+          </Section>
+
           {/* ── TRAFFIC BREAKDOWN ── */}
           <Section label="Traffic Breakdown">
             <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -1587,74 +1648,6 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
             </Section>
           )}
 
-          {/* ── ENTRY LOG ── */}
-          <Section label={`Entry Log${
-            entryLogSearch.trim()
-              ? ` — ${filteredEntries.length} match${filteredEntries.length === 1 ? "" : "es"} of ${visits.length}`
-              : visits.length > logLimit ? ` (showing ${logLimit} of ${visits.length})` : ` (${visits.length})`
-          }`}>
-            <div className="mb-3 flex gap-2">
-              <input
-                type="text"
-                value={entryLogSearch}
-                onChange={e => setEntryLogSearch(e.target.value)}
-                placeholder="Search by name, unit, type, or resident..."
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
-              {entryLogSearch && (
-                <button
-                  onClick={() => setEntryLogSearch("")}
-                  className="px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md border-none cursor-pointer"
-                >
-                  ✕ Clear
-                </button>
-              )}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {filteredEntries.slice(0, logLimit).map((v) => (
-                <div key={v.id}
-                  className="bg-white border border-gray-200 px-4 py-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-50 hover:border-blue-300 transition-colors group"
-                  onClick={() => window.location.href = `/vms/intel?search=${encodeURIComponent(`${v.first_name} ${v.last_name}`)}`}
-                >
-                  <div>
-                    <div className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
-                      {v.first_name} {v.last_name}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      <span className="capitalize">{v.person_type}</span>
-                      {v.unit_number && ` · Unit ${v.unit_number}`}
-                      {v.resident_name && ` · Visiting: ${v.resident_name}`}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                    <div className="text-right">
-                      <div className="text-sm text-gray-700">{formatTime(v.created_at)}</div>
-                      <div className="text-xs text-gray-400">{timeAgo(v.created_at)}</div>
-                    </div>
-                    {isAdmin && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteEntry(v) }}
-                        disabled={deleting === v.id}
-                        title="Delete entry (admin)"
-                        className="px-2 py-1 bg-red-700 hover:bg-red-800 text-white text-xs font-semibold rounded border-none cursor-pointer disabled:opacity-50"
-                      >
-                        {deleting === v.id ? "…" : "🗑"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {entryLogSearch.trim() && filteredEntries.length === 0 && (
-                <div className="text-gray-400 text-sm py-6 text-center">No entries match your search.</div>
-              )}
-            </div>
-            {filteredEntries.length > logLimit && (
-              <button onClick={() => setLogLimit(l => l + 50)}
-                className="mt-3 w-full py-2.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white">
-                Show more ({filteredEntries.length - logLimit} remaining)
-              </button>
-            )}
-          </Section>
         </>
       )}
 
