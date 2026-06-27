@@ -13,18 +13,21 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| — | Visitor log detail page | `/vms/reports/visitor-log/[id]` — no detail page yet; visitor log entries in Reports by Community have no View → link |
+| — | Deploy to prod | `vercel --prod` — all June 26–27 work is on master, not yet on asg-psp.com |
 
 ---
 
 ## Recently completed (June 27, 2026)
 
-- [x] **Visitor Log in Reports by Community** — added as 8th card (indigo) alongside Incidents, Field Contacts, etc.; count + expandable detail rows (name, person type, unit, visiting resident, time); uses same community + date-range filter
+- [x] **Visitor log detail page** — `/vms/reports/visitor-log/[id]`: badges (Allowed/Denied, Watchlist Hit, DL Scanned), Check-In Details, Visitor section (name prefers DL scan data, denial reason callout), Driver's License section (DL#, state, DOB, sex, height, eye color, address), Vehicle, Notes, Photo, Intel profile link, ← Back + Print
+- [x] **Unit History → visitor log links** — `SOURCE_SLUG` in `UnitActivityTab.tsx` now maps `visitor_logs` → `"visitor-log"` so Unit History cards link to the new detail page
+- [x] **Reports by Community visitor log rows** — View → link added; prefer DL name over manually typed; Denied badge shown when applicable
+- [x] **Visitor Log in Reports by Community** — added as 8th card (indigo) alongside Incidents, Field Contacts, etc.; count + expandable detail rows; uses same community + date-range filter
 - [x] **Maintenance + Gate Checklist detail rows** — expandable detail panel in Reports by Community now renders rows for these two types (previously returned null silently)
-- [x] **Visitor check-in timezone fix** — `created_at` from Supabase lacks `Z` suffix; browsers parsed as local midnight → showed 12:13 AM instead of 8:13 PM ET; fixed in `intel/page.tsx` (changed to `fmtDate()`) and `vms/page.tsx` (UTC-safe string before `new Date()`)
-- [x] **Intel page ← Back button** — `router.back()` button added at top so navigating to Intel from any page (VMS check-in, Reports, etc.) brings user straight back
-- [x] **VMS Today's Entries — clickable names** — visitor names in Today's Entries are now `<Link>` to Intel search; also fixed UTC time bug in that same time display
-- [x] **What's New / changelog** — 11 entries for June 26 work inserted into Supabase `changelog` table (migration `2026-06-27_changelog_june26.sql`)
+- [x] **Visitor check-in timezone fix** — `created_at` from Supabase lacks `Z` suffix; browsers parsed as local midnight → showed 12:13 AM instead of 8:13 PM ET; fixed in `intel/page.tsx` and `vms/page.tsx`
+- [x] **Intel page ← Back button** — `router.back()` so navigating from any page brings user straight back
+- [x] **VMS Today's Entries — clickable names** — visitor names now link to Intel search; UTC time display fixed
+- [x] **What's New / changelog** — 11 entries for June 26 work applied to Supabase prod
 
 ## Recently completed (June 26, 2026)
 
