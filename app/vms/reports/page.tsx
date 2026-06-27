@@ -1298,14 +1298,19 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-semibold text-gray-800 truncate capitalize">
-                                    {[row.first_name, row.last_name].filter(Boolean).join(" ") || "—"}
+                                    {[row.dl_first_name || row.first_name, row.dl_last_name || row.last_name].filter(Boolean).join(" ") || "—"}
                                   </div>
                                   <div className="text-xs text-gray-500 truncate">
                                     <span className="capitalize">{row.person_type || "visitor"}</span>
                                     {row.unit_number ? ` · Unit ${row.unit_number}` : ""}
                                     {row.resident_name ? ` · Visiting: ${row.resident_name}` : ""}
+                                    {row.status === "denied" && <span className="ml-1 text-red-600 font-semibold">· Denied</span>}
                                   </div>
                                 </div>
+                                <Link href={`/vms/reports/visitor-log/${row.id}`}
+                                  className="text-xs text-indigo-700 hover:underline whitespace-nowrap font-medium flex-shrink-0">
+                                  View →
+                                </Link>
                               </div>
                             )
                             return null

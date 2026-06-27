@@ -5,6 +5,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 
 // source_table → URL slug for /vms/reports/[type]/[id]
+// visitor_logs uses its own route /vms/reports/visitor-log/[id]
 const SOURCE_SLUG: Record<string, string> = {
   incident_reports:             "incident",
   parking_violations:           "parking",
@@ -13,6 +14,7 @@ const SOURCE_SLUG: Record<string, string> = {
   officer_daily_logs:           "daily-log",
   property_maintenance_reports: "maintenance",
   gate_checklists:              "gate-checklist",
+  visitor_logs:                 "visitor-log",
 }
 
 const inputCls = "w-full px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white"
