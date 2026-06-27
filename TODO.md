@@ -3,7 +3,7 @@
 **App:** https://asg-vms.vercel.app/
 **Stack:** Next.js · TypeScript · Supabase · Vercel
 **Supabase project:** ASG-VMS (`xmomsoobriehgrnppewa`)
-**Last updated:** June 26, 2026
+**Last updated:** June 27, 2026
 
 > Shared task list for Claude.ai ↔ Claude Code. Keep this file in the repo root as the single source of truth. Companion: `CLAUDE_CODE_HANDOFF.md` (sequenced build plan + migration files).
 
@@ -13,9 +13,18 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| — | Gate Checklist Monthly Report | by location; summary counts + full detail; print/PDF |
+| — | Visitor log detail page | `/vms/reports/visitor-log/[id]` — no detail page yet; visitor log entries in Reports by Community have no View → link |
 
 ---
+
+## Recently completed (June 27, 2026)
+
+- [x] **Visitor Log in Reports by Community** — added as 8th card (indigo) alongside Incidents, Field Contacts, etc.; count + expandable detail rows (name, person type, unit, visiting resident, time); uses same community + date-range filter
+- [x] **Maintenance + Gate Checklist detail rows** — expandable detail panel in Reports by Community now renders rows for these two types (previously returned null silently)
+- [x] **Visitor check-in timezone fix** — `created_at` from Supabase lacks `Z` suffix; browsers parsed as local midnight → showed 12:13 AM instead of 8:13 PM ET; fixed in `intel/page.tsx` (changed to `fmtDate()`) and `vms/page.tsx` (UTC-safe string before `new Date()`)
+- [x] **Intel page ← Back button** — `router.back()` button added at top so navigating to Intel from any page (VMS check-in, Reports, etc.) brings user straight back
+- [x] **VMS Today's Entries — clickable names** — visitor names in Today's Entries are now `<Link>` to Intel search; also fixed UTC time bug in that same time display
+- [x] **What's New / changelog** — 11 entries for June 26 work inserted into Supabase `changelog` table (migration `2026-06-27_changelog_june26.sql`)
 
 ## Recently completed (June 26, 2026)
 
