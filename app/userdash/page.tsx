@@ -2630,8 +2630,9 @@ export default function UserDashboard() {
                   r._type === "Parking Violation" ? "🅿️ Parking" :
                   r._type === "Maintenance"       ? "🔧 Maintenance" :
                                                     "📝 Daily Log"
-                const commName = communities.find(c => c.id === r.community_id)?.name
-                const summary = [commName, r.officer_name || r.officer || r.issued_by, r.date].filter(Boolean).join(" · ")
+                const commName   = communities.find(c => c.id === r.community_id)?.name
+                const typeDetail = r.incident_type || r.violation_type || r.issue_type || null
+                const summary    = [commName, r.officer_name || r.officer || r.issued_by, r.date, typeDetail].filter(Boolean).join(" · ")
                 const followUp = r.follow_up_required || r.follow_up
                 return (
                 <div key={i} className={`border rounded-xl mb-3 overflow-hidden ${borderCls}`}>
