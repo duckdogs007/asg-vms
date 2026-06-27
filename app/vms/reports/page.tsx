@@ -151,13 +151,14 @@ interface RunnerRow {
 }
 
 const REPORT_TYPES = [
-  { key: "incidents",      label: "Incident Reports",   color: "red",     table: "incident_reports",             dateCol: "date"       },
-  { key: "fieldContacts",  label: "Field Contacts",     color: "purple",  table: "contact_history",              dateCol: "created_at" },
-  { key: "vehicleFIs",     label: "Vehicle FIs",        color: "orange",  table: "vehicle_fi_logs",              dateCol: "date"       },
-  { key: "parking",        label: "Parking Violations", color: "amber",   table: "parking_violations",           dateCol: "date"       },
-  { key: "dailyLogs",      label: "Daily Logs",         color: "teal",    table: "officer_daily_logs",           dateCol: "date"       },
-  { key: "maintenance",    label: "Maintenance",        color: "emerald", table: "property_maintenance_reports", dateCol: "created_at" },
-  { key: "gateChecklists", label: "Gate Checklists",   color: "slate",   table: "gate_checklists",              dateCol: "checklist_date" },
+  { key: "incidents",      label: "Incident Reports",   color: "red",     table: "incident_reports",             dateCol: "date"           },
+  { key: "fieldContacts",  label: "Field Contacts",     color: "purple",  table: "contact_history",              dateCol: "created_at"     },
+  { key: "vehicleFIs",     label: "Vehicle FIs",        color: "orange",  table: "vehicle_fi_logs",              dateCol: "date"           },
+  { key: "parking",        label: "Parking Violations", color: "amber",   table: "parking_violations",           dateCol: "date"           },
+  { key: "dailyLogs",      label: "Daily Logs",         color: "teal",    table: "officer_daily_logs",           dateCol: "date"           },
+  { key: "maintenance",    label: "Maintenance",        color: "emerald", table: "property_maintenance_reports", dateCol: "created_at"     },
+  { key: "gateChecklists", label: "Gate Checklists",    color: "slate",   table: "gate_checklists",              dateCol: "checklist_date" },
+  { key: "visitorLogs",    label: "Visitor Log",        color: "indigo",  table: "visitor_logs",                 dateCol: "created_at"     },
 ] as const
 type RptTypeKey = typeof REPORT_TYPES[number]["key"]
 
@@ -204,6 +205,7 @@ const RPT_COLORS: Record<string, { idle: string; open: string; title: string; va
   teal:    { idle: "bg-teal-50 border-teal-200",     open: "bg-teal-100 border-teal-300",     title: "text-teal-700",    val: "text-teal-800"    },
   emerald: { idle: "bg-emerald-50 border-emerald-200", open: "bg-emerald-100 border-emerald-300", title: "text-emerald-700", val: "text-emerald-800" },
   slate:   { idle: "bg-slate-50 border-slate-200",   open: "bg-slate-100 border-slate-300",   title: "text-slate-700",   val: "text-slate-800"   },
+  indigo:  { idle: "bg-indigo-50 border-indigo-200", open: "bg-indigo-100 border-indigo-300", title: "text-indigo-700",  val: "text-indigo-800"  },
 }
 
 export default function ReportsPage() {
@@ -223,7 +225,7 @@ export default function ReportsPage() {
   const [deleting,       setDeleting]       = useState<string | null>(null)
   const [entryLogSearch, setEntryLogSearch] = useState("")
   const [priorTotal,     setPriorTotal]     = useState<number | null>(null)
-  const EMPTY_RPT: Record<RptTypeKey, number> = { incidents: 0, fieldContacts: 0, vehicleFIs: 0, parking: 0, dailyLogs: 0, maintenance: 0, gateChecklists: 0 }
+  const EMPTY_RPT: Record<RptTypeKey, number> = { incidents: 0, fieldContacts: 0, vehicleFIs: 0, parking: 0, dailyLogs: 0, maintenance: 0, gateChecklists: 0, visitorLogs: 0 }
   const [rptCommunity,     setRptCommunity]     = useState("")
   const [rptSummary,       setRptSummary]       = useState<Record<RptTypeKey, number>>(EMPTY_RPT)
   const [rptSummaryLoading,setRptSummaryLoading]= useState(false)
@@ -395,7 +397,7 @@ export default function ReportsPage() {
   async function loadRptSummary() {
     if (!rptCommunity) return
     setRptSummaryLoading(true)
-    const [incR, ctR, vfiR, pvR, logR, mntR, gcR] = await Promise.all([
+    const [incR, ctR, vfiR, pvR, logR, mntR, gcR, vlR] = await Promise.all([
       supabase.from("incident_reports").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
       supabase.from("contact_history").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59"),
       supabase.from("vehicle_fi_logs").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
@@ -403,6 +405,7 @@ export default function ReportsPage() {
       supabase.from("officer_daily_logs").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("date", dateFrom).lte("date", dateTo),
       supabase.from("property_maintenance_reports").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59"),
       supabase.from("gate_checklists").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("checklist_date", dateFrom).lte("checklist_date", dateTo),
+      supabase.from("visitor_logs").select("*", { count: "exact", head: true }).eq("community_id", rptCommunity).gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59"),
     ])
     setRptSummary({
       incidents:      incR.count  || 0,
@@ -412,6 +415,7 @@ export default function ReportsPage() {
       dailyLogs:      logR.count  || 0,
       maintenance:    mntR.count  || 0,
       gateChecklists: gcR.count   || 0,
+      visitorLogs:    vlR.count   || 0,
     })
     setRptSummaryLoading(false)
   }
@@ -642,7 +646,9 @@ export default function ReportsPage() {
   async function runReport() {
     if (!rptCommunity) return
     setRunnerLoading(true); setRunnerRan(false); setRunnerRows([])
-    const typesToRun = runnerType === "all" ? REPORT_TYPES : REPORT_TYPES.filter(rt => rt.key === runnerType)
+    const typesToRun = runnerType === "all"
+      ? REPORT_TYPES.filter(rt => rt.key !== "visitorLogs")
+      : REPORT_TYPES.filter(rt => rt.key === runnerType)
     const results = await Promise.all(typesToRun.map(async rt => {
       let q = (supabase.from(rt.table) as any).select("*").eq("community_id", rptCommunity)
       if (rt.dateCol === "created_at") q = q.gte("created_at", dateFrom + "T00:00:00").lte("created_at", dateTo + "T23:59:59")
@@ -1263,6 +1269,45 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                                 </div>
                               </div>
                             )
+                            if (rptOpenDetail === "maintenance") return (
+                              <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
+                                <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">
+                                  {row.created_at ? new Date(utc(row.created_at)).toLocaleDateString("en-CA") : "—"}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-semibold text-gray-800 truncate">{row.issue_type || "—"}</div>
+                                  <div className="text-xs text-gray-500 truncate">{[row.location, row.reported_by].filter(Boolean).join(" · ") || "—"}</div>
+                                  {row.description && <div className="text-xs text-gray-400 truncate mt-0.5">{row.description}</div>}
+                                </div>
+                              </div>
+                            )
+                            if (rptOpenDetail === "gateChecklists") return (
+                              <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
+                                <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">{row.checklist_date || "—"}</div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-semibold text-gray-800 truncate">{row.officer_name || "—"}</div>
+                                  <div className="text-xs text-gray-500 truncate">{row.shift || "—"}</div>
+                                </div>
+                              </div>
+                            )
+                            if (rptOpenDetail === "visitorLogs") return (
+                              <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
+                                <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">
+                                  {row.created_at ? new Date(utc(row.created_at)).toLocaleDateString("en-CA") : "—"}
+                                  <div>{row.created_at ? new Date(utc(row.created_at)).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</div>
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <div className="text-sm font-semibold text-gray-800 truncate capitalize">
+                                    {[row.first_name, row.last_name].filter(Boolean).join(" ") || "—"}
+                                  </div>
+                                  <div className="text-xs text-gray-500 truncate">
+                                    <span className="capitalize">{row.person_type || "visitor"}</span>
+                                    {row.unit_number ? ` · Unit ${row.unit_number}` : ""}
+                                    {row.resident_name ? ` · Visiting: ${row.resident_name}` : ""}
+                                  </div>
+                                </div>
+                              </div>
+                            )
                             return null
                           })}
                         </div>
@@ -1298,7 +1343,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               <select value={runnerType} onChange={e => { setRunnerType(e.target.value); setRunnerRan(false) }}
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
                 <option value="all">All types</option>
-                {REPORT_TYPES.map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
+                {REPORT_TYPES.filter(rt => rt.key !== "visitorLogs").map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
               </select>
             </div>
             <button

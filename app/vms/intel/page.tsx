@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
 import { maskSSN } from "@/lib/format"
@@ -149,6 +150,8 @@ interface OsintHistoryRow {
 }
 
 export default function IntelPage() {
+
+  const router = useRouter()
 
   const [search,         setSearch]         = useState("")
   const [selectedPerson, setSelectedPerson] = useState<PersonProfile | null>(null)
@@ -458,6 +461,13 @@ export default function IntelPage() {
   return (
     <div className="p-5">
 
+      <button
+        onClick={() => router.back()}
+        className="mb-3 text-sm text-blue-700 hover:text-blue-900 bg-transparent border-none cursor-pointer p-0"
+      >
+        ← Back
+      </button>
+
       <h2 className="text-2xl font-bold mb-4">Intel Terminal</h2>
 
       {/* SEARCH */}
@@ -644,7 +654,7 @@ export default function IntelPage() {
                         {v.resident_name && ` · Visiting: ${v.resident_name}`}
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5">
-                        {new Date(v.created_at).toLocaleString()}
+                        {fmtDate(v.created_at)}
                       </div>
                     </div>
                   ))}

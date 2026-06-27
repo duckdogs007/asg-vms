@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { Community, Unit, Resident } from "@/lib/types"
 import CadTicker from "@/components/CadTicker"
@@ -569,11 +570,15 @@ export default function VMSPage() {
                           employee:   "text-emerald-400",
                         }
                         const tColor = typeColors[e.person_type?.toLowerCase()] || "text-gray-400"
-                        const t = new Date(e.created_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                        const ts = e.created_at.endsWith("Z") || e.created_at.includes("+") ? e.created_at : e.created_at + "Z"
+                        const t = new Date(ts).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+                        const intelHref = `/vms/intel?search=${encodeURIComponent(`${e.first_name} ${e.last_name}`)}`
                         return (
                           <div key={i} className="flex justify-between items-center py-2 border-b border-gray-800 last:border-0">
                             <div>
-                              <div className="text-sm font-semibold text-white">{e.first_name} {e.last_name}</div>
+                              <Link href={intelHref} className="text-sm font-semibold text-white hover:text-blue-300 transition-colors">
+                                {e.first_name} {e.last_name}
+                              </Link>
                               <div className={`text-xs ${tColor}`}>{e.person_type}{e.unit_number ? ` · Unit ${e.unit_number}` : ""}</div>
                             </div>
                             <div className="text-xs text-gray-500 shrink-0 ml-3">{t}</div>
