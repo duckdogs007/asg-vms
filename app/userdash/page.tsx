@@ -2631,6 +2631,7 @@ export default function UserDashboard() {
                   r._type === "Maintenance"       ? "🔧 Maintenance" :
                                                     "📝 Daily Log"
                 const summary =
+                  r._type === "Daily Log"         ? [communities.find(c => c.id === r.community_id)?.name, r.officer_name, r.date].filter(Boolean).join(" · ") :
                   r._type === "Field Contact"     ? `${r.first_name || ""} ${r.last_name || ""}`.trim() || r.reason || "No name" :
                   r._type === "Vehicle FI"        ? [r.year, r.color, r.make, r.model, r.plate ? `· ${displayPlate(r.plate)}` : ""].filter(Boolean).join(" ") || r.reason || "No vehicle" :
                   r._type === "Parking Violation" ? [r.violation_type, r.plate ? `· ${displayPlate(r.plate)}` : ""].filter(Boolean).join(" ") || "Parking violation" :
