@@ -5,6 +5,7 @@ import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { SignedImage } from "@/components/SignedImage"
+import { ADMIN_EMAILS } from "@/lib/admin"
 
 function utc(ts: string) {
   return ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z"
@@ -54,6 +55,24 @@ export default function VisitorLogDetailPage() {
   const [communityName, setCommunityName] = useState("")
   const [loading,       setLoading]       = useState(true)
   const [notFound,      setNotFound]      = useState(false)
+  const [isAdmin,       setIsAdmin]       = useState(false)
+  const [deleting,      setDeleting]      = useState(false)
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setIsAdmin(ADMIN_EMAILS.includes(user?.email || ""))
+    })
+  }, [])
+
+  async function deleteRecord() {
+    if (!record) return
+    const label = `${record.first_name || ""} ${record.last_name || ""}`.trim() || "this entry"
+    if (!confirm(`Permanently delete visitor log for ${label}?\n\nThis cannot be undone.`)) return
+    setDeleting(true)
+    const { error } = await supabase.from("visitor_logs").delete().eq("id", id)
+    if (error) { setDeleting(false); alert("Delete failed: " + error.message); return }
+    router.replace("/vms/reports")
+  }
 
   useEffect(() => {
     supabase.from("visitor_logs").select("*").eq("id", id).maybeSingle()
@@ -103,12 +122,23 @@ export default function VisitorLogDetailPage() {
         >
           ← Back
         </button>
-        <button
-          onClick={() => window.print()}
-          className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-200 cursor-pointer border-none"
-        >
-          🖨 Print
-        </button>
+        <div className="flex items-center gap-2">
+          {isAdmin && (
+            <button
+              onClick={deleteRecord}
+              disabled={deleting}
+              className="px-3 py-1.5 text-xs font-semibold bg-red-700 text-white rounded-lg hover:bg-red-800 cursor-pointer border-none disabled:opacity-50"
+            >
+              {deleting ? "Deleting…" : "🗑 Delete Record"}
+            </button>
+          )}
+          <button
+            onClick={() => window.print()}
+            className="px-3 py-1.5 text-xs font-semibold bg-gray-100 text-gray-700 border border-gray-200 rounded-lg hover:bg-gray-200 cursor-pointer border-none"
+          >
+            🖨 Print
+          </button>
+        </div>
       </div>
 
       {/* Badges */}
