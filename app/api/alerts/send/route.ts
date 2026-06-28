@@ -169,13 +169,25 @@ export async function POST(req: Request) {
     error,
   }).select("id").single()
 
+  const alertId = (alertRow as { id?: string } | null)?.id || ""
+
+  // Audit the alert dispatch itself
+  await supabase.from("audit_logs").insert({
+    user_email:    user.email || "unknown",
+    action:        "created",
+    resource_type: "Alert",
+    resource_id:   alertId,
+    detail:        `${input.type.replace(/_/g, " ")} — ${severity} · ${status}${input.community ? ` · ${input.community}` : ""}`,
+    created_at:    new Date().toISOString(),
+  })
+
   // Audit-log the email leg specifically (Teams delivery is captured by the
   // alerts row's status/error fields). Surfaces in /admin → Audit Log.
   if (recipients.length) {
     await logEmailDelivery(supabase, {
       user_email:    user.email || null,
       resource_type: "Alert",
-      resource_id:   (alertRow as { id?: string } | null)?.id || "",
+      resource_id:   alertId,
       recipients,
       result:        emailResult,
     })

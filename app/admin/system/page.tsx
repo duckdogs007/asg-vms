@@ -730,12 +730,15 @@ export default function AdminSystemPage() {
           {/* Filter bar */}
           <div className="flex flex-wrap gap-1.5 mb-4">
             {([
-              { key: "auth",     label: "Login / Logout" },
-              { key: "checkin",  label: "Check-ins" },
-              { key: "search",   label: "Searches" },
-              { key: "delete",   label: "Deletions" },
-              { key: "report",   label: "Reports" },
-              { key: "all",      label: "All Activity" },
+              { key: "auth",       label: "Login / Logout" },
+              { key: "checkin",    label: "Check-ins" },
+              { key: "watchlist",  label: "Watchlist" },
+              { key: "bolo",       label: "BOLO" },
+              { key: "alert",      label: "Alerts" },
+              { key: "search",     label: "Searches" },
+              { key: "delete",     label: "Deletions" },
+              { key: "report",     label: "Reports" },
+              { key: "all",        label: "All Activity" },
             ] as { key: string; label: string }[]).map(f => (
               <button
                 key={f.key}
@@ -752,12 +755,15 @@ export default function AdminSystemPage() {
           </div>
           {(() => {
             const filtered = auditLogs.filter(log => {
-              if (auditFilter === "all")     return true
-              if (auditFilter === "auth")    return log.resource_type === "Auth"
-              if (auditFilter === "checkin") return (log.resource_type as string).includes("Check-In")
-              if (auditFilter === "search")  return log.action === "searched"
-              if (auditFilter === "delete")  return log.action === "deleted"
-              if (auditFilter === "report")  return log.resource_type === "Report Queue"
+              if (auditFilter === "all")       return true
+              if (auditFilter === "auth")      return log.resource_type === "Auth"
+              if (auditFilter === "checkin")   return (log.resource_type as string).includes("Check-In")
+              if (auditFilter === "watchlist") return log.resource_type === "Watchlist"
+              if (auditFilter === "bolo")      return log.resource_type === "BOLO"
+              if (auditFilter === "alert")     return log.resource_type === "Alert"
+              if (auditFilter === "search")    return log.action === "searched"
+              if (auditFilter === "delete")    return log.action === "deleted"
+              if (auditFilter === "report")    return log.resource_type === "Report Queue"
               return true
             })
             const visible = filtered.slice(0, auditLimit)
