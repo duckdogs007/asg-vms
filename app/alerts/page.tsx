@@ -111,6 +111,7 @@ export default function AlertsPage() {
   const [showChart,   setShowChart]   = useState(true)
   const [rtConnected, setRtConnected] = useState(false)
   const [notifOk,     setNotifOk]     = useState(false)
+  const [alertLimit,  setAlertLimit]  = useState(20)
 
   const rtRef = useRef<RealtimeChannel | null>(null)
 
@@ -341,7 +342,7 @@ export default function AlertsPage() {
         ] as const).map(([k, label]) => (
           <button
             key={k}
-            onClick={() => setFilter(k)}
+            onClick={() => { setFilter(k); setAlertLimit(20) }}
             className={`px-3 py-2 text-sm font-medium border-none cursor-pointer rounded-t-md transition-colors ${
               filter === k ? "bg-blue-800 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
             }`}
@@ -354,7 +355,7 @@ export default function AlertsPage() {
       {/* ALERTS LIST */}
       <div className="bg-white border border-gray-200 rounded-xl overflow-hidden mb-8">
         <div className="px-4 py-2 bg-gray-50 border-b border-gray-200 text-xs font-bold text-gray-500 uppercase tracking-wider">
-          Alerts ({filtered.length})
+          Alerts ({filtered.length}{filtered.length > alertLimit ? `, showing ${alertLimit}` : ""})
         </div>
         {filtered.length === 0 ? (
           <div className="p-8 text-center text-gray-500 text-sm">
@@ -362,7 +363,7 @@ export default function AlertsPage() {
           </div>
         ) : (
           <ul className="divide-y divide-gray-100">
-            {filtered.map(a => (
+            {filtered.slice(0, alertLimit).map(a => (
               <li
                 key={a.id}
                 className={`p-4 flex flex-col gap-2 hover:bg-gray-50 ${
@@ -484,6 +485,16 @@ export default function AlertsPage() {
               </li>
             ))}
           </ul>
+        )}
+        {filtered.length > alertLimit && (
+          <div className="px-4 py-3 border-t border-gray-100 bg-gray-50">
+            <button
+              onClick={() => setAlertLimit(l => l + 20)}
+              className="w-full py-2 text-xs text-gray-500 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer"
+            >
+              Load more ({filtered.length - alertLimit} remaining)
+            </button>
+          </div>
         )}
       </div>
 
