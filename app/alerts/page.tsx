@@ -108,7 +108,7 @@ export default function AlertsPage() {
   const [ackingId,    setAckingId]    = useState<string | null>(null)
   const [ackNote,     setAckNote]     = useState("")
   const [resending,   setResending]   = useState<string | null>(null)
-  const [showChart,   setShowChart]   = useState(false)
+  const [showChart,   setShowChart]   = useState(true)
   const [rtConnected, setRtConnected] = useState(false)
   const [notifOk,     setNotifOk]     = useState(false)
 
@@ -273,11 +273,11 @@ export default function AlertsPage() {
       {/* HEADER */}
       <div className="flex items-center justify-between mb-5 flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold">🔔 Alerts & Notify</h1>
+          <h1 className="text-2xl font-bold">Alert History</h1>
           <div className="flex items-center gap-1.5 mt-1">
             <span className={`w-2 h-2 rounded-full ${rtConnected ? "bg-green-500 animate-pulse" : "bg-gray-400"}`} />
             <span className="text-xs text-gray-500">
-              {rtConnected ? "Live" : "Connecting…"}
+              {rtConnected ? "Live updates on" : "Connecting…"}
               {" · "}
               {notifOk ? "Browser notifications on" : "Browser notifications off"}
             </span>
@@ -302,19 +302,11 @@ export default function AlertsPage() {
             </button>
           )}
           <button
-            onClick={() => setShowChart(s => !s)}
-            className={`px-3 py-1.5 text-sm rounded-md border-none cursor-pointer transition-colors ${
-              showChart ? "bg-blue-800 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-            }`}
-          >
-            📊 Chart
-          </button>
-          <button
             onClick={exportCSV}
             disabled={!filtered.length}
             className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm rounded-md border-none cursor-pointer disabled:opacity-40"
           >
-            ⬇ CSV
+            ⬇ Export CSV
           </button>
           <button
             onClick={loadAll}
@@ -572,7 +564,7 @@ function AlertChart({ alerts }: { alerts: AlertRow[] }) {
   return (
     <div className="bg-white border border-gray-200 rounded-xl p-4 mb-4">
       <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3">
-        Alert Volume — Last 14 Days
+        Alert Volume — Last 14 Days (hover for details)
       </div>
       <div className="flex items-end gap-1">
         {data.map(d => {
@@ -654,14 +646,14 @@ function AlertPayload({ alert: a }: { alert: AlertRow }) {
   if (a.type === "incident_high_priority") {
     return (
       <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 text-sm grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-1">
-        {p["Report Type"] && <PField label="Type"    value={p["Report Type"]} bold />}
-        {p.Unit           && <PField label="Unit"    value={p.Unit} />}
-        {p.Officer        && <PField label="Officer" value={p.Officer} />}
-        {p.Narrative      && (
-          <div className="sm:col-span-2 text-gray-700">
-            <span className="text-gray-500 font-medium">Narrative: </span>{p.Narrative}
-          </div>
-        )}
+        {p.Type         && <PField label="Incident Type" value={p.Type}        bold />}
+        {p.Location     && <PField label="Location"      value={p.Location} />}
+        {p.Date         && <PField label="Date"          value={p.Date} />}
+        {p.Time         && <PField label="Time"          value={p.Time} />}
+        {p.Officer      && <PField label="Officer"       value={p.Officer} />}
+        {p.Persons      && <PField label="Persons"       value={p.Persons} />}
+        {p.ActionTaken  && <PField label="Action Taken"  value={p.ActionTaken} />}
+        {p.FollowUp     && <PField label="Follow-Up"     value={p.FollowUp} />}
       </div>
     )
   }
