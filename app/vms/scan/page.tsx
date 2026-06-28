@@ -150,8 +150,17 @@ export default function ScanID(){
         created_at:     new Date().toISOString(),
       })
       if (logErr) { setSaveError("Save failed: " + logErr.message); return }
+      const dlName = `${person.first_name} ${person.last_name}`.trim()
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        supabase.from("audit_logs").insert({
+          user_email: user?.email || "unknown",
+          action: "created", resource_type: "Visitor Check-In (DL Scan)", resource_id: "",
+          detail: `${dlName} checked in — ${personType}${unitId ? ` · Unit ${unitId}` : ""}`,
+          created_at: new Date().toISOString(),
+        })
+      })
       // Brief confirmation, then reset for next scan
-      setSavedName(`${person.first_name} ${person.last_name}`.trim())
+      setSavedName(dlName)
       setTimeout(() => { setSavedName(""); reset() }, 1200)
     } finally {
       setSaving(false)

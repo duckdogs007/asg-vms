@@ -69,6 +69,13 @@ export default function VmsSearchPage() {
     if (!q) return
     setLoading(true)
     setHasSearched(true)
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      supabase.from("audit_logs").insert({
+        user_email: user?.email || "unknown",
+        action: "searched", resource_type: "VMS Search", resource_id: "",
+        detail: `Searched: "${q}"`, created_at: new Date().toISOString(),
+      })
+    })
     const output: SearchResult[] = []
 
     // VISITORS — dedupe per person to most-recent visit

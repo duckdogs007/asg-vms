@@ -597,6 +597,14 @@ export default function ReportsPage() {
       : `Error: ${data.error || "unknown"}`
     setQueueMsg(prev => ({ ...prev, [queueId]: { ok: data.ok, msg } }))
     if (data.ok) {
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        supabase.from("audit_logs").insert({
+          user_email: user?.email || "unknown",
+          action: "approved", resource_type: "Report Queue", resource_id: queueId,
+          detail: `Approved report — emailed to ${data.recipients?.join(", ") || "no contacts"}`,
+          created_at: new Date().toISOString(),
+        })
+      })
       setTimeout(() => {
         setQueue(prev => prev.filter(q => q.id !== queueId))
         setQueueMsg(prev => { const u = { ...prev }; delete u[queueId]; return u })
@@ -617,6 +625,12 @@ export default function ReportsPage() {
     }).eq("id", queueId)
     setReturnSaving(false)
     if (error) { alert("Failed: " + error.message); return }
+    supabase.from("audit_logs").insert({
+      user_email: user?.email || "unknown",
+      action: "returned", resource_type: "Report Queue", resource_id: queueId,
+      detail: `Returned report for revision — ${notes.trim().slice(0, 100)}`,
+      created_at: new Date().toISOString(),
+    })
     setReturnId(null)
     setReturnNotes("")
     loadQueue()

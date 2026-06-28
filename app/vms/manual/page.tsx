@@ -196,6 +196,15 @@ export default function ManualEntry() {
 
       if (logError) { setError(logError.message); return }
 
+      const manualName = `${firstName} ${lastName}`.trim()
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        supabase.from("audit_logs").insert({
+          user_email: user?.email || "unknown",
+          action: "created", resource_type: "Visitor Check-In (Manual)", resource_id: "",
+          detail: `${manualName} checked in — ${visitorType}${apartment ? ` · Unit ${apartment}` : ""}`,
+          created_at: new Date().toISOString(),
+        })
+      })
       setMessage("Visitor logged successfully.")
       setFirstName(""); setLastName(""); setDob(""); setOln("")
       setPlate(""); setApartment(""); setResidentName("")

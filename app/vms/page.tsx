@@ -304,6 +304,14 @@ export default function VMSPage() {
       if (error) { setSaveError("Check-in failed: " + error.message); return }
 
       const displayName = `${first} ${last}`.trim()
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        supabase.from("audit_logs").insert({
+          user_email: user?.email || "unknown",
+          action: "created", resource_type: "Visitor Check-In", resource_id: "",
+          detail: `${displayName} checked in — ${personType}${unitNumber ? ` · Unit ${unitNumber}` : ""}`,
+          created_at: new Date().toISOString(),
+        })
+      })
       setConfirmed(displayName)
       resetForm()
       loadTodayLogs(communityId)

@@ -232,6 +232,13 @@ export default function IntelPage() {
     setLoading(true)
     setError("")
     setPhotoUrl("")
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      supabase.from("audit_logs").insert({
+        user_email: user?.email || "unknown",
+        action: "searched", resource_type: "Intel Terminal", resource_id: "",
+        detail: `Searched: "${query}"`, created_at: new Date().toISOString(),
+      })
+    })
 
     try {
       const { first, last } = parseName(query)

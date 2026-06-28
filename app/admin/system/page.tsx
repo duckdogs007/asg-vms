@@ -121,6 +121,7 @@ export default function AdminSystemPage() {
   // ── AUDIT LOG ──
   const [auditLogs,    setAuditLogs]    = useState<any[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
+  const [auditLimit,   setAuditLimit]   = useState(20)
 
   // ── SETTINGS ──
   const [tableCounts,     setTableCounts]     = useState<Record<string, number> | null>(null)
@@ -176,9 +177,9 @@ export default function AdminSystemPage() {
   // silent=true skips the loading spinner so the interval poll doesn't flicker
   // the table (the render hides the table while auditLoading is true).
   async function loadAuditLog(silent = false) {
-    if (!silent) setAuditLoading(true)
+    if (!silent) { setAuditLoading(true); setAuditLimit(20) }
     const { data } = await supabase.from("audit_logs")
-      .select("*").order("created_at", { ascending: false }).limit(100)
+      .select("*").order("created_at", { ascending: false }).limit(500)
     setAuditLogs(data || [])
     if (!silent) setAuditLoading(false)
   }
@@ -718,7 +719,11 @@ export default function AdminSystemPage() {
           <div className="flex justify-between items-center mb-5">
             <div>
               <h3 className="text-lg font-bold text-gray-800">Activity Audit Log</h3>
-              <p className="text-xs text-gray-500 mt-0.5">All system actions logged chronologically — read only</p>
+              <p className="text-xs text-gray-500 mt-0.5">
+                {auditLogs.length > 0
+                  ? `${Math.min(auditLimit, auditLogs.length)} of ${auditLogs.length} entries — read only`
+                  : "All system actions logged chronologically — read only"}
+              </p>
             </div>
             <button onClick={() => loadAuditLog()}
               className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 border-none cursor-pointer">
@@ -730,43 +735,55 @@ export default function AdminSystemPage() {
             <div className="text-gray-500 text-sm py-8 text-center">No activity recorded yet.</div>
           )}
           {!auditLoading && auditLogs.length > 0 && (
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              <table className="w-full text-sm">
-                <thead className="bg-gray-50 border-b border-gray-200">
-                  <tr>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Timestamp</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">User</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Action</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
-                    <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Detail</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {auditLogs.map((log, i) => {
-                    const actionColor =
-                      log.action === "deleted"      ? "text-red-600 font-semibold" :
-                      log.action === "edited"       ? "text-blue-600 font-semibold" :
-                      log.action === "resolved"     ? "text-orange-500 font-semibold" :
-                      log.action === "reactivated"  ? "text-purple-600 font-semibold" :
-                      log.action === "email_failed" ? "text-red-600 font-semibold" :
-                      log.action === "email_sent"   ? "text-emerald-600 font-semibold" :
-                                                      "text-green-600 font-semibold"
-                    return (
-                      <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
-                        <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                          {new Date(log.created_at.endsWith("Z") || log.created_at.includes("+") ? log.created_at : log.created_at + "Z")
-                            .toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
-                        </td>
-                        <td className="px-4 py-2.5 text-xs text-gray-700">{log.user_email}</td>
-                        <td className={`px-4 py-2.5 text-xs ${actionColor}`}>{log.action}</td>
-                        <td className="px-4 py-2.5 text-xs text-gray-600">{log.resource_type}</td>
-                        <td className="px-4 py-2.5 text-xs text-gray-500">{log.detail}</td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <>
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Timestamp</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">User</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Action</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
+                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Detail</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {auditLogs.slice(0, auditLimit).map((log, i) => {
+                      const actionColor =
+                        log.action === "deleted"      ? "text-red-600 font-semibold" :
+                        log.action === "edited"       ? "text-blue-600 font-semibold" :
+                        log.action === "resolved"     ? "text-orange-500 font-semibold" :
+                        log.action === "reactivated"  ? "text-purple-600 font-semibold" :
+                        log.action === "email_failed" ? "text-red-600 font-semibold" :
+                        log.action === "email_sent"   ? "text-emerald-600 font-semibold" :
+                                                        "text-green-600 font-semibold"
+                      return (
+                        <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
+                          <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                            {new Date(log.created_at.endsWith("Z") || log.created_at.includes("+") ? log.created_at : log.created_at + "Z")
+                              .toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                          </td>
+                          <td className="px-4 py-2.5 text-xs text-gray-700">{log.user_email}</td>
+                          <td className={`px-4 py-2.5 text-xs ${actionColor}`}>{log.action}</td>
+                          <td className="px-4 py-2.5 text-xs text-gray-600">{log.resource_type}</td>
+                          <td className="px-4 py-2.5 text-xs text-gray-500">{log.detail}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {auditLimit < auditLogs.length && (
+                <div className="mt-3 text-center">
+                  <button
+                    onClick={() => setAuditLimit(prev => prev + 20)}
+                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg border-none cursor-pointer"
+                  >
+                    Load more ({auditLogs.length - auditLimit} remaining)
+                  </button>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

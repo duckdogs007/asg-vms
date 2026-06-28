@@ -71,6 +71,14 @@ export default function VisitorLogDetailPage() {
     setDeleting(true)
     const { error } = await supabase.from("visitor_logs").delete().eq("id", id)
     if (error) { setDeleting(false); alert("Delete failed: " + error.message); return }
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      supabase.from("audit_logs").insert({
+        user_email: user?.email || "unknown",
+        action: "deleted", resource_type: "Visitor Log", resource_id: id,
+        detail: `Deleted visitor log for ${label}`,
+        created_at: new Date().toISOString(),
+      })
+    })
     router.replace("/vms/reports")
   }
 
