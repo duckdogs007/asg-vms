@@ -1120,6 +1120,7 @@ export default function UserDashboard() {
       status:       "pending",
       submitted_at: new Date().toISOString(),
     }).then(({ error: qe }) => { if (qe) console.warn("[queue]", qe.message) })
+    logActivity("submitted", "Report Queue", id, `${type.replace(/_/g, " ")} submitted — ${summary}`)
   }
 
   async function resubmitReport(queueId: string, comment: string) {
@@ -1132,6 +1133,7 @@ export default function UserDashboard() {
     }).eq("id", queueId)
     setRevisionSaving(null)
     if (error) { alert("Resubmit failed: " + error.message); return }
+    logActivity("resubmitted", "Report Queue", queueId, "Report resubmitted after revision")
     setRevisionText(prev => { const u = { ...prev }; delete u[queueId]; return u })
     await loadPastReports()
   }
