@@ -122,6 +122,7 @@ export default function AdminSystemPage() {
   const [auditLogs,    setAuditLogs]    = useState<any[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditLimit,   setAuditLimit]   = useState(20)
+  const [auditFilter,  setAuditFilter]  = useState<string>("auth")
 
   // ── SETTINGS ──
   const [tableCounts,     setTableCounts]     = useState<Record<string, number> | null>(null)
@@ -716,75 +717,113 @@ export default function AdminSystemPage() {
       {/* AUDIT LOG */}
       {activeTab === "audit" && (
         <div>
-          <div className="flex justify-between items-center mb-5">
+          <div className="flex flex-wrap justify-between items-start gap-3 mb-4">
             <div>
               <h3 className="text-lg font-bold text-gray-800">Activity Audit Log</h3>
-              <p className="text-xs text-gray-500 mt-0.5">
-                {auditLogs.length > 0
-                  ? `${Math.min(auditLimit, auditLogs.length)} of ${auditLogs.length} entries — read only`
-                  : "All system actions logged chronologically — read only"}
-              </p>
+              <p className="text-xs text-gray-500 mt-0.5">Read only — actions logged system-wide</p>
             </div>
             <button onClick={() => loadAuditLog()}
               className="px-3 py-1.5 bg-gray-100 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-200 border-none cursor-pointer">
               ↻ Refresh
             </button>
           </div>
-          {auditLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading...</div>}
-          {!auditLoading && auditLogs.length === 0 && (
-            <div className="text-gray-500 text-sm py-8 text-center">No activity recorded yet.</div>
-          )}
-          {!auditLoading && auditLogs.length > 0 && (
-            <>
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-gray-50 border-b border-gray-200">
-                    <tr>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Timestamp</th>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">User</th>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Action</th>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
-                      <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Detail</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {auditLogs.slice(0, auditLimit).map((log, i) => {
-                      const actionColor =
-                        log.action === "deleted"      ? "text-red-600 font-semibold" :
-                        log.action === "edited"       ? "text-blue-600 font-semibold" :
-                        log.action === "resolved"     ? "text-orange-500 font-semibold" :
-                        log.action === "reactivated"  ? "text-purple-600 font-semibold" :
-                        log.action === "email_failed" ? "text-red-600 font-semibold" :
-                        log.action === "email_sent"   ? "text-emerald-600 font-semibold" :
-                                                        "text-green-600 font-semibold"
-                      return (
-                        <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
-                          <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
-                            {new Date(log.created_at.endsWith("Z") || log.created_at.includes("+") ? log.created_at : log.created_at + "Z")
-                              .toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
-                          </td>
-                          <td className="px-4 py-2.5 text-xs text-gray-700">{log.user_email}</td>
-                          <td className={`px-4 py-2.5 text-xs ${actionColor}`}>{log.action}</td>
-                          <td className="px-4 py-2.5 text-xs text-gray-600">{log.resource_type}</td>
-                          <td className="px-4 py-2.5 text-xs text-gray-500">{log.detail}</td>
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {auditLimit < auditLogs.length && (
-                <div className="mt-3 text-center">
-                  <button
-                    onClick={() => setAuditLimit(prev => prev + 20)}
-                    className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg border-none cursor-pointer"
-                  >
-                    Load more ({auditLogs.length - auditLimit} remaining)
-                  </button>
-                </div>
-              )}
-            </>
-          )}
+          {/* Filter bar */}
+          <div className="flex flex-wrap gap-1.5 mb-4">
+            {([
+              { key: "auth",     label: "Login / Logout" },
+              { key: "checkin",  label: "Check-ins" },
+              { key: "search",   label: "Searches" },
+              { key: "delete",   label: "Deletions" },
+              { key: "report",   label: "Reports" },
+              { key: "all",      label: "All Activity" },
+            ] as { key: string; label: string }[]).map(f => (
+              <button
+                key={f.key}
+                onClick={() => { setAuditFilter(f.key); setAuditLimit(20) }}
+                className={`px-3 py-1 text-xs font-semibold rounded-full border-none cursor-pointer transition-colors ${
+                  auditFilter === f.key
+                    ? "bg-blue-800 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {f.label}
+              </button>
+            ))}
+          </div>
+          {(() => {
+            const filtered = auditLogs.filter(log => {
+              if (auditFilter === "all")     return true
+              if (auditFilter === "auth")    return log.resource_type === "Auth"
+              if (auditFilter === "checkin") return (log.resource_type as string).includes("Check-In")
+              if (auditFilter === "search")  return log.action === "searched"
+              if (auditFilter === "delete")  return log.action === "deleted"
+              if (auditFilter === "report")  return log.resource_type === "Report Queue"
+              return true
+            })
+            const visible = filtered.slice(0, auditLimit)
+            return (
+              <>
+                {auditLoading && <div className="text-gray-500 text-sm py-8 text-center">Loading...</div>}
+                {!auditLoading && filtered.length === 0 && (
+                  <div className="text-gray-500 text-sm py-8 text-center">No entries for this filter.</div>
+                )}
+                {!auditLoading && filtered.length > 0 && (
+                  <>
+                    <div className="text-xs text-gray-400 mb-2">{Math.min(auditLimit, filtered.length)} of {filtered.length} entries</div>
+                    <div className="border border-gray-200 rounded-xl overflow-hidden">
+                      <table className="w-full text-sm">
+                        <thead className="bg-gray-50 border-b border-gray-200">
+                          <tr>
+                            <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Timestamp</th>
+                            <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">User</th>
+                            <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Action</th>
+                            <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Type</th>
+                            <th className="text-left px-4 py-3 font-semibold text-gray-500 text-xs">Detail</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {visible.map((log, i) => {
+                            const actionColor =
+                              log.action === "login"        ? "text-blue-700 font-semibold" :
+                              log.action === "logout"       ? "text-gray-500 font-semibold" :
+                              log.action === "deleted"      ? "text-red-600 font-semibold" :
+                              log.action === "edited"       ? "text-blue-600 font-semibold" :
+                              log.action === "resolved"     ? "text-orange-500 font-semibold" :
+                              log.action === "reactivated"  ? "text-purple-600 font-semibold" :
+                              log.action === "email_failed" ? "text-red-600 font-semibold" :
+                              log.action === "email_sent"   ? "text-emerald-600 font-semibold" :
+                                                              "text-green-600 font-semibold"
+                            return (
+                              <tr key={i} className={`border-b border-gray-100 ${i % 2 === 0 ? "bg-white" : "bg-gray-50"}`}>
+                                <td className="px-4 py-2.5 text-xs text-gray-500 whitespace-nowrap">
+                                  {new Date(log.created_at.endsWith("Z") || log.created_at.includes("+") ? log.created_at : log.created_at + "Z")
+                                    .toLocaleString("en-US", { month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+                                </td>
+                                <td className="px-4 py-2.5 text-xs text-gray-700">{log.user_email}</td>
+                                <td className={`px-4 py-2.5 text-xs ${actionColor}`}>{log.action}</td>
+                                <td className="px-4 py-2.5 text-xs text-gray-600">{log.resource_type}</td>
+                                <td className="px-4 py-2.5 text-xs text-gray-500">{log.detail}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                    {auditLimit < filtered.length && (
+                      <div className="mt-3 text-center">
+                        <button
+                          onClick={() => setAuditLimit(prev => prev + 20)}
+                          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg border-none cursor-pointer"
+                        >
+                          Load more ({filtered.length - auditLimit} remaining)
+                        </button>
+                      </div>
+                    )}
+                  </>
+                )}
+              </>
+            )
+          })()}
         </div>
       )}
     </div>

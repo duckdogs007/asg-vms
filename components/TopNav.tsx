@@ -121,6 +121,13 @@ export default function TopNav() {
   const unreadCount = changelog.filter(e => !lastSeenAt || e.posted_at > lastSeenAt).length
 
   async function handleLogout() {
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from("audit_logs").insert({
+      user_email: user?.email || "unknown",
+      action: "logout", resource_type: "Auth", resource_id: "",
+      detail: "User signed out",
+      created_at: new Date().toISOString(),
+    })
     await supabase.auth.signOut()
     router.push("/login")
   }

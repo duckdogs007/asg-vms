@@ -23,6 +23,12 @@ export default function LoginPage() {
       if (error) {
         setError(error.message)
       } else if (data.session) {
+        supabase.from("audit_logs").insert({
+          user_email: email.toLowerCase().trim(),
+          action: "login", resource_type: "Auth", resource_id: "",
+          detail: "User signed in",
+          created_at: new Date().toISOString(),
+        })
         // Sign-on flow: officer must confirm their post for this shift.
         // The confirm page saves the assignment + localStorage and then
         // routes everyone to the Home page (/).
