@@ -258,6 +258,7 @@ export default function ReportsPage() {
   const [regKind,    setRegKind]    = useState<"all" | "resident" | "visitor">("all")
   const [recentSubs,        setRecentSubs]        = useState<SubmissionRow[]>([])
   const [recentSubsLoading, setRecentSubsLoading] = useState(false)
+  const [recentSubsExpanded, setRecentSubsExpanded] = useState(false)
 
   // Review queue (admin/supervisor)
   const [queue,        setQueue]        = useState<any[]>([])
@@ -1082,46 +1083,56 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
         ) : recentSubs.length === 0 ? (
           <div className="text-gray-400 text-sm py-6 text-center">No reports found.</div>
         ) : (
-          <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-            {recentSubs.map((s, i) => {
-              const badge  = SUB_BADGE[s.typeKey] || "bg-gray-100 text-gray-700"
-              const isNew  = Date.now() - new Date(utc(s.created_at)).getTime() < 24 * 3600 * 1000
-              const comm   = communities.find(c => c.id === s.community_id)?.name || "—"
-              return (
-                <div
-                  key={`${s.typeKey}:${s.id}`}
-                  className={`flex items-center gap-3 px-4 py-3 ${i < recentSubs.length - 1 ? "border-b border-gray-100" : ""}`}
-                >
-                  <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${badge}`}>
-                    {s.typeLabel}
-                  </span>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-medium text-gray-800 truncate">{s.summary}</div>
-                    <div className="text-xs text-gray-500 truncate">{s.officer} · {comm}</div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {isNew && (
-                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                        New
-                      </span>
-                    )}
-                    <div className="text-xs text-gray-400 text-right">
-                      <div>{timeAgo(s.created_at)}</div>
-                      <div className="text-[10px] text-gray-300">
-                        {new Date(utc(s.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                      </div>
+          <>
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {recentSubs.slice(0, recentSubsExpanded ? 15 : 3).map((s, i, arr) => {
+                const badge  = SUB_BADGE[s.typeKey] || "bg-gray-100 text-gray-700"
+                const isNew  = Date.now() - new Date(utc(s.created_at)).getTime() < 24 * 3600 * 1000
+                const comm   = communities.find(c => c.id === s.community_id)?.name || "—"
+                return (
+                  <div
+                    key={`${s.typeKey}:${s.id}`}
+                    className={`flex items-center gap-3 px-4 py-3 ${i < arr.length - 1 ? "border-b border-gray-100" : ""}`}
+                  >
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${badge}`}>
+                      {s.typeLabel}
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-800 truncate">{s.summary}</div>
+                      <div className="text-xs text-gray-500 truncate">{s.officer} · {comm}</div>
                     </div>
-                    <Link
-                      href={`/vms/reports/${SUB_TYPE_SLUG[s.typeKey]}/${s.id}`}
-                      className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium"
-                    >
-                      View →
-                    </Link>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      {isNew && (
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
+                          New
+                        </span>
+                      )}
+                      <div className="text-xs text-gray-400 text-right">
+                        <div>{timeAgo(s.created_at)}</div>
+                        <div className="text-[10px] text-gray-300">
+                          {new Date(utc(s.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                        </div>
+                      </div>
+                      <Link
+                        href={`/vms/reports/${SUB_TYPE_SLUG[s.typeKey]}/${s.id}`}
+                        className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium"
+                      >
+                        View →
+                      </Link>
+                    </div>
                   </div>
-                </div>
-              )
-            })}
-          </div>
+                )
+              })}
+            </div>
+            {recentSubs.length > 3 && (
+              <button
+                onClick={() => setRecentSubsExpanded(e => !e)}
+                className="mt-2 w-full py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white"
+              >
+                {recentSubsExpanded ? "▲ Show less" : `▼ Show all ${recentSubs.length} submissions`}
+              </button>
+            )}
+          </>
         )}
       </Section>
 
@@ -1479,62 +1490,58 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
             )}
           </Section>
 
-          {/* ── TRAFFIC BREAKDOWN ── */}
+          {/* ── TRAFFIC BREAKDOWN + DAILY ACTIVITY ── */}
           <Section label="Traffic Breakdown">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <StatCard title="Total Entries"  value={stats.total}       accent="blue"
-                sub={deltaSub(stats.total, priorTotal, `${dayCount}d`)} />
-              <StatCard title="Visitors"       value={stats.visitors}    accent="indigo" />
-              <StatCard title="Deliveries"     value={stats.deliveries}  accent="sky" />
-              <StatCard title="Contractors"    value={stats.contractors} accent="violet" />
-              <StatCard title="Employees"      value={stats.employees}   accent="emerald" />
-              <StatCard title="Residents"      value={stats.residents}   accent="green" />
-            </div>
-          </Section>
-
-          {/* ── DAILY ACTIVITY CHART ── */}
-          <Section label="Daily Activity">
-            <div className="bg-white border border-gray-200 rounded-xl p-4">
-              <div className="flex items-end gap-px" style={{ height: "100px" }}>
-                {allDates.map(date => {
-                  const count = stats.byDay[date] || 0
-                  const pct   = (count / maxDayCount) * 100
-                  const label = new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "numeric", day: "numeric" })
-                  return (
-                    <div key={date} title={`${label}: ${count}`}
-                      className="flex flex-col items-center justify-end flex-1 min-w-0 h-full cursor-default group">
-                      {count > 0 ? (
-                        <div
-                          className="w-full rounded-sm bg-blue-700 transition-all group-hover:opacity-80"
-                          style={{ height: `${Math.max(3, (pct / 100) * 72)}px` }}
-                        />
-                      ) : (
-                        // Empty days render as a thin dashed baseline so the eye
-                        // reads "nothing happened" instead of "tiny activity".
-                        <div className="w-full border-b border-dashed border-gray-300" style={{ height: "1px" }} />
-                      )}
-                    </div>
-                  )
-                })}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Stat cards */}
+              <div className="grid grid-cols-3 gap-2">
+                <StatCard title="Total"       value={stats.total}       accent="blue"
+                  sub={deltaSub(stats.total, priorTotal, `${dayCount}d`)} />
+                <StatCard title="Visitors"    value={stats.visitors}    accent="indigo" />
+                <StatCard title="Deliveries"  value={stats.deliveries}  accent="sky" />
+                <StatCard title="Contractors" value={stats.contractors} accent="violet" />
+                <StatCard title="Employees"   value={stats.employees}   accent="emerald" />
+                <StatCard title="Residents"   value={stats.residents}   accent="green" />
               </div>
-              {/* X-axis labels — only show if 31 days or fewer */}
-              {allDates.length <= 31 && (
-                <div className="flex gap-px mt-1">
+              {/* Daily bar chart */}
+              <div className="bg-white border border-gray-200 rounded-xl p-3 flex flex-col justify-between">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Daily Activity</div>
+                <div className="flex items-end gap-px flex-1" style={{ minHeight: "64px" }}>
                   {allDates.map(date => {
+                    const count = stats.byDay[date] || 0
+                    const pct   = (count / maxDayCount) * 100
                     const label = new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "numeric", day: "numeric" })
                     return (
-                      <div key={date} className="flex-1 min-w-0 text-center text-[8px] text-gray-400 leading-tight truncate">
-                        {label}
+                      <div key={date} title={`${label}: ${count}`}
+                        className="flex flex-col items-center justify-end flex-1 min-w-0 h-full cursor-default group">
+                        {count > 0 ? (
+                          <div className="w-full rounded-sm bg-blue-700 transition-all group-hover:opacity-80"
+                            style={{ height: `${Math.max(3, (pct / 100) * 56)}px` }} />
+                        ) : (
+                          <div className="w-full border-b border-dashed border-gray-300" style={{ height: "1px" }} />
+                        )}
                       </div>
                     )
                   })}
                 </div>
-              )}
-              <div className="text-xs text-gray-400 mt-2">
-                Peak day: <strong className="text-gray-600">{Object.entries(stats.byDay).sort((a,b) => b[1]-a[1])[0]
-                  ? `${new Date(Object.entries(stats.byDay).sort((a,b) => b[1]-a[1])[0][0] + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} (${Object.entries(stats.byDay).sort((a,b) => b[1]-a[1])[0][1]} entries)`
-                  : "—"
-                }</strong>
+                {allDates.length <= 31 && (
+                  <div className="flex gap-px mt-1">
+                    {allDates.map(date => {
+                      const label = new Date(date + "T12:00:00").toLocaleDateString("en-US", { month: "numeric", day: "numeric" })
+                      return (
+                        <div key={date} className="flex-1 min-w-0 text-center text-[7px] text-gray-400 leading-tight truncate">
+                          {label}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+                <div className="text-[10px] text-gray-400 mt-1.5">
+                  Peak: <strong className="text-gray-600">{Object.entries(stats.byDay).sort((a,b) => b[1]-a[1])[0]
+                    ? `${new Date(Object.entries(stats.byDay).sort((a,b) => b[1]-a[1])[0][0] + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric" })} (${Object.entries(stats.byDay).sort((a,b) => b[1]-a[1])[0][1]})`
+                    : "—"
+                  }</strong>
+                </div>
               </div>
             </div>
           </Section>
