@@ -289,6 +289,7 @@ export default function UserDashboard() {
   const [showAddBolo,    setShowAddBolo]    = useState(false)
   // Inline edit state (admin only)
   const [editingBoloId,    setEditingBoloId]    = useState<string | null>(null)
+  const [notifyBoloOnEdit, setNotifyBoloOnEdit] = useState(false)
   const [editBoloName,     setEditBoloName]     = useState("")
   const [editBoloDesc,     setEditBoloDesc]     = useState("")
   const [editBoloReason,   setEditBoloReason]   = useState("")
@@ -1454,6 +1455,7 @@ export default function UserDashboard() {
 
   function cancelBoloEdit() {
     setEditingBoloId(null)
+    setNotifyBoloOnEdit(false)
     setEditBoloName(""); setEditBoloDesc(""); setEditBoloReason("")
     setEditBoloDob(""); setEditBoloOln(""); setEditBoloSsn(""); setEditBoloSex(""); setEditBoloRace(""); setEditBoloFirearm(false)
     setEditBoloVehicle(""); setEditBoloPlate(""); setEditBoloPlateState(""); setEditBoloCommunity(""); setEditBoloAddedBy("")
@@ -1498,7 +1500,7 @@ export default function UserDashboard() {
     if (error) { setBoloError("Update failed: " + error.message); return }
     setBoloMessage(`✅ BOLO updated.`)
     await logActivity("edited", "BOLO", b.id, `Edited BOLO — ${editBoloName || editBoloDesc}`)
-    notifyBolo(b.id)
+    if (notifyBoloOnEdit) notifyBolo(b.id)
     cancelBoloEdit()
     loadBolos()
   }
@@ -3288,6 +3290,10 @@ export default function UserDashboard() {
                       )}
                     </div>
                   </div>
+                  <label className="flex items-center gap-2 mb-3 cursor-pointer">
+                    <input type="checkbox" checked={notifyBoloOnEdit} onChange={e => setNotifyBoloOnEdit(e.target.checked)} className="w-4 h-4 accent-red-700" />
+                    <span className="text-sm text-gray-700">Notify officers of this update</span>
+                  </label>
                   <div className="flex gap-2">
                     <button onClick={() => saveBoloEdit(b)} disabled={savingBoloEdit}
                       className="px-4 py-2 bg-green-700 hover:bg-green-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer disabled:opacity-50">

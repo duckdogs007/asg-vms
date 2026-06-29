@@ -87,7 +87,7 @@ export default function ConfirmLocationPage() {
           American Security Group
         </div>
         <div className="text-[11px] text-gray-500 uppercase tracking-widest mt-1 mb-5 text-center">
-          Integrated Property Solutions
+          Property Solutions Platform
         </div>
 
         <h2 className="text-base font-semibold text-gray-900 mb-1">
