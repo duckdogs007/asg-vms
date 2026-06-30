@@ -213,13 +213,12 @@ export default function TopNav() {
 
           {/* Desktop nav links (hidden below md) */}
           <div className="hidden md:flex gap-5">
-            <Link href="/"            className={navLinkCls}>Home</Link>
-            <Link href="/vms"         className={navLinkCls}>VMS</Link>
-            {isAdmin && <Link href="/admin/system" className={navLinkCls}>Admin Dashboard</Link>}
-            <Link href="/alerts"      className={navLinkCls}>Alert Log</Link>
-            <Link href="/userdash"    className={navLinkCls}>User Dashboard</Link>
-            <Link href="/vms/intel"   className={navLinkCls}>Intel Terminal</Link>
-            <Link href="/vms/reports" className={navLinkCls}>Reports</Link>
+            <Link href="/vms"          className={navLinkCls}>VMS</Link>
+            <Link href="/userdash"     className={navLinkCls}>User Dashboard</Link>
+            <Link href="/vms/property" className={navLinkCls}>Property Hub</Link>
+            <Link href="/vms/intel"    className={navLinkCls}>Intel Hub</Link>
+            <Link href="/alerts"       className={navLinkCls}>Alert Log</Link>
+            <Link href="/vms/reports"  className={navLinkCls}>Reports</Link>
             {userEmail && (
               <Link href="/chat" className={`${navLinkCls} relative`}>
                 💬 Chat
@@ -228,7 +227,7 @@ export default function TopNav() {
                 )}
               </Link>
             )}
-            <Link href="/vms/property" className={navLinkCls}>Property Hub</Link>
+            {isAdmin && <Link href="/admin/system" className={navLinkCls}>Admin</Link>}
           </div>
         </div>
 
@@ -413,20 +412,19 @@ export default function TopNav() {
           {/* Click-outside catcher */}
           <div className="fixed inset-0 z-40" onClick={() => setMobileNavOpen(false)} />
           <div className="absolute left-3 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[220px] py-1">
-            <Link href="/"            className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
-            <Link href="/vms"         className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
-            {isAdmin && <Link href="/admin/system" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ Admin Dashboard</Link>}
-            <Link href="/alerts"      className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alert Log</Link>
-            <Link href="/userdash"    className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>
-            <Link href="/vms/intel"   className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Terminal</Link>
-            <Link href="/vms/reports"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
+            <Link href="/vms"          className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
+            <Link href="/userdash"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>
+            <Link href="/vms/property" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏢 Property Hub</Link>
+            <Link href="/vms/intel"    className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Hub</Link>
+            <Link href="/alerts"       className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alert Log</Link>
+            <Link href="/vms/reports"  className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
             {userEmail && (
               <Link href="/chat" className={`${mobileNavLinkCls} flex items-center justify-between`} onClick={() => setMobileNavOpen(false)}>
-                <span>💬 Team Chat</span>
+                <span>💬 Chat</span>
                 {chatUnread && <span className="w-2 h-2 rounded-full bg-blue-600 flex-shrink-0"></span>}
               </Link>
             )}
-            <Link href="/vms/property" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏢 Property Hub</Link>
+            {isAdmin && <Link href="/admin/system" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>⚙️ Admin</Link>}
             <div className="border-t border-gray-100 mt-1 pt-1.5 pb-1.5 px-4 text-xs text-gray-400">{currentTime}</div>
           </div>
         </>
