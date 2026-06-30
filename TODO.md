@@ -1,9 +1,9 @@
 # VMS — TODO & Build Tracker
 
-**App:** https://asg-vms.vercel.app/
+**App:** https://asg-psp.com
 **Stack:** Next.js · TypeScript · Supabase · Vercel
 **Supabase project:** ASG-VMS (`xmomsoobriehgrnppewa`)
-**Last updated:** June 27, 2026
+**Last updated:** June 29, 2026
 
 > Shared task list for Claude.ai ↔ Claude Code. Keep this file in the repo root as the single source of truth. Companion: `CLAUDE_CODE_HANDOFF.md` (sequenced build plan + migration files).
 
@@ -13,9 +13,23 @@
 
 | # | Item | Notes |
 |---|------|-------|
-| — | Deploy to prod | `vercel --prod` — all June 26–27 work is on master, not yet on asg-psp.com |
+| 56 | Punch in / punch out | Geofence-based officer time clock — scoping phase |
+| 7b | Property manager role enforcement | RLS + UI gating per role (guest read-only, PM writes Hub) |
+| 27 | Tenancy history — app-side | Snapshot-on-save + import archival (schema done, app-side pending) |
 
 ---
+
+## Recently completed (June 27–29, 2026)
+
+- [x] **#54 / Audit log — login & logout tracking** — `login` and `logout` actions written to `audit_logs` on every sign-in (login page) and sign-out (TopNav); Admin audit log defaults to Login/Logout filter view
+- [x] **Audit log — full action coverage** — all visitor check-ins (main, DL scan, manual), visitor log deletion, report approve/return, VMS search, Intel Terminal search, watchlist add/edit/delete (already via `logActivity`), BOLO create/edit/resolve/reactivate (already via `logActivity`), alert dispatch, report submission + resubmission all tracked in `audit_logs`
+- [x] **Admin audit log — filter bar + pagination** — 9 filter categories (Login/Logout, Check-ins, Watchlist, BOLO, Alerts, Searches, Deletions, Reports, All Activity); defaults to Login/Logout; Load More (+20 per click); DB fetch 500 records
+- [x] **Alert History page** — renamed from "Alerts & Notify"; incident alert payload field names fixed; Load More pagination (20 at a time); chart always visible
+- [x] **Reports page reorganization** — community selector derived from top filter; Entry Log first; Traffic Breakdown + Daily Activity side-by-side; Recent Submissions collapsed to 3 with expand toggle; Monthly Reports merged into Report Runner; Visitor Logs added to Report Runner
+- [x] **Visitor log delete** — admin-only Delete Record button on `/vms/reports/visitor-log/[id]`; soft-delete deferred
+- [x] **#44 — Header rename (complete)** — confirm-location page was missed in June 25 pass; now fully "Property Solutions Platform" everywhere
+- [x] **#48 — Tab order rotation (per spec)** — desktop + mobile: Home → VMS → Admin Dashboard → Alert Log → User Dashboard → Intel Terminal → Reports → Chat → Property Hub
+- [x] **#55 — BOLO edit decoupled from notifications** — saving a BOLO no longer auto-notifies; "Notify officers of this update" checkbox added (unchecked by default)
 
 ## Recently completed (June 27, 2026)
 
@@ -47,9 +61,16 @@
 
 ## Open items
 
----
+#### 56. Punch in / punch out — officer time clock at locations
+Geofence-based check-in so officers clock on/off post. Per-location lat/long + radius; punch validates GPS position is inside the geofence. Data model: `shifts` / `time_clock` table (officer, location, punch_in, punch_out, lat/long, accuracy). Feeds coverage/hours reporting. Scoping phase — geofence chosen over QR/NFC.
 
-## Security advisor follow-ups (from June 19 scan)
+#### 7b. Property Hub — `property_manager` role enforcement
+Role widened in DB (`user_assignments.role` CHECK constraint); `is_guest()`, `is_admin_or_pm()` DB functions live. Still needed: RLS policies per role (guest read-only, PM writes Property Hub), UI gating per role in app code.
+
+#### 27. Tenancy history — app-side (snapshot + import archival)
+Schema fully applied to prod (`tenancy_history` table, `resolve_hoh_as_of()` helper, `move_out`/`lease_to`/status on residents). App-side still TODO: snapshot HOH + household onto each report record on creation; import shift from overwrite → upsert-with-archival.
+
+#### Security advisor follow-ups (from June 19 scan)
 - Review `EXECUTE` on `is_admin()` and `set_my_assignment()` (callable by anon/authenticated).
 - Enable leaked-password protection (Auth settings — one toggle; Pro-gated).
 - Re-run the advisor after any new tables/policies.
