@@ -135,6 +135,16 @@ const EMPTY_STATS: Stats = {
   byDay: {}, byHour: {}
 }
 
+// typeKey → report_queue.report_type value
+const SUB_QUEUE_TYPE: Partial<Record<string, string>> = {
+  incident:      "incident",
+  fieldContact:  "field_contact",
+  vehicleFI:     "vehicle_fi",
+  parking:       "parking",
+  dailyLog:      "daily_log",
+  maintenance:   "maintenance",
+}
+
 interface SubmissionRow {
   id: string
   typeKey: "incident" | "fieldContact" | "vehicleFI" | "parking" | "dailyLog" | "maintenance" | "gateChecklist"
@@ -143,6 +153,9 @@ interface SubmissionRow {
   community_id: string | null
   created_at: string
   summary: string
+  queueStatus?: string
+  approvedBy?: string
+  approvedAt?: string
 }
 
 interface RunnerRow {
@@ -569,7 +582,28 @@ export default function ReportsPage() {
       })),
     ]
     rows.sort((a, b) => new Date(utc(b.created_at)).getTime() - new Date(utc(a.created_at)).getTime())
-    setRecentSubs(rows.slice(0, 15))
+    const top15 = rows.slice(0, 15)
+
+    // Batch-fetch queue status for the 15 displayed rows (types that go through the queue)
+    const queueable = top15.filter(r => SUB_QUEUE_TYPE[r.typeKey])
+    if (queueable.length > 0) {
+      const { data: qRows } = await supabase
+        .from("report_queue")
+        .select("report_id,report_type,status,reviewed_by,reviewed_at")
+        .in("report_id", queueable.map(r => r.id))
+      const qMap: Record<string, typeof qRows extends (infer T)[] | null ? T : never> = {}
+      for (const q of qRows || []) { qMap[q.report_id] = q }
+      for (const row of top15) {
+        const q = qMap[row.id]
+        if (q) {
+          row.queueStatus = q.status
+          row.approvedBy  = q.reviewed_by ?? undefined
+          row.approvedAt  = q.reviewed_at ?? undefined
+        }
+      }
+    }
+
+    setRecentSubs(top15)
     setRecentSubsLoading(false)
   }
 
@@ -1114,6 +1148,17 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                     <div className="flex-1 min-w-0">
                       <div className="text-sm font-medium text-gray-800 truncate">{s.summary}</div>
                       <div className="text-xs text-gray-500 truncate">{s.officer} · {comm}</div>
+                      {s.queueStatus === "sent" && s.approvedBy && (
+                        <div className="text-[10px] text-green-700 mt-0.5 truncate">
+                          ✓ Approved by {s.approvedBy}{s.approvedAt ? ` · ${new Date(utc(s.approvedAt)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}` : ""}
+                        </div>
+                      )}
+                      {s.queueStatus === "needs_revision" && (
+                        <div className="text-[10px] text-amber-700 mt-0.5">! Revision requested</div>
+                      )}
+                      {s.queueStatus === "pending" && (
+                        <div className="text-[10px] text-yellow-700 mt-0.5">⏳ Pending review</div>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {isNew && (

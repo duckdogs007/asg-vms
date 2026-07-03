@@ -278,11 +278,37 @@ export default function ReportDetailPage() {
         )}
       </div>
 
+      {/* Approval stamp */}
+      {qStatus === "sent" && queue?.reviewed_by && (
+        <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-xl">
+          <div className="text-xs font-bold text-green-800 uppercase tracking-wide mb-1">Approved &amp; Sent</div>
+          <div className="text-sm text-green-900">
+            Approved by <span className="font-semibold">{queue.reviewed_by}</span>
+            {queue.reviewed_at && (
+              <> on {new Date(queue.reviewed_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</>
+            )}
+          </div>
+          {queue.sent_at && queue.sent_at !== queue.reviewed_at && (
+            <div className="text-xs text-green-700 mt-1">
+              Sent to client {new Date(queue.sent_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Revision notes */}
       {qStatus === "needs_revision" && queue?.revision_notes && (
         <div className="mb-4 p-4 bg-amber-50 border border-amber-200 rounded-xl">
           <div className="text-xs font-bold text-amber-800 uppercase tracking-wide mb-1">Revision Requested</div>
           <div className="text-sm text-amber-900">{queue.revision_notes}</div>
+          {queue.reviewed_by && (
+            <div className="text-xs text-amber-700 mt-1">
+              Returned by <span className="font-semibold">{queue.reviewed_by}</span>
+              {queue.reviewed_at && (
+                <> on {new Date(queue.reviewed_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</>
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -444,6 +470,11 @@ export default function ReportDetailPage() {
         <div>Report ID: {id}</div>
         {r.created_at && (
           <div>Submitted {new Date(r.created_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}{queue?.submitted_by ? ` by ${queue.submitted_by}` : ""}</div>
+        )}
+        {queue?.reviewed_by && queue?.reviewed_at && (
+          <div>
+            {qStatus === "sent" ? "Approved" : "Reviewed"} by {queue.reviewed_by} · {new Date(queue.reviewed_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}
+          </div>
         )}
       </div>
     </div>
