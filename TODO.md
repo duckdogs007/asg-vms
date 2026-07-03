@@ -3,7 +3,7 @@
 **App:** https://asg-psp.com
 **Stack:** Next.js · TypeScript · Supabase · Vercel
 **Supabase project:** ASG-VMS (`xmomsoobriehgrnppewa`)
-**Last updated:** June 29, 2026
+**Last updated:** July 3, 2026
 
 > Shared task list for Claude.ai ↔ Claude Code. Keep this file in the repo root as the single source of truth. Companion: `CLAUDE_CODE_HANDOFF.md` (sequenced build plan + migration files).
 
@@ -16,6 +16,7 @@
 | 56 | Punch in / punch out | Geofence-based officer time clock — scoping phase |
 | 7b | Property manager role enforcement | RLS + UI gating per role (guest read-only, PM writes Hub) |
 | 27 | Tenancy history — app-side | Snapshot-on-save + import archival (schema done, app-side pending) |
+| 57 | AI quota limit error handling | Review Gemini quota/rate-limit errors surfaced in report summary (`/api/ai/summary`); add graceful user-facing message + retry/fallback strategy |
 
 ---
 
