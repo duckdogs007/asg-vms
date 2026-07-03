@@ -37,6 +37,70 @@ const TYPE_BADGE: Record<string, string> = {
   slate:   "bg-slate-100 text-slate-700 border-slate-200",
 }
 
+type EditFieldDef = { key: string; label: string; type: "text" | "date" | "textarea" }
+
+const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
+  "incident": [
+    { key: "date",             label: "Date",              type: "date"     },
+    { key: "issued_by",        label: "Reporting Officer", type: "text"     },
+    { key: "incident_type",    label: "Incident Type",     type: "text"     },
+    { key: "building",         label: "Building",          type: "text"     },
+    { key: "apartment",        label: "Apartment",         type: "text"     },
+    { key: "hoh_name",         label: "HOH / Tenant",      type: "text"     },
+    { key: "persons_involved", label: "Persons Involved",  type: "text"     },
+    { key: "narrative",        label: "Narrative",         type: "textarea" },
+    { key: "action_taken",     label: "Action Taken",      type: "textarea" },
+    { key: "reliant_case_no",  label: "Reliant Case #",    type: "text"     },
+    { key: "hpd_report_no",    label: "HPD Report #",      type: "text"     },
+    { key: "asg_report_no",    label: "ASG Report #",      type: "text"     },
+  ],
+  "field-contact": [
+    { key: "officer_name", label: "Officer",      type: "text"     },
+    { key: "contact_name", label: "Contact Name", type: "text"     },
+    { key: "reason",       label: "Reason",       type: "text"     },
+    { key: "notes",        label: "Notes",        type: "textarea" },
+  ],
+  "vehicle-fi": [
+    { key: "date",         label: "Date",         type: "date"     },
+    { key: "officer_name", label: "Officer",      type: "text"     },
+    { key: "plate",        label: "Plate",        type: "text"     },
+    { key: "state",        label: "State",        type: "text"     },
+    { key: "make",         label: "Make",         type: "text"     },
+    { key: "model",        label: "Model",        type: "text"     },
+    { key: "color",        label: "Color",        type: "text"     },
+    { key: "year",         label: "Year",         type: "text"     },
+    { key: "notes",        label: "Notes",        type: "textarea" },
+  ],
+  "parking": [
+    { key: "date",           label: "Date",           type: "date"     },
+    { key: "officer_name",   label: "Officer",        type: "text"     },
+    { key: "violation_type", label: "Violation Type", type: "text"     },
+    { key: "plate",          label: "Plate",          type: "text"     },
+    { key: "make",           label: "Make",           type: "text"     },
+    { key: "color",          label: "Color",          type: "text"     },
+    { key: "location",       label: "Location",       type: "text"     },
+    { key: "notes",          label: "Notes",          type: "textarea" },
+  ],
+  "daily-log": [
+    { key: "date",         label: "Date",      type: "date"     },
+    { key: "officer_name", label: "Officer",   type: "text"     },
+    { key: "shift",        label: "Shift",     type: "text"     },
+    { key: "narrative",    label: "Narrative", type: "textarea" },
+  ],
+  "maintenance": [
+    { key: "officer_name", label: "Officer",     type: "text"     },
+    { key: "issue_type",   label: "Issue Type",  type: "text"     },
+    { key: "description",  label: "Description", type: "textarea" },
+    { key: "notes",        label: "Notes",       type: "textarea" },
+  ],
+  "gate-checklist": [
+    { key: "checklist_date",  label: "Date",             type: "date"     },
+    { key: "guard_name",      label: "Guard",            type: "text"     },
+    { key: "shift",           label: "Shift",            type: "text"     },
+    { key: "additional_notes",label: "Additional Notes", type: "textarea" },
+  ],
+}
+
 function Field({ label, value }: { label: string; value?: string | number | null }) {
   if (value === null || value === undefined || value === "") return null
   return (
@@ -84,6 +148,21 @@ export default function ReportDetailPage() {
   const [summaryLoading,  setSummaryLoading]  = useState(false)
   const [summaryError,    setSummaryError]    = useState<string | null>(null)
 
+  // Edit mode
+  const [editMode,    setEditMode]    = useState(false)
+  const [editFields,  setEditFields]  = useState<Record<string, any>>({})
+  const [editSaving,  setEditSaving]  = useState(false)
+  const [editError,   setEditError]   = useState("")
+
+  // Approve from detail page
+  const [approvingDetail,     setApprovingDetail]     = useState(false)
+  const [approveDetailResult, setApproveDetailResult] = useState<{ ok: boolean; msg: string } | null>(null)
+
+  // Return for revision from detail page
+  const [returnOpen,   setReturnOpen]   = useState(false)
+  const [returnNotes,  setReturnNotes]  = useState("")
+  const [returnSaving, setReturnSaving] = useState(false)
+
   useEffect(() => { checkCanApprove().then(setCanEmail) }, [])
 
   useEffect(() => {
@@ -105,7 +184,6 @@ export default function ReportDetailPage() {
           .then(({ data: c }) => setCommunityName(c?.name ?? ""))
       }
       setLoading(false)
-      // Auto-generate summary if there is narrative content
       const narrative = [rec.narrative, rec.description, rec.notes, rec.action_taken].filter(Boolean).join("\n\n")
       if (narrative.trim()) fetchSummary(rec, narrative)
     })
@@ -162,6 +240,83 @@ export default function ReportDetailPage() {
     }
   }
 
+  function openEdit() {
+    if (!report) return
+    const defs = EDIT_FIELDS[type] || []
+    const initial: Record<string, any> = {}
+    for (const f of defs) initial[f.key] = report[f.key] ?? ""
+    setEditFields(initial)
+    setEditError("")
+    setEditMode(true)
+    setReturnOpen(false)
+    setApproveDetailResult(null)
+  }
+
+  async function saveEdit() {
+    setEditSaving(true)
+    setEditError("")
+    const { error: updateErr } = await supabase.from(config.table).update(editFields).eq("id", id)
+    if (updateErr) { setEditError(updateErr.message); setEditSaving(false); return }
+    const { data: updated } = await supabase.from(config.table).select("*").eq("id", id).maybeSingle()
+    if (updated) setReport(updated)
+    setEditMode(false)
+    setEditSaving(false)
+  }
+
+  async function approveFromDetail() {
+    if (!queue?.id) return
+    setApprovingDetail(true)
+    setApproveDetailResult(null)
+    const res = await fetch("/api/reports/queue/approve", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ queueId: queue.id }),
+    })
+    const data = await res.json()
+    setApprovingDetail(false)
+    if (data.ok) {
+      const { data: q } = await supabase.from("report_queue").select("*")
+        .eq("report_type", SLUG_TO_QUEUE[type]).eq("report_id", id).maybeSingle()
+      setQueue(q ?? null)
+      supabase.auth.getUser().then(({ data: { user } }) => {
+        supabase.from("audit_logs").insert({
+          user_email: user?.email || "unknown",
+          action: "approved", resource_type: "Report Queue", resource_id: queue.id,
+          detail: `Approved report — emailed to ${data.recipients?.join(", ") || "no contacts"}`,
+          created_at: new Date().toISOString(),
+        })
+      })
+      setApproveDetailResult({ ok: true, msg: `✅ Approved and sent to ${data.recipients?.join(", ") || "no contacts on file"}` })
+    } else {
+      setApproveDetailResult({ ok: false, msg: data.error || "Unknown error" })
+    }
+  }
+
+  async function returnFromDetail() {
+    if (!returnNotes.trim() || !queue?.id) return
+    setReturnSaving(true)
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error } = await supabase.from("report_queue").update({
+      status:         "needs_revision",
+      revision_notes: returnNotes.trim(),
+      reviewed_by:    user?.email || null,
+      reviewed_at:    new Date().toISOString(),
+    }).eq("id", queue.id)
+    setReturnSaving(false)
+    if (error) { alert("Failed: " + error.message); return }
+    supabase.from("audit_logs").insert({
+      user_email: user?.email || "unknown",
+      action: "returned", resource_type: "Report Queue", resource_id: queue.id,
+      detail: `Returned report for revision — ${returnNotes.trim().slice(0, 100)}`,
+      created_at: new Date().toISOString(),
+    })
+    const { data: q } = await supabase.from("report_queue").select("*")
+      .eq("report_type", SLUG_TO_QUEUE[type]).eq("report_id", id).maybeSingle()
+    setQueue(q ?? null)
+    setReturnOpen(false)
+    setReturnNotes("")
+  }
+
   if (loading)  return <div className="p-8 text-gray-400 text-sm">Loading…</div>
   if (notFound || !config) return (
     <div className="p-8">
@@ -193,12 +348,15 @@ export default function ReportDetailPage() {
   const hasRefNums     = r.reliant_case_no || r.hpd_report_no || r.asg_report_no
   const hasNarrative   = r.narrative || r.description || r.notes || r.action_taken
 
+  const canReviewAct = canEmail && SLUG_TO_QUEUE[type]
+  const canApproveAct = canReviewAct && (qStatus === "pending" || qStatus === "needs_revision") && !!queue?.id
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-6">
       <style>{`@media print { .no-print { display: none !important; } body { background: white; } }`}</style>
 
       {/* Breadcrumb + action bar */}
-      <div className="mb-5 no-print">
+      <div className="mb-4 no-print">
         <div className="flex items-center justify-between flex-wrap gap-2">
           <Link href="/vms/reports" className="text-xs text-blue-700 hover:underline">← Reports</Link>
           <div className="flex items-center gap-2">
@@ -225,6 +383,124 @@ export default function ReportDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ── REVIEWER ACTION BAR ── */}
+      {canReviewAct && (
+        <div className="mb-5 no-print">
+          <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 flex flex-wrap items-center gap-2">
+            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mr-1">Reviewer Actions</span>
+            <button
+              onClick={editMode ? () => setEditMode(false) : openEdit}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-lg border-none cursor-pointer transition-colors ${
+                editMode
+                  ? "bg-gray-200 text-gray-700 hover:bg-gray-300"
+                  : "bg-white border border-gray-300 text-gray-700 hover:bg-gray-100"
+              }`}
+            >
+              {editMode ? "✕ Cancel Edit" : "✏️ Edit Report"}
+            </button>
+            {canApproveAct && !editMode && (
+              <>
+                <button
+                  onClick={approveFromDetail}
+                  disabled={approvingDetail}
+                  className="px-3 py-1.5 text-xs font-semibold bg-green-700 hover:bg-green-800 text-white rounded-lg border-none cursor-pointer disabled:opacity-50"
+                >
+                  {approvingDetail ? "Approving…" : "✅ Approve & Send"}
+                </button>
+                <button
+                  onClick={() => { setReturnOpen(o => !o); setReturnNotes("") }}
+                  className="px-3 py-1.5 text-xs font-semibold bg-amber-100 hover:bg-amber-200 text-amber-800 rounded-lg border-none cursor-pointer"
+                >
+                  🔄 Return for Revision
+                </button>
+              </>
+            )}
+          </div>
+
+          {approveDetailResult && (
+            <div className={`mt-2 text-xs px-3 py-2 rounded-lg font-semibold ${approveDetailResult.ok ? "bg-green-50 text-green-700" : "bg-red-50 text-red-700"}`}>
+              {approveDetailResult.msg}
+            </div>
+          )}
+
+          {returnOpen && (
+            <div className="mt-2 p-4 bg-amber-50 border border-amber-200 rounded-xl">
+              <div className="text-xs font-semibold text-amber-800 mb-2">Return to officer with notes:</div>
+              <textarea
+                value={returnNotes}
+                onChange={e => setReturnNotes(e.target.value)}
+                placeholder="What needs to be corrected or added?"
+                className="w-full px-3 py-2 border border-amber-300 rounded-md text-sm resize-none focus:outline-none focus:ring-2 focus:ring-amber-400 bg-white"
+                rows={3}
+              />
+              <div className="flex gap-2 mt-2">
+                <button
+                  onClick={returnFromDetail}
+                  disabled={returnSaving || !returnNotes.trim()}
+                  className="px-4 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50"
+                >
+                  {returnSaving ? "Returning…" : "↩ Return for Revision"}
+                </button>
+                <button
+                  onClick={() => { setReturnOpen(false); setReturnNotes("") }}
+                  className="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 text-xs rounded-lg cursor-pointer hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── INLINE EDIT FORM ── */}
+      {editMode && (
+        <div className="mb-5 bg-white border border-blue-300 rounded-xl p-5 no-print">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm font-bold text-gray-800">Edit Report</div>
+            <button onClick={() => setEditMode(false)} className="text-xs text-gray-400 hover:text-gray-700 cursor-pointer bg-transparent border-none">✕ Cancel</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(EDIT_FIELDS[type] || []).map(f => (
+              <div key={f.key} className={f.type === "textarea" ? "col-span-full" : ""}>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">{f.label}</label>
+                {f.type === "textarea" ? (
+                  <textarea
+                    value={editFields[f.key] ?? ""}
+                    onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    rows={5}
+                  />
+                ) : (
+                  <input
+                    type={f.type}
+                    value={editFields[f.key] ?? ""}
+                    onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          {editError && <div className="mt-3 text-xs text-red-600 font-medium">{editError}</div>}
+          <div className="flex gap-2 mt-5">
+            <button
+              onClick={saveEdit}
+              disabled={editSaving}
+              className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50"
+            >
+              {editSaving ? "Saving…" : "Save Changes"}
+            </button>
+            <button
+              onClick={() => setEditMode(false)}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-600 text-sm rounded-lg cursor-pointer hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Summary — Highlights / Followup */}
       {(summaryLoading || summary || summaryError) && (
