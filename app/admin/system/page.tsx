@@ -763,7 +763,7 @@ export default function AdminSystemPage() {
               if (auditFilter === "alert")     return log.resource_type === "Alert"
               if (auditFilter === "search")    return log.action === "searched"
               if (auditFilter === "delete")    return log.action === "deleted"
-              if (auditFilter === "report")    return log.resource_type === "Report Queue"
+              if (auditFilter === "report")    return log.resource_type === "Report Queue" || log.resource_type === "Report"
               return true
             })
             const visible = filtered.slice(0, auditLimit)
