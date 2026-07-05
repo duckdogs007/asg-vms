@@ -2092,6 +2092,7 @@ export default function UserDashboard() {
                     <option>Noise Complaint</option><option>Vehicle Incident</option>
                     <option>Shooting</option><option>Firearm Violation</option>
                     <option>Fight / Altercation</option><option>Shot Detection Alert</option>
+                    <option>Juvenile Issue</option>
                     <option>Loitering</option><option>Fire</option>
                     <option>Other</option>
                   </select></div>
