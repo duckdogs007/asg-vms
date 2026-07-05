@@ -314,8 +314,11 @@ export default function IntelPage() {
       const incFiltered = (incData || []).filter((r: IncidentAppearance) => {
         if (!r.persons_involved) return false
         const pi = r.persons_involved.toLowerCase()
-        if (first === last) return pi.includes(first)
-        return pi.includes(first) && pi.includes(last)
+        const tokens = pi.split(/\W+/)
+        // Bidirectional first-name match: "Theo" matches "Theodore" and vice versa
+        const firstOk = tokens.some((w: string) => w && (w.includes(first) || first.includes(w)))
+        if (first === last) return firstOk
+        return firstOk && pi.includes(last)
       })
       setIncidentAppearances(incFiltered)
 

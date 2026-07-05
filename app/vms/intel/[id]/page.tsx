@@ -134,14 +134,16 @@ export default function ProfilePage({ params }: any) {
       const { data: byName } = await supabase
         .from("incident_reports")
         .select("*")
-        .ilike("persons_involved", `%${first}%`)
+        .ilike("persons_involved", `%${last}%`)
         .order("created_at", { ascending: false })
         .limit(100)
       const baseIds = new Set(base.map(r => r.id))
       const extra = (byName || []).filter((r: any) => {
         if (baseIds.has(r.id)) return false
         const pi = (r.persons_involved || "").toLowerCase()
-        return pi.includes(first) && pi.includes(last)
+        if (!pi.includes(last)) return false
+        // Bidirectional first-name match: "Theo" matches "Theodore" and vice versa
+        return pi.split(/\W+/).some((w: string) => w && (w.includes(first) || first.includes(w)))
       })
       setIncidents(
         [...base, ...(extra as IncidentRow[])]
