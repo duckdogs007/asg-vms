@@ -36,7 +36,8 @@ const PARKING_VIOLATION_TYPES = [
 
 const HIGH_PRIORITY_INCIDENT_TYPES = [
   "weapons", "weapon", "firearm",
-  "shooting",
+  "shooting", "shot detection",
+  "fight", "altercation",
   "domestic", "domestic dispute", "domestic violence",
   "missing person", "missing",
   "fire",
@@ -2090,6 +2091,7 @@ export default function UserDashboard() {
                     <option>Suspicious Activity</option><option>Domestic</option>
                     <option>Noise Complaint</option><option>Vehicle Incident</option>
                     <option>Shooting</option><option>Firearm Violation</option>
+                    <option>Fight / Altercation</option><option>Shot Detection Alert</option>
                     <option>Loitering</option><option>Fire</option>
                     <option>Other</option>
                   </select></div>
