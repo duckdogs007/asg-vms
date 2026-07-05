@@ -213,6 +213,7 @@ export default function TopNav() {
 
           {/* Desktop nav links (hidden below md) */}
           <div className="hidden md:flex gap-5">
+            <Link href="/"             className={navLinkCls}>Home</Link>
             <Link href="/vms"          className={navLinkCls}>VMS</Link>
             <Link href="/userdash"     className={navLinkCls}>User Dashboard</Link>
             <Link href="/vms/property" className={navLinkCls}>Property Hub</Link>
@@ -412,6 +413,7 @@ export default function TopNav() {
           {/* Click-outside catcher */}
           <div className="fixed inset-0 z-40" onClick={() => setMobileNavOpen(false)} />
           <div className="absolute left-3 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[220px] py-1">
+            <Link href="/"             className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
             <Link href="/vms"          className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
             <Link href="/userdash"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>
             <Link href="/vms/property" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏢 Property Hub</Link>
