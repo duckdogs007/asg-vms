@@ -83,7 +83,17 @@ interface ContactRecord {
   photo_url: string | null
 }
 
-type RightTab = "ban" | "visits" | "contacts" | "osint"
+type RightTab = "ban" | "visits" | "contacts" | "reports" | "osint"
+
+interface IncidentAppearance {
+  id: string
+  created_at: string
+  incident_type: string | null
+  location: string | null
+  persons_involved: string | null
+  persons_data: Array<{ name: string; role: string; dob: string; sex: string; race: string; address: string }> | null
+  community_id: string | null
+}
 
 interface OsintSource {
   id:    string
@@ -161,7 +171,8 @@ export default function IntelPage() {
   const [communities,    setCommunities]    = useState<Community[]>([])
   const [loading,        setLoading]        = useState(false)
   const [error,          setError]          = useState("")
-  const [rightTab,       setRightTab]       = useState<RightTab>("ban")
+  const [rightTab,           setRightTab]           = useState<RightTab>("ban")
+  const [incidentAppearances, setIncidentAppearances] = useState<IncidentAppearance[]>([])
 
   const [photoUrl,       setPhotoUrl]       = useState("")
   const [uploading,      setUploading]      = useState(false)
@@ -282,15 +293,31 @@ export default function IntelPage() {
       setBanHistory(watchMatches)
       setConfirmedBanId(null)
 
-      // Load contact history
+      // Load contact history (last_name + contact_name cover both Intel-logged and officer-filed contacts)
       const { data: contactData } = await supabase
         .from("contact_history")
         .select("*")
-        .ilike("last_name", `%${last}%`)
+        .or(`last_name.ilike.%${last}%,contact_name.ilike.%${first}%`)
         .order("contacted_at", { ascending: false })
 
       const filtered = (contactData || []).filter((c: ContactRecord) => nameMatch(c, first, last))
       setContacts(filtered)
+
+      // Load incident report appearances — search persons_involved text field
+      const { data: incData } = await supabase
+        .from("incident_reports")
+        .select("id, created_at, incident_type, location, persons_involved, persons_data, community_id")
+        .or(`persons_involved.ilike.%${first}%,persons_involved.ilike.%${last}%`)
+        .order("created_at", { ascending: false })
+        .limit(100)
+
+      const incFiltered = (incData || []).filter((r: IncidentAppearance) => {
+        if (!r.persons_involved) return false
+        const pi = r.persons_involved.toLowerCase()
+        if (first === last) return pi.includes(first)
+        return pi.includes(first) && pi.includes(last)
+      })
+      setIncidentAppearances(incFiltered)
 
       tryLoadPhoto(`${first}_${last}`)
 
@@ -565,6 +592,9 @@ export default function IntelPage() {
               {contacts.length > 0 && (
                 <div className="text-sm text-gray-700">Field Contacts: <strong>{contacts.length}</strong></div>
               )}
+              {incidentAppearances.length > 0 && (
+                <div className="text-sm text-gray-700">Report Appearances: <strong>{incidentAppearances.length}</strong></div>
+              )}
             </div>
           )}
 
@@ -584,6 +614,12 @@ export default function IntelPage() {
               📋 Contact History
               {contacts.length > 0 && (
                 <span className="ml-1.5 bg-blue-700 text-white text-xs rounded-full px-1.5 py-0.5">{contacts.length}</span>
+              )}
+            </button>
+            <button className={tabCls("reports")} onClick={() => setRightTab("reports")}>
+              📄 Reports
+              {incidentAppearances.length > 0 && (
+                <span className="ml-1.5 bg-blue-700 text-white text-xs rounded-full px-1.5 py-0.5">{incidentAppearances.length}</span>
               )}
             </button>
             <button className={tabCls("osint")} onClick={() => setRightTab("osint")}>🌐 OSINT</button>
@@ -824,6 +860,74 @@ export default function IntelPage() {
               )}
             </>
           )}
+
+          {/* REPORTS TAB */}
+          {rightTab === "reports" && (() => {
+            const { first: sf, last: sl } = parseName(selectedPerson?.name || "")
+            return (
+              <>
+                {incidentAppearances.length > 0 ? incidentAppearances.map(r => {
+                  const matchedPersons = (r.persons_data || []).filter(p => {
+                    const n = p.name.toLowerCase()
+                    return sf === sl ? n.includes(sf) : n.includes(sf) && n.includes(sl)
+                  })
+                  return (
+                    <div key={r.id} className="border border-gray-200 rounded-lg px-4 py-3 mb-3 bg-white">
+                      <div className="flex justify-between items-start mb-2">
+                        <div>
+                          <span className="text-xs font-bold text-gray-500 uppercase tracking-wider">
+                            {r.incident_type || "Incident Report"}
+                          </span>
+                          {r.location && <span className="text-xs text-gray-400 ml-2">📍 {r.location}</span>}
+                        </div>
+                        <div className="flex items-center gap-2 flex-shrink-0">
+                          <span className="text-xs text-gray-400">
+                            {new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                          </span>
+                          <a
+                            href={`/vms/reports/incident/${r.id}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-xs text-blue-700 hover:text-blue-900 font-medium"
+                          >
+                            View ↗
+                          </a>
+                        </div>
+                      </div>
+                      {matchedPersons.length > 0 ? (
+                        <div className="flex flex-col gap-1.5">
+                          {matchedPersons.map((p, i) => (
+                            <div key={i} className="bg-blue-50 rounded-md px-3 py-2 text-xs">
+                              <span className="font-semibold text-gray-900">{p.name}</span>
+                              {p.role && <span className="ml-2 text-blue-700 font-medium">({p.role})</span>}
+                              <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1 text-gray-600">
+                                {p.dob     && <span>DOB: {p.dob}</span>}
+                                {p.sex     && <span>Sex: {p.sex}</span>}
+                                {p.race    && <span>Race: {p.race}</span>}
+                                {p.address && <span className="w-full">Address: {p.address}</span>}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : r.persons_involved ? (
+                        <div className="text-xs text-gray-600 bg-gray-50 rounded-md px-3 py-2">{r.persons_involved}</div>
+                      ) : null}
+                      {r.community_id && (
+                        <div className="text-xs text-gray-400 mt-1.5">{getCommunityName(r.community_id)}</div>
+                      )}
+                    </div>
+                  )
+                }) : (
+                  <div className="text-center py-10 text-gray-400">
+                    <div className="text-3xl mb-2">📄</div>
+                    <div className="text-sm">
+                      {selectedPerson ? "No incident report appearances on record." : "Search a person to view report history."}
+                    </div>
+                  </div>
+                )}
+              </>
+            )
+          })()}
 
           {/* OSINT TAB */}
           {rightTab === "osint" && (
