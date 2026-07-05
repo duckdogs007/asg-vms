@@ -2975,8 +2975,8 @@ export default function UserDashboard() {
         <div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
-            {/* SUBMIT FORM */}
-            {!isGuest && <div>
+            {/* SUBMIT FORM — available to all authenticated users */}
+            {<div>
               <h3 className="text-lg font-bold mb-4 text-gray-800">Submit Passdown</h3>
               <div className="bg-gray-50 border border-gray-200 rounded-xl p-5">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
