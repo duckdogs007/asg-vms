@@ -303,9 +303,6 @@ export default function ProfilePage({ params }: any) {
               🚨 {person.reason}
             </div>
           )}
-          {(person.comments || person.notes) && (
-            <div className="mt-2 text-sm text-gray-600 italic">{person.comments || person.notes}</div>
-          )}
           <div className="mt-4 flex gap-2 flex-wrap">
             <button
               onClick={flagPerson}
