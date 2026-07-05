@@ -1159,18 +1159,17 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
           <div className="text-gray-400 text-sm py-6 text-center">No reports found.</div>
         ) : (
           <>
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              {recentSubs
-                .filter(s => topTypeFilter === "all" || s.typeKey === TOP_FILTER_TO_SUB_KEY[topTypeFilter])
-                .slice(0, recentSubsExpanded ? 15 : 3).map((s, i, arr) => {
-                const badge  = SUB_BADGE[s.typeKey] || "bg-gray-100 text-gray-700"
-                const isNew  = Date.now() - new Date(utc(s.created_at)).getTime() < 24 * 3600 * 1000
-                const comm   = communities.find(c => c.id === s.community_id)?.name || "—"
+            {(() => {
+              const filtered  = recentSubs.filter(s => topTypeFilter === "all" || s.typeKey === TOP_FILTER_TO_SUB_KEY[topTypeFilter])
+              const pending   = filtered.filter(s => s.queueStatus === "pending" || s.queueStatus === "needs_revision")
+              const submitted = filtered.filter(s => s.queueStatus !== "pending" && s.queueStatus !== "needs_revision")
+
+              function SubRow({ s, i, arr, tint }: { s: SubmissionRow; i: number; arr: SubmissionRow[]; tint?: boolean }) {
+                const badge = SUB_BADGE[s.typeKey] || "bg-gray-100 text-gray-700"
+                const isNew = Date.now() - new Date(utc(s.created_at)).getTime() < 24 * 3600 * 1000
+                const comm  = communities.find(c => c.id === s.community_id)?.name || "—"
                 return (
-                  <div
-                    key={`${s.typeKey}:${s.id}`}
-                    className={`flex items-center gap-3 px-4 py-3 ${i < arr.length - 1 ? "border-b border-gray-100" : ""}`}
-                  >
+                  <div className={`flex items-center gap-3 px-4 py-3 ${tint ? "bg-amber-50/60" : ""} ${i < arr.length - 1 ? "border-b border-gray-100" : ""}`}>
                     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${badge}`}>
                       {s.typeLabel}
                     </span>
@@ -1183,17 +1182,15 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                         </div>
                       )}
                       {s.queueStatus === "needs_revision" && (
-                        <div className="text-[10px] text-amber-700 mt-0.5">! Revision requested</div>
+                        <div className="text-[10px] font-semibold text-orange-700 mt-0.5">↩ Returned — revision needed</div>
                       )}
                       {s.queueStatus === "pending" && (
-                        <div className="text-[10px] text-yellow-700 mt-0.5">⏳ Pending review</div>
+                        <div className="text-[10px] text-amber-700 mt-0.5">Awaiting supervisor review</div>
                       )}
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       {isNew && (
-                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">
-                          New
-                        </span>
+                        <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-blue-100 text-blue-700">New</span>
                       )}
                       <div className="text-xs text-gray-400 text-right">
                         <div>{timeAgo(s.created_at)}</div>
@@ -1201,27 +1198,53 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                           {new Date(utc(s.created_at)).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
                         </div>
                       </div>
-                      <Link
-                        href={`/vms/reports/${SUB_TYPE_SLUG[s.typeKey]}/${s.id}`}
-                        className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium"
-                      >
+                      <Link href={`/vms/reports/${SUB_TYPE_SLUG[s.typeKey]}/${s.id}`}
+                        className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium">
                         View →
                       </Link>
                     </div>
                   </div>
                 )
-              })}
-            </div>
-            {(() => {
-              const filtered = recentSubs.filter(s => topTypeFilter === "all" || s.typeKey === TOP_FILTER_TO_SUB_KEY[topTypeFilter])
-              return filtered.length > 3 ? (
-                <button
-                  onClick={() => setRecentSubsExpanded(e => !e)}
-                  className="mt-2 w-full py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white"
-                >
-                  {recentSubsExpanded ? "▲ Show less" : `▼ Show all ${filtered.length} submissions`}
-                </button>
-              ) : null
+              }
+
+              return (
+                <>
+                  {/* ── Awaiting Review ── */}
+                  {pending.length > 0 && (
+                    <div className="mb-4">
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">⏳ Awaiting Review</span>
+                        <span className="text-[10px] font-bold bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">{pending.length}</span>
+                      </div>
+                      <div className="bg-white border border-amber-300 rounded-xl overflow-hidden">
+                        {pending.map((s, i, arr) => <SubRow key={`${s.typeKey}:${s.id}`} s={s} i={i} arr={arr} tint />)}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ── Submitted ── */}
+                  {submitted.length > 0 && (
+                    <>
+                      {pending.length > 0 && (
+                        <div className="flex items-center gap-2 mb-1.5">
+                          <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Submitted</span>
+                        </div>
+                      )}
+                      <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                        {submitted.slice(0, recentSubsExpanded ? submitted.length : 3).map((s, i, arr) => (
+                          <SubRow key={`${s.typeKey}:${s.id}`} s={s} i={i} arr={arr} />
+                        ))}
+                      </div>
+                      {submitted.length > 3 && (
+                        <button onClick={() => setRecentSubsExpanded(e => !e)}
+                          className="mt-2 w-full py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white">
+                          {recentSubsExpanded ? "▲ Show less" : `▼ Show all ${submitted.length} submitted reports`}
+                        </button>
+                      )}
+                    </>
+                  )}
+                </>
+              )
             })()}
           </>
         )}
