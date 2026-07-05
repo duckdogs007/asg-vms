@@ -1209,8 +1209,8 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
 
               return (
                 <>
-                  {/* ── Awaiting Review ── */}
-                  {pending.length > 0 && (
+                  {/* ── Awaiting Review (officers only — supervisors/admins use the Review Queue above) ── */}
+                  {pending.length > 0 && !canApprove && (
                     <div className="mb-4">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">⏳ Awaiting Review</span>
@@ -1225,7 +1225,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                   {/* ── Submitted ── */}
                   {submitted.length > 0 && (
                     <>
-                      {pending.length > 0 && (
+                      {pending.length > 0 && !canApprove && (
                         <div className="flex items-center gap-2 mb-1.5">
                           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Submitted</span>
                         </div>
