@@ -52,6 +52,13 @@ function fmt(ts: string | null) {
   return new Date(s).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
 }
 
+// For date-only values (YYYY-MM-DD) — avoids UTC midnight timezone shift
+function fmtDate(d: string | null) {
+  if (!d) return "—"
+  const [y, m, day] = d.split("-").map(Number)
+  return new Date(y, m - 1, day).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+}
+
 const SEVERITY_BADGE: Record<string, string> = {
   LOW:    "bg-gray-100   text-gray-700",
   MEDIUM: "bg-yellow-100 text-yellow-800",
@@ -524,7 +531,7 @@ export default function ProfilePage({ params }: any) {
                     {r.location && <span>· 📍 {r.location}</span>}
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-gray-400">{r.date ? r.date : fmt(r.created_at)}</span>
+                    <span className="text-xs text-gray-400">{r.date ? fmtDate(r.date) : fmt(r.created_at)}</span>
                     <Link href={`/vms/reports/incident/${r.id}`} className="text-xs text-blue-700 hover:text-blue-900 font-medium">View ↗</Link>
                   </div>
                 </div>
