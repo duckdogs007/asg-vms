@@ -97,6 +97,15 @@ export async function POST(req: Request) {
 
     const data: any = await res.json().catch(() => null)
     if (!res.ok) {
+      const isQuota = res.status === 429 || data?.error?.status === "RESOURCE_EXHAUSTED"
+      if (isQuota) {
+        const retryDelayStr: string | undefined = data?.error?.details?.find((d: any) => d["@type"]?.includes("RetryInfo"))?.retryDelay
+        const retryMatch = (data?.error?.message as string | undefined)?.match(/retry in ([\d.]+)/i)
+        const retrySeconds = retryDelayStr ? Math.ceil(parseFloat(retryDelayStr))
+          : retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null
+        const retryMsg = retrySeconds ? ` Try again in ~${retrySeconds}s.` : " Try again in a moment."
+        return NextResponse.json({ error: `AI assist is temporarily unavailable (quota exceeded).${retryMsg}` }, { status: 429 })
+      }
       const msg = data?.error?.message || `AI request failed (${res.status}).`
       return NextResponse.json({ error: msg }, { status: 502 })
     }
