@@ -343,8 +343,8 @@ export default function ReportDetailPage() {
     r.location,
   ].filter(Boolean).join(" · ") || null
 
-  const hasPersonInfo  = r.hoh_name || r.persons_involved || r.contact_name || r.first_name || r.last_name
-  const hasVehicleInfo = r.plate || r.make || r.vehicle
+  const hasPersonInfo  = r.hoh_name || r.persons_involved || r.persons_data?.length || r.contact_name || r.first_name || r.last_name
+  const hasVehicleInfo = r.plate || r.make || r.vehicle || r.vehicles_data?.length
   const hasRefNums     = r.reliant_case_no || r.hpd_report_no || r.asg_report_no
   const hasNarrative   = r.narrative || r.description || r.notes || r.action_taken
 
@@ -615,34 +615,84 @@ export default function ReportDetailPage() {
       {/* Persons */}
       {hasPersonInfo && (
         <Section title="Persons Involved">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {(r.first_name || r.last_name) && (
-              <Field label="Subject Name" value={[r.first_name, r.middle_name, r.last_name].filter(Boolean).join(" ")} />
-            )}
-            <Field label="HOH / Tenant"     value={r.hoh_name} />
-            <Field label="Persons Involved" value={r.persons_involved} />
-            <Field label="Contact Name"     value={r.contact_name} />
-            <Field label="DOB"              value={r.dob} />
-            <Field label="Sex"              value={r.sex} />
-            <Field label="Race"             value={r.race} />
-            <Field label="OLN"              value={r.oln} />
-            <Field label="Address"          value={r.address} />
-          </div>
+          {/* Structured persons list (new incident reports) */}
+          {r.persons_data?.length > 0 ? (
+            <div className="space-y-3">
+              {r.persons_data.map((p: any, i: number) => (
+                <div key={i} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="text-xs font-semibold text-gray-400 mb-2">Person {i + 1}{p.role ? ` — ${p.role}` : ""}</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {p.name && <Field label="Name" value={p.name} />}
+                    {p.dob  && <Field label="DOB"  value={p.dob} />}
+                    {p.sex  && <Field label="Sex"  value={p.sex} />}
+                    {p.race && <Field label="Race" value={p.race} />}
+                    {p.address && (
+                      <div className="col-span-2 sm:col-span-3"><Field label="Address" value={p.address} /></div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Legacy / other report types */
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {(r.first_name || r.last_name) && (
+                <Field label="Subject Name" value={[r.first_name, r.middle_name, r.last_name].filter(Boolean).join(" ")} />
+              )}
+              <Field label="HOH / Tenant"     value={r.hoh_name} />
+              <Field label="Persons Involved" value={r.persons_involved} />
+              <Field label="Contact Name"     value={r.contact_name} />
+              <Field label="DOB"              value={r.dob} />
+              <Field label="Sex"              value={r.sex} />
+              <Field label="Race"             value={r.race} />
+              <Field label="OLN"              value={r.oln} />
+              <Field label="Address"          value={r.address} />
+            </div>
+          )}
+          {/* HOH always shown when present, even with structured persons */}
+          {r.persons_data?.length > 0 && r.hoh_name && (
+            <div className="mt-3 pt-3 border-t border-gray-100">
+              <Field label="HOH / Tenant on Record" value={r.hoh_name} />
+            </div>
+          )}
         </Section>
       )}
 
       {/* Vehicle */}
       {hasVehicleInfo && (
         <Section title="Vehicle">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            <Field label="Plate"   value={r.plate === "NONE" || r.plate === "NOT_DISPLAYED" ? "None / Not Displayed" : r.plate} />
-            <Field label="State"   value={r.plate === "NONE" || r.plate === "NOT_DISPLAYED" ? undefined : r.state} />
-            <Field label="Make"    value={r.make} />
-            <Field label="Model"   value={r.model} />
-            <Field label="Color"   value={r.color} />
-            <Field label="Year"    value={r.year} />
-            <Field label="Vehicle" value={r.vehicle} />
-          </div>
+          {/* Structured vehicles list (new incident reports) */}
+          {r.vehicles_data?.length > 0 ? (
+            <div className="space-y-3">
+              {r.vehicles_data.map((v: any, i: number) => (
+                <div key={i} className="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                  <div className="text-xs font-semibold text-gray-400 mb-2">Vehicle {i + 1}</div>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                    {v.make        && <Field label="Make"    value={v.make} />}
+                    {v.model       && <Field label="Model"   value={v.model} />}
+                    {v.year        && <Field label="Year"    value={v.year} />}
+                    {v.color       && <Field label="Color"   value={v.color} />}
+                    {v.plate       && <Field label="Plate"   value={v.plate} />}
+                    {v.plate_state && <Field label="State" value={v.plate_state} />}
+                    {v.description && (
+                      <div className="col-span-2 sm:col-span-3"><Field label="Notes" value={v.description} /></div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            /* Legacy / other report types */
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              <Field label="Plate"   value={r.plate === "NONE" || r.plate === "NOT_DISPLAYED" ? "None / Not Displayed" : r.plate} />
+              <Field label="State"   value={r.plate === "NONE" || r.plate === "NOT_DISPLAYED" ? undefined : r.state} />
+              <Field label="Make"    value={r.make} />
+              <Field label="Model"   value={r.model} />
+              <Field label="Color"   value={r.color} />
+              <Field label="Year"    value={r.year} />
+              <Field label="Vehicle" value={r.vehicle} />
+            </div>
+          )}
           {r.bolo_match && (
             <div className="mt-3 inline-block text-xs font-bold px-2.5 py-1 rounded-full bg-red-100 text-red-700">⚠ BOLO Match</div>
           )}

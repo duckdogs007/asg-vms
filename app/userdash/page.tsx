@@ -57,6 +57,16 @@ function isHighPriorityIncident(t: string | undefined): boolean {
   return HIGH_PRIORITY_INCIDENT_TYPES.some(k => s.includes(k))
 }
 
+type IncidentPerson = {
+  name: string; role: string; dob: string; sex: string; race: string; address: string
+}
+type IncidentVehicle = {
+  make: string; model: string; year: string; color: string
+  plate: string; plate_state: string; description: string
+}
+const EMPTY_INC_PERSON  = (): IncidentPerson  => ({ name: "", role: "Suspect", dob: "", sex: "", race: "", address: "" })
+const EMPTY_INC_VEHICLE = (): IncidentVehicle => ({ make: "", model: "", year: "", color: "", plate: "", plate_state: "", description: "" })
+
 type Tab       = "onduty" | "watchlist" | "reports" | "passdown" | "bolo" | "gatecheck"
 
 // One-line descriptor shown under the tab bar so officers know what each tab is for.
@@ -240,7 +250,8 @@ export default function UserDashboard() {
   const [incCommunity,   setIncCommunity]   = useState("")
   const [incLoc,         setIncLoc]         = useState<LocationValue>(EMPTY_LOCATION)
   const [incTypes,       setIncTypes]       = useState<string[]>([])
-  const [incPersons,     setIncPersons]     = useState("")
+  const [incPersonList,  setIncPersonList]  = useState<IncidentPerson[]>([])
+  const [incVehicleList, setIncVehicleList] = useState<IncidentVehicle[]>([])
   const [incDescription, setIncDescription] = useState("")
   const [incAction,      setIncAction]      = useState("")
   const [incFollowUp,    setIncFollowUp]    = useState(false)
@@ -722,7 +733,10 @@ export default function UserDashboard() {
       reliant_notified: requiresReliant ? incReliantNotified : null,
       reliant_notified_at: (requiresReliant && incReliantNotified && incReliantNotifiedAt) ? new Date(incReliantNotifiedAt).toISOString() : null,
       reliant_not_notified_reason: (requiresReliant && incReliantNotified === false) ? (incReliantNotReason.trim() || null) : null,
-      persons_involved: incPersons, description: incDescription,
+      persons_involved: incPersonList.map(p => [p.name, p.role ? `(${p.role})` : ""].filter(Boolean).join(" ")).join("; ") || null,
+      persons_data:  incPersonList.length  ? incPersonList  : null,
+      vehicles_data: incVehicleList.length ? incVehicleList : null,
+      description: incDescription,
       action_taken: incAction, follow_up_required: incFollowUp,
       photo_urls: photoUrls.length ? photoUrls : null,
       officer_name: incOfficer, created_at: new Date().toISOString()
@@ -747,13 +761,13 @@ export default function UserDashboard() {
           Location:     incLoc.location || "—",
           Type:         incTypes.join(", "),
           Officer:      incOfficer || "—",
-          Persons:      incPersons || "—",
+          Persons:      incPersonList.map(p => p.name).filter(Boolean).join(", ") || "—",
           ActionTaken:  incAction || "—",
           FollowUp:     incFollowUp ? "yes" : "no",
         },
       })
     }
-    setIncDescription(""); setIncAction(""); setIncPersons(""); setIncLoc(EMPTY_LOCATION); setIncFollowUp(false); setIncPhotoFiles([])
+    setIncDescription(""); setIncAction(""); setIncPersonList([]); setIncVehicleList([]); setIncLoc(EMPTY_LOCATION); setIncFollowUp(false); setIncPhotoFiles([])
     setIncReliantNo(""); setIncHpdNo(""); setIncAsgNo("")
     setIncReliantNotified(null); setIncReliantNotifiedAt(""); setIncReliantNotReason("")
     logActivity("created", "Incident", "", `Incident report submitted — ${incDate}`)
@@ -2111,16 +2125,153 @@ export default function UserDashboard() {
                   </div>
                 </div>
               </div>
+              {/* Persons Involved */}
               <div className="mb-4">
-                <label className={labelCls}>Persons Involved</label>
-                <input value={incPersons} onChange={e => setIncPersons(e.target.value)}
-                  placeholder="Names, descriptions of involved parties" className={inputCls} />
+                <div className="flex items-center justify-between mb-2">
+                  <label className={labelCls + " mb-0"}>Persons Involved</label>
+                  <button type="button"
+                    onClick={() => setIncPersonList(prev => [...prev, EMPTY_INC_PERSON()])}
+                    className="text-xs px-2.5 py-1 bg-red-700 text-white rounded-md hover:bg-red-800">
+                    + Add Person
+                  </button>
+                </div>
+                {incPersonList.length === 0 && (
+                  <p className="text-xs text-gray-400 italic py-1">No persons logged — tap + Add Person to record subjects, victims, or witnesses.</p>
+                )}
+                {incPersonList.map((p, i) => (
+                  <div key={i} className="border border-gray-200 rounded-lg p-3 mb-2 bg-gray-50 dark:bg-gray-800/40">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-500">Person {i + 1}</span>
+                      <button type="button" onClick={() => setIncPersonList(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-xs text-red-500 hover:text-red-700">Remove</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="col-span-2">
+                        <label className={labelCls}>Full Name</label>
+                        <input value={p.name}
+                          onChange={e => setIncPersonList(prev => prev.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))}
+                          placeholder="Last, First Middle" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Role</label>
+                        <select value={p.role}
+                          onChange={e => setIncPersonList(prev => prev.map((x, idx) => idx === i ? { ...x, role: e.target.value } : x))}
+                          className={inputCls}>
+                          <option>Suspect</option><option>Victim</option><option>Witness</option>
+                          <option>Complainant</option><option>Reporting Party</option><option>Other</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Date of Birth</label>
+                        <input type="date" value={p.dob}
+                          onChange={e => setIncPersonList(prev => prev.map((x, idx) => idx === i ? { ...x, dob: e.target.value } : x))}
+                          className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Sex</label>
+                        <select value={p.sex}
+                          onChange={e => setIncPersonList(prev => prev.map((x, idx) => idx === i ? { ...x, sex: e.target.value } : x))}
+                          className={inputCls}>
+                          <option value="">—</option>
+                          <option>Male</option><option>Female</option>
+                          <option>Non-Binary</option><option>Unknown</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className={labelCls}>Race</label>
+                        <select value={p.race}
+                          onChange={e => setIncPersonList(prev => prev.map((x, idx) => idx === i ? { ...x, race: e.target.value } : x))}
+                          className={inputCls}>
+                          <option value="">—</option>
+                          <option>White</option><option>Black / African American</option>
+                          <option>Hispanic / Latino</option><option>Asian</option>
+                          <option>Native American / Alaska Native</option><option>Pacific Islander</option>
+                          <option>Other</option><option>Unknown</option>
+                        </select>
+                      </div>
+                      <div className="col-span-2">
+                        <label className={labelCls}>Address</label>
+                        <input value={p.address}
+                          onChange={e => setIncPersonList(prev => prev.map((x, idx) => idx === i ? { ...x, address: e.target.value } : x))}
+                          placeholder="Street address or last known address" className={inputCls} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Vehicles Involved */}
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <label className={labelCls + " mb-0"}>Vehicles Involved</label>
+                  <button type="button"
+                    onClick={() => setIncVehicleList(prev => [...prev, EMPTY_INC_VEHICLE()])}
+                    className="text-xs px-2.5 py-1 bg-red-700 text-white rounded-md hover:bg-red-800">
+                    + Add Vehicle
+                  </button>
+                </div>
+                {incVehicleList.length === 0 && (
+                  <p className="text-xs text-gray-400 italic py-1">No vehicles logged — tap + Add Vehicle to record involved vehicles.</p>
+                )}
+                {incVehicleList.map((v, i) => (
+                  <div key={i} className="border border-gray-200 rounded-lg p-3 mb-2 bg-gray-50 dark:bg-gray-800/40">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-gray-500">Vehicle {i + 1}</span>
+                      <button type="button" onClick={() => setIncVehicleList(prev => prev.filter((_, idx) => idx !== i))}
+                        className="text-xs text-red-500 hover:text-red-700">Remove</button>
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className={labelCls}>Make</label>
+                        <input value={v.make}
+                          onChange={e => setIncVehicleList(prev => prev.map((x, idx) => idx === i ? { ...x, make: e.target.value } : x))}
+                          placeholder="Toyota, Ford…" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Model</label>
+                        <input value={v.model}
+                          onChange={e => setIncVehicleList(prev => prev.map((x, idx) => idx === i ? { ...x, model: e.target.value } : x))}
+                          placeholder="Camry, F-150…" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Year</label>
+                        <input value={v.year}
+                          onChange={e => setIncVehicleList(prev => prev.map((x, idx) => idx === i ? { ...x, year: e.target.value } : x))}
+                          placeholder="2019" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Color</label>
+                        <input value={v.color}
+                          onChange={e => setIncVehicleList(prev => prev.map((x, idx) => idx === i ? { ...x, color: e.target.value } : x))}
+                          placeholder="Black, Silver…" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>License Plate</label>
+                        <input value={v.plate}
+                          onChange={e => setIncVehicleList(prev => prev.map((x, idx) => idx === i ? { ...x, plate: e.target.value } : x))}
+                          placeholder="ABC-1234" className={inputCls} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>State / Province</label>
+                        <input value={v.plate_state}
+                          onChange={e => setIncVehicleList(prev => prev.map((x, idx) => idx === i ? { ...x, plate_state: e.target.value } : x))}
+                          placeholder="NY, NJ, TX…" className={inputCls} />
+                      </div>
+                      <div className="col-span-2">
+                        <label className={labelCls}>Description / Notes</label>
+                        <input value={v.description}
+                          onChange={e => setIncVehicleList(prev => prev.map((x, idx) => idx === i ? { ...x, description: e.target.value } : x))}
+                          placeholder="Damage, stickers, notable features…" className={inputCls} />
+                      </div>
+                    </div>
+                  </div>
+                ))}
               </div>
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <label className={labelCls + " mb-0"}>Incident Description <span className="text-red-500">*</span></label>
                   <AiAssist kind="incident" value={incDescription} onChange={setIncDescription}
-                    fields={{ incident_type: incTypes.join(", "), location: incLoc.location, building: incLoc.building, apartment: incLoc.apartment, persons_involved: incPersons, action_taken: incAction, date: incDate, time: incTime }} />
+                    fields={{ incident_type: incTypes.join(", "), location: incLoc.location, building: incLoc.building, apartment: incLoc.apartment, persons_involved: incPersonList.map(p => [p.name, p.role ? `(${p.role})` : ""].filter(Boolean).join(" ")).join("; "), action_taken: incAction, date: incDate, time: incTime }} />
                 </div>
                 <textarea rows={5} value={incDescription} onChange={e => setIncDescription(e.target.value)}
                   placeholder="Jot down rough notes, then ✨ AI Draft to expand them into a full narrative — or write it yourself." className={textareaCls} />
