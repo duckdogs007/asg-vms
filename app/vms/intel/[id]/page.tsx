@@ -514,32 +514,67 @@ export default function ProfilePage({ params }: any) {
         <p className="text-xs text-gray-400 mt-1">For richer reports (date/location/type/follow-up), use <Link href="/userdash" className="text-blue-700 hover:text-blue-900">Officer Reports</Link>.</p>
         {incidentError && <div className="text-xs text-red-600 mt-1">{incidentError}</div>}
 
-        {incidents.length === 0 ? (
-          <div className="text-sm text-gray-400 mt-4">No incident reports.</div>
-        ) : (
-          <div className="mt-4 flex flex-col gap-2">
-            {incidents.map(r => (
-              <div key={r.id} className="border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
-                <div className="flex justify-between items-start gap-2 flex-wrap mb-1">
-                  <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600">
-                    {r.incident_type && (
-                      <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-semibold uppercase rounded text-[10px]">
-                        {r.incident_type}
-                      </span>
-                    )}
-                    {r.officer_name && <span>{r.officer_name}</span>}
-                    {r.location && <span>· 📍 {r.location}</span>}
+        {(() => {
+          // Synthesize incident cards from watchlist record fields when no formal report exists
+          const synth: Array<{ key: string; date: string; label: string; description: string }> = []
+          if (person) {
+            if (person.ban_date && person.reason) {
+              synth.push({ key: "ban", date: person.ban_date, label: "Ban / Offense", description: person.reason })
+            }
+            // Parse "(YYYY-MM-DD): description" patterns embedded in comments
+            const commentText = (person.comments || person.notes || "") as string
+            const rx = /\((\d{4}-\d{2}-\d{2})\):\s*([^\n|]+)/g
+            let m: RegExpExecArray | null
+            let i = 0
+            while ((m = rx.exec(commentText)) !== null) {
+              const [, date, desc] = m
+              // Skip if we already have a formal incident_report for this date
+              if (!incidents.some(r => r.date === date)) {
+                synth.push({ key: `c${i++}`, date, label: "Prior Incident", description: desc.trim() })
+              }
+            }
+          }
+          const synthCards = synth
+            .filter(s => !incidents.some(r => r.date === s.date))
+            .sort((a, b) => b.date.localeCompare(a.date))
+
+          const total = incidents.length + synthCards.length
+          if (total === 0) return <div className="text-sm text-gray-400 mt-4">No incident reports.</div>
+
+          return (
+            <div className="mt-4 flex flex-col gap-2">
+              {incidents.map(r => (
+                <div key={r.id} className="border border-gray-200 rounded-md px-3 py-2 bg-gray-50">
+                  <div className="flex justify-between items-start gap-2 flex-wrap mb-1">
+                    <div className="flex items-center gap-2 flex-wrap text-xs text-gray-600">
+                      {r.incident_type && (
+                        <span className="px-2 py-0.5 bg-blue-100 text-blue-800 font-semibold uppercase rounded text-[10px]">
+                          {r.incident_type}
+                        </span>
+                      )}
+                      {r.officer_name && <span>{r.officer_name}</span>}
+                      {r.location && <span>· 📍 {r.location}</span>}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <span className="text-xs text-gray-400">{r.date ? fmtDate(r.date) : fmt(r.created_at)}</span>
+                      <Link href={`/vms/reports/incident/${r.id}`} className="text-xs text-blue-700 hover:text-blue-900 font-medium">View ↗</Link>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="text-xs text-gray-400">{r.date ? fmtDate(r.date) : fmt(r.created_at)}</span>
-                    <Link href={`/vms/reports/incident/${r.id}`} className="text-xs text-blue-700 hover:text-blue-900 font-medium">View ↗</Link>
-                  </div>
+                  <div className="text-sm text-gray-800 whitespace-pre-wrap">{r.description || r.report || "—"}</div>
                 </div>
-                <div className="text-sm text-gray-800 whitespace-pre-wrap">{r.description || r.report || "—"}</div>
-              </div>
-            ))}
-          </div>
-        )}
+              ))}
+              {synthCards.map(s => (
+                <div key={s.key} className="border border-amber-200 rounded-md px-3 py-2 bg-amber-50">
+                  <div className="flex justify-between items-start gap-2 flex-wrap mb-1">
+                    <span className="px-2 py-0.5 bg-amber-100 text-amber-800 font-semibold uppercase rounded text-[10px]">{s.label}</span>
+                    <span className="text-xs text-gray-400 shrink-0">{fmtDate(s.date)}</span>
+                  </div>
+                  <div className="text-sm text-gray-800">{s.description}</div>
+                </div>
+              ))}
+            </div>
+          )
+        })()}
       </div>
     </div>
   )
