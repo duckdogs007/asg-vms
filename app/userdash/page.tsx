@@ -250,6 +250,7 @@ export default function UserDashboard() {
   const [incCommunity,   setIncCommunity]   = useState("")
   const [incLoc,         setIncLoc]         = useState<LocationValue>(EMPTY_LOCATION)
   const [incTypes,       setIncTypes]       = useState<string[]>([])
+  const [incTypeOpen,    setIncTypeOpen]    = useState(false)
   const [incPersonList,  setIncPersonList]  = useState<IncidentPerson[]>([])
   const [incVehicleList, setIncVehicleList] = useState<IncidentVehicle[]>([])
   const [incDescription, setIncDescription] = useState("")
@@ -2108,20 +2109,33 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Location / Unit</label>
                   <LocationField communityId={incCommunity} value={incLoc} onChange={setIncLoc} inputCls={inputCls} /></div>
                 <div><label className={labelCls}>Incident Type <span className="text-red-500">*</span></label>
-                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
-                    <div className="grid grid-cols-2 gap-x-6 gap-y-2">
-                      {INCIDENT_TYPE_OPTIONS.map(t => (
-                        <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
-                          <input
-                            type="checkbox"
-                            checked={incTypes.includes(t)}
-                            onChange={e => setIncTypes(prev => e.target.checked ? [...prev, t] : prev.filter(x => x !== t))}
-                            className="w-4 h-4 rounded border-gray-300 accent-red-700"
-                          />
-                          <span className="text-gray-700 dark:text-gray-300">{t}</span>
-                        </label>
-                      ))}
-                    </div>
+                  <div className="relative">
+                    <button type="button" onClick={() => setIncTypeOpen(o => !o)}
+                      className={inputCls + " text-left flex items-center justify-between"}>
+                      <span className={incTypes.length === 0 ? "text-gray-400 truncate" : "text-gray-900 truncate pr-2"}>
+                        {incTypes.length === 0 ? "Select type(s)…" : incTypes.join(", ")}
+                      </span>
+                      <svg className="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={incTypeOpen ? "M5 15l7-7 7 7" : "M19 9l-7 7-7-7"} />
+                      </svg>
+                    </button>
+                    {incTypeOpen && (
+                      <>
+                        <div className="fixed inset-0 z-10" onClick={() => setIncTypeOpen(false)} />
+                        <div className="absolute z-20 mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg p-3 max-h-64 overflow-y-auto">
+                          <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                            {INCIDENT_TYPE_OPTIONS.map(t => (
+                              <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
+                                <input type="checkbox" checked={incTypes.includes(t)}
+                                  onChange={e => setIncTypes(prev => e.target.checked ? [...prev, t] : prev.filter(x => x !== t))}
+                                  className="w-4 h-4 rounded border-gray-300 accent-red-700" />
+                                <span className="text-gray-700">{t}</span>
+                              </label>
+                            ))}
+                          </div>
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               </div>
