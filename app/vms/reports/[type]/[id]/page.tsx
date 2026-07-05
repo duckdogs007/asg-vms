@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useParams } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
@@ -153,6 +153,7 @@ export default function ReportDetailPage() {
   const [editFields,  setEditFields]  = useState<Record<string, any>>({})
   const [editSaving,  setEditSaving]  = useState(false)
   const [editError,   setEditError]   = useState("")
+  const editFormRef = useRef<HTMLDivElement>(null)
 
   // Approve from detail page
   const [approvingDetail,     setApprovingDetail]     = useState(false)
@@ -250,6 +251,7 @@ export default function ReportDetailPage() {
     setEditMode(true)
     setReturnOpen(false)
     setApproveDetailResult(null)
+    setTimeout(() => editFormRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }), 50)
   }
 
   async function saveEdit() {
@@ -451,54 +453,6 @@ export default function ReportDetailPage() {
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* ── INLINE EDIT FORM ── */}
-      {editMode && (
-        <div className="mb-5 bg-white border border-blue-300 rounded-xl p-5 no-print">
-          <div className="flex items-center justify-between mb-4">
-            <div className="text-sm font-bold text-gray-800">Edit Report</div>
-            <button onClick={() => setEditMode(false)} className="text-xs text-gray-400 hover:text-gray-700 cursor-pointer bg-transparent border-none">✕ Cancel</button>
-          </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            {(EDIT_FIELDS[type] || []).map(f => (
-              <div key={f.key} className={f.type === "textarea" ? "col-span-full" : ""}>
-                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">{f.label}</label>
-                {f.type === "textarea" ? (
-                  <textarea
-                    value={editFields[f.key] ?? ""}
-                    onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                    rows={5}
-                  />
-                ) : (
-                  <input
-                    type={f.type}
-                    value={editFields[f.key] ?? ""}
-                    onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                  />
-                )}
-              </div>
-            ))}
-          </div>
-          {editError && <div className="mt-3 text-xs text-red-600 font-medium">{editError}</div>}
-          <div className="flex gap-2 mt-5">
-            <button
-              onClick={saveEdit}
-              disabled={editSaving}
-              className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50"
-            >
-              {editSaving ? "Saving…" : "Save Changes"}
-            </button>
-            <button
-              onClick={() => setEditMode(false)}
-              className="px-4 py-2 bg-white border border-gray-300 text-gray-600 text-sm rounded-lg cursor-pointer hover:bg-gray-50"
-            >
-              Cancel
-            </button>
-          </div>
         </div>
       )}
 
@@ -803,6 +757,54 @@ export default function ReportDetailPage() {
           </div>
         )}
       </div>
+
+      {/* ── INLINE EDIT FORM — below report so content stays visible ── */}
+      {editMode && (
+        <div ref={editFormRef} className="mt-6 bg-white border border-blue-300 rounded-xl p-5 no-print">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm font-bold text-gray-800">Edit Report</div>
+            <button onClick={() => setEditMode(false)} className="text-xs text-gray-400 hover:text-gray-700 cursor-pointer bg-transparent border-none">✕ Cancel</button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(EDIT_FIELDS[type] || []).map(f => (
+              <div key={f.key} className={f.type === "textarea" ? "col-span-full" : ""}>
+                <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">{f.label}</label>
+                {f.type === "textarea" ? (
+                  <textarea
+                    value={editFields[f.key] ?? ""}
+                    onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                    rows={5}
+                  />
+                ) : (
+                  <input
+                    type={f.type}
+                    value={editFields[f.key] ?? ""}
+                    onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+          {editError && <div className="mt-3 text-xs text-red-600 font-medium">{editError}</div>}
+          <div className="flex gap-2 mt-5">
+            <button
+              onClick={saveEdit}
+              disabled={editSaving}
+              className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50"
+            >
+              {editSaving ? "Saving…" : "Save Changes"}
+            </button>
+            <button
+              onClick={() => setEditMode(false)}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-600 text-sm rounded-lg cursor-pointer hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
