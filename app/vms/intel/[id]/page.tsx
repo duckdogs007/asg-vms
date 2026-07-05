@@ -149,7 +149,7 @@ export default function ProfilePage({ params }: any) {
           if (w.length === 1) return w === first[0]           // "T" → "Theodore"
           return w.length >= minLen && (w.includes(first) || first.includes(w))
         })
-        const hasOtherTokens = tokens.some(w => w !== last && w.length >= 2)
+        const hasOtherTokens = tokens.some((w: string) => w !== last && w.length >= 2)
         return firstMatch || !hasOtherTokens
       })
       setIncidents(
