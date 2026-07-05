@@ -27,6 +27,7 @@ export const EMPTY_LOCATION: LocationValue = {
 
 const COMMON_AREAS = [
   "Parking Lot", "Main Gate", "Pool", "Clubhouse",
+  "Playground", "Community Bldg", "Leasing Office",
   "Maintenance", "Security Shack", "Mail Area", "Other",
 ]
 
