@@ -197,6 +197,18 @@ const RUNNER_BADGE_KEY: Record<string, string> = {
   visitorLogs:    "visitorLog",
 }
 
+// Maps top-bar type filter key → SubmissionRow.typeKey for Recent Submissions filtering
+const TOP_FILTER_TO_SUB_KEY: Record<string, string> = {
+  incidents:      "incident",
+  fieldContacts:  "fieldContact",
+  vehicleFIs:     "vehicleFI",
+  parking:        "parking",
+  dailyLogs:      "dailyLog",
+  maintenance:    "maintenance",
+  gateChecklists: "gateChecklist",
+  visitorLogs:    "visitorLog",
+}
+
 const SUB_BADGE: Record<string, string> = {
   // camelCase keys — Recent Submissions (s.typeKey)
   incident:      "bg-red-100 text-red-700",
@@ -249,6 +261,8 @@ export default function ReportsPage() {
   const [rptOpenDetail,    setRptOpenDetail]    = useState<RptTypeKey | null>(null)
   const [rptDetailRows,    setRptDetailRows]    = useState<any[]>([])
   const [rptDetailLoading, setRptDetailLoading] = useState(false)
+
+  const [topTypeFilter, setTopTypeFilter] = useState("all")
 
   const [runnerType,    setRunnerType]    = useState("all")
   const [runnerRows,    setRunnerRows]    = useState<RunnerRow[]>([])
@@ -321,6 +335,9 @@ export default function ReportsPage() {
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (community) { setRptOpenDetail(null); setRptDetailRows([]); loadRptSummary() } }, [community, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Sync Report Runner type when top-bar filter changes
+  useEffect(() => { setRunnerType(topTypeFilter) }, [topTypeFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!community) return
@@ -948,6 +965,16 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
             <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
               className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
           </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-semibold text-gray-500">Report Type</label>
+            <select value={topTypeFilter} onChange={e => setTopTypeFilter(e.target.value)}
+              className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+              <option value="all">All Types</option>
+              {REPORT_TYPES.map(rt => (
+                <option key={rt.key} value={rt.key}>{rt.label}</option>
+              ))}
+            </select>
+          </div>
           {community && !loading && (
             <div className="text-xs text-gray-400 self-end pb-2">
               {visits.length} entries · {dayCount} days
@@ -1133,7 +1160,9 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
         ) : (
           <>
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              {recentSubs.slice(0, recentSubsExpanded ? 15 : 3).map((s, i, arr) => {
+              {recentSubs
+                .filter(s => topTypeFilter === "all" || s.typeKey === TOP_FILTER_TO_SUB_KEY[topTypeFilter])
+                .slice(0, recentSubsExpanded ? 15 : 3).map((s, i, arr) => {
                 const badge  = SUB_BADGE[s.typeKey] || "bg-gray-100 text-gray-700"
                 const isNew  = Date.now() - new Date(utc(s.created_at)).getTime() < 24 * 3600 * 1000
                 const comm   = communities.find(c => c.id === s.community_id)?.name || "—"
@@ -1183,14 +1212,17 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                 )
               })}
             </div>
-            {recentSubs.length > 3 && (
-              <button
-                onClick={() => setRecentSubsExpanded(e => !e)}
-                className="mt-2 w-full py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white"
-              >
-                {recentSubsExpanded ? "▲ Show less" : `▼ Show all ${recentSubs.length} submissions`}
-              </button>
-            )}
+            {(() => {
+              const filtered = recentSubs.filter(s => topTypeFilter === "all" || s.typeKey === TOP_FILTER_TO_SUB_KEY[topTypeFilter])
+              return filtered.length > 3 ? (
+                <button
+                  onClick={() => setRecentSubsExpanded(e => !e)}
+                  className="mt-2 w-full py-2 text-xs text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white"
+                >
+                  {recentSubsExpanded ? "▲ Show less" : `▼ Show all ${filtered.length} submissions`}
+                </button>
+              ) : null
+            })()}
           </>
         )}
       </Section>
@@ -1211,7 +1243,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               <>
                 {/* Summary cards — each is a link to expand inline detail */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
-                  {REPORT_TYPES.map(rt => {
+                  {REPORT_TYPES.filter(rt => topTypeFilter === "all" || rt.key === topTypeFilter).map(rt => {
                     const count  = rptSummary[rt.key]
                     const isOpen = rptOpenDetail === rt.key
                     const clr    = RPT_COLORS[rt.color]
