@@ -118,7 +118,31 @@ export default function ProfilePage({ params }: any) {
     setPerson(p as PersonRow | null)
     setNotes((n as NoteRow[]) || [])
     setFlags((f as FlagRow[]) || [])
-    setIncidents((i as IncidentRow[]) || [])
+
+    // Also search by name in persons_involved (new-style reports don't set person_id)
+    const base: IncidentRow[] = (i as IncidentRow[]) || []
+    const first = (p?.first_name || "").toLowerCase().trim()
+    const last  = (p?.last_name  || "").toLowerCase().trim()
+    if (first && last) {
+      const { data: byName } = await supabase
+        .from("incident_reports")
+        .select("*")
+        .ilike("persons_involved", `%${first}%`)
+        .order("created_at", { ascending: false })
+        .limit(100)
+      const baseIds = new Set(base.map(r => r.id))
+      const extra = (byName || []).filter((r: any) => {
+        if (baseIds.has(r.id)) return false
+        const pi = (r.persons_involved || "").toLowerCase()
+        return pi.includes(first) && pi.includes(last)
+      })
+      setIncidents(
+        [...base, ...(extra as IncidentRow[])]
+          .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))
+      )
+    } else {
+      setIncidents(base)
+    }
   }
 
   async function flagPerson() {
@@ -499,7 +523,10 @@ export default function ProfilePage({ params }: any) {
                     {r.officer_name && <span>{r.officer_name}</span>}
                     {r.location && <span>· 📍 {r.location}</span>}
                   </div>
-                  <span className="text-xs text-gray-400 shrink-0">{r.date ? r.date : fmt(r.created_at)}</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span className="text-xs text-gray-400">{r.date ? r.date : fmt(r.created_at)}</span>
+                    <Link href={`/vms/reports/incident/${r.id}`} className="text-xs text-blue-700 hover:text-blue-900 font-medium">View ↗</Link>
+                  </div>
                 </div>
                 <div className="text-sm text-gray-800 whitespace-pre-wrap">{r.description || r.report || "—"}</div>
               </div>
