@@ -34,6 +34,13 @@ const PARKING_VIOLATION_TYPES = [
   "Other",
 ] as const
 
+const INCIDENT_TYPE_OPTIONS = [
+  "Disturbance", "Trespassing", "Theft", "Property Damage",
+  "Medical Emergency", "Suspicious Activity", "Domestic", "Noise Complaint",
+  "Vehicle Incident", "Shooting", "Firearm Violation", "Fight / Altercation",
+  "Shot Detection Alert", "Juvenile Issue", "Loitering", "Fire", "Other",
+] as const
+
 const HIGH_PRIORITY_INCIDENT_TYPES = [
   "weapons", "weapon", "firearm",
   "shooting", "shot detection",
@@ -232,7 +239,7 @@ export default function UserDashboard() {
   const [incTime,        setIncTime]        = useState("")
   const [incCommunity,   setIncCommunity]   = useState("")
   const [incLoc,         setIncLoc]         = useState<LocationValue>(EMPTY_LOCATION)
-  const [incType,        setIncType]        = useState("Disturbance")
+  const [incTypes,       setIncTypes]       = useState<string[]>([])
   const [incPersons,     setIncPersons]     = useState("")
   const [incDescription, setIncDescription] = useState("")
   const [incAction,      setIncAction]      = useState("")
@@ -662,6 +669,7 @@ export default function UserDashboard() {
 
   async function saveIncidentReport() {
     if (!incDescription) { setReportError("Incident description is required."); return }
+    if (incTypes.length === 0) { setReportError("Please select at least one incident type."); return }
     // Reliant-notification compliance gate (per-community flag; St Luke today).
     const requiresReliant = !!communities.find(c => c.id === incCommunity)?.requires_reliant_notification
     if (requiresReliant) {
@@ -705,7 +713,7 @@ export default function UserDashboard() {
 
     const { data: ins, error } = await supabase.from("incident_reports").insert({
       date: incDate, time: incTime, community_id: incCommunity,
-      location: incLoc.location || null, incident_type: incType,
+      location: incLoc.location || null, incident_type: incTypes.join(", "),
       location_type: incLoc.location_type,
       building: incLoc.building, apartment: incLoc.apartment, common_area: incLoc.common_area,
       hoh_name: incSnap.hoh_name, hoh_resident_id: incSnap.hoh_resident_id,
@@ -721,22 +729,23 @@ export default function UserDashboard() {
     }).select("id").single()
     setReportSaving(false)
     if (error) { setReportError(error.message); return }
-    if (ins?.id) enqueueReport("incident", ins.id, incCommunity, incOfficer || officerName, incType || "Incident Report")
+    if (ins?.id) enqueueReport("incident", ins.id, incCommunity, incOfficer || officerName, incTypes.join(", ") || "Incident Report")
     setReportMessage("✅ Incident report submitted — pending supervisor review.")
-    if (isHighPriorityIncident(incType)) {
+    if (isHighPriorityIncident(incTypes.join(" "))) {
       const communityName = communities.find(c => c.id === incCommunity)?.name || "Unknown"
+      const incTypeLabel = incTypes.join(" / ")
       fireAlert({
         type:         "incident_high_priority",
         severity:     "critical",
         community_id: incCommunity || null,
-        subject:      `🚨 ${incType.toUpperCase()} — ${communityName}`,
+        subject:      `🚨 ${incTypeLabel.toUpperCase()} — ${communityName}`,
         body:         `A high-priority incident has been reported.\n\n${incDescription}`,
         payload: {
           Community:    communityName,
           Date:         incDate,
           Time:         incTime,
           Location:     incLoc.location || "—",
-          Type:         incType,
+          Type:         incTypes.join(", "),
           Officer:      incOfficer || "—",
           Persons:      incPersons || "—",
           ActionTaken:  incAction || "—",
@@ -2084,18 +2093,23 @@ export default function UserDashboard() {
                   </select></div>
                 <div><label className={labelCls}>Location / Unit</label>
                   <LocationField communityId={incCommunity} value={incLoc} onChange={setIncLoc} inputCls={inputCls} /></div>
-                <div><label className={labelCls}>Incident Type</label>
-                  <select value={incType} onChange={e => setIncType(e.target.value)} className={inputCls}>
-                    <option>Disturbance</option><option>Trespassing</option><option>Theft</option>
-                    <option>Property Damage</option><option>Medical Emergency</option>
-                    <option>Suspicious Activity</option><option>Domestic</option>
-                    <option>Noise Complaint</option><option>Vehicle Incident</option>
-                    <option>Shooting</option><option>Firearm Violation</option>
-                    <option>Fight / Altercation</option><option>Shot Detection Alert</option>
-                    <option>Juvenile Issue</option>
-                    <option>Loitering</option><option>Fire</option>
-                    <option>Other</option>
-                  </select></div>
+                <div><label className={labelCls}>Incident Type <span className="text-red-500">*</span></label>
+                  <div className="border border-gray-200 dark:border-gray-700 rounded-lg p-3 bg-gray-50 dark:bg-gray-800/50">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-2">
+                      {INCIDENT_TYPE_OPTIONS.map(t => (
+                        <label key={t} className="flex items-center gap-2 text-sm cursor-pointer">
+                          <input
+                            type="checkbox"
+                            checked={incTypes.includes(t)}
+                            onChange={e => setIncTypes(prev => e.target.checked ? [...prev, t] : prev.filter(x => x !== t))}
+                            className="w-4 h-4 rounded border-gray-300 accent-red-700"
+                          />
+                          <span className="text-gray-700 dark:text-gray-300">{t}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
               </div>
               <div className="mb-4">
                 <label className={labelCls}>Persons Involved</label>
@@ -2106,7 +2120,7 @@ export default function UserDashboard() {
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <label className={labelCls + " mb-0"}>Incident Description <span className="text-red-500">*</span></label>
                   <AiAssist kind="incident" value={incDescription} onChange={setIncDescription}
-                    fields={{ incident_type: incType, location: incLoc.location, building: incLoc.building, apartment: incLoc.apartment, persons_involved: incPersons, action_taken: incAction, date: incDate, time: incTime }} />
+                    fields={{ incident_type: incTypes.join(", "), location: incLoc.location, building: incLoc.building, apartment: incLoc.apartment, persons_involved: incPersons, action_taken: incAction, date: incDate, time: incTime }} />
                 </div>
                 <textarea rows={5} value={incDescription} onChange={e => setIncDescription(e.target.value)}
                   placeholder="Jot down rough notes, then ✨ AI Draft to expand them into a full narrative — or write it yourself." className={textareaCls} />
