@@ -42,13 +42,15 @@ type EditFieldDef = { key: string; label: string; type: "text" | "date" | "texta
 const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
   "incident": [
     { key: "date",             label: "Date",              type: "date"     },
-    { key: "issued_by",        label: "Reporting Officer", type: "text"     },
+    { key: "time",             label: "Time",              type: "text"     },
+    { key: "officer_name",     label: "Reporting Officer", type: "text"     },
     { key: "incident_type",    label: "Incident Type",     type: "text"     },
+    { key: "location",         label: "Location",          type: "text"     },
     { key: "building",         label: "Building",          type: "text"     },
     { key: "apartment",        label: "Apartment",         type: "text"     },
     { key: "hoh_name",         label: "HOH / Tenant",      type: "text"     },
     { key: "persons_involved", label: "Persons Involved",  type: "text"     },
-    { key: "narrative",        label: "Narrative",         type: "textarea" },
+    { key: "description",      label: "Description",       type: "textarea" },
     { key: "action_taken",     label: "Action Taken",      type: "textarea" },
     { key: "reliant_case_no",  label: "Reliant Case #",    type: "text"     },
     { key: "hpd_report_no",    label: "HPD Report #",      type: "text"     },
