@@ -5,6 +5,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
 import { SignedImage } from "@/components/SignedImage"
+import { ADMIN_EMAILS } from "@/lib/admin"
 
 interface PersonRow extends WatchlistEntry {
   photo_url?: string | null
@@ -89,6 +90,19 @@ export default function ProfilePage({ params }: any) {
   const [savingIncident,setSavingIncident]= useState(false)
   const [incidentError, setIncidentError] = useState("")
 
+  // Admin edit
+  const [isAdmin,    setIsAdmin]    = useState(false)
+  const [editMode,   setEditMode]   = useState(false)
+  const [editFields, setEditFields] = useState<Record<string, string>>({})
+  const [editSaving, setEditSaving] = useState(false)
+  const [editError,  setEditError]  = useState("")
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (user) setIsAdmin(ADMIN_EMAILS.includes(user.email || ""))
+    })
+  }, [])
+
   useEffect(() => { loadAll() }, [id])
 
   async function loadAll() {
@@ -171,6 +185,59 @@ export default function ProfilePage({ params }: any) {
     await loadAll()
   }
 
+  function openEdit() {
+    if (!person) return
+    setEditFields({
+      first_name:  person.first_name  || "",
+      middle_name: person.middle_name || "",
+      last_name:   person.last_name   || "",
+      dob:         person.dob         || "",
+      sex:         person.sex         || "",
+      race:        person.race        || "",
+      oln:         person.oln         || "",
+      ssn:         person.ssn         || "",
+      ban_date:    person.ban_date    || "",
+      banned_by:   person.banned_by   || person.flagged_by || "",
+      reason:      person.reason      || "",
+      notes:       person.notes       || person.comments   || "",
+      community:   person.community   || "",
+    })
+    setEditError("")
+    setEditMode(true)
+  }
+
+  async function saveEdit() {
+    setEditSaving(true); setEditError("")
+    const { data: { user } } = await supabase.auth.getUser()
+    const { error: err } = await supabase.from("watchlist").update({
+      first_name:  editFields.first_name  || null,
+      middle_name: editFields.middle_name || null,
+      last_name:   editFields.last_name   || null,
+      dob:         editFields.dob         || null,
+      sex:         editFields.sex         || null,
+      race:        editFields.race        || null,
+      oln:         editFields.oln         || null,
+      ssn:         editFields.ssn         || null,
+      ban_date:    editFields.ban_date    || null,
+      banned_by:   editFields.banned_by   || null,
+      reason:      editFields.reason      || null,
+      notes:       editFields.notes       || null,
+      comments:    editFields.notes       || null,
+      community:   editFields.community   || null,
+    }).eq("id", id)
+    if (err) { setEditError(err.message); setEditSaving(false); return }
+    // Audit log
+    supabase.from("audit_logs").insert({
+      user_email: user?.email || "unknown",
+      action: "updated", resource_type: "Watchlist", resource_id: id,
+      detail: `Admin updated watchlist record: ${editFields.first_name} ${editFields.last_name}`,
+      created_at: new Date().toISOString(),
+    })
+    setEditSaving(false)
+    setEditMode(false)
+    await loadAll()
+  }
+
   if (loading) return <div className="p-5 text-gray-500 text-sm">Loading…</div>
   if (error)   return <div className="p-5 text-red-600 text-sm">{error}</div>
   if (!person) return <div className="p-5 text-gray-500 text-sm">Person not found.</div>
@@ -216,6 +283,14 @@ export default function ProfilePage({ params }: any) {
             >
               {flagging ? "Flagging…" : "🚩 Flag Person"}
             </button>
+            {isAdmin && !editMode && (
+              <button
+                onClick={openEdit}
+                className="px-3 py-1.5 bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold rounded-md border-none cursor-pointer"
+              >
+                ✏️ Edit Record
+              </button>
+            )}
             {flagError && <span className="text-red-600 text-xs self-center">{flagError}</span>}
           </div>
         </div>
@@ -238,6 +313,88 @@ export default function ProfilePage({ params }: any) {
           {uploadError && <div className="text-xs text-red-600 mt-1">{uploadError}</div>}
         </div>
       </div>
+
+      {/* ADMIN EDIT FORM */}
+      {isAdmin && editMode && (
+        <div className="bg-blue-50 border border-blue-300 rounded-xl p-5 mb-5">
+          <div className="flex items-center justify-between mb-4">
+            <div className="text-sm font-bold text-gray-800">✏️ Edit Watchlist Record</div>
+            <button onClick={() => setEditMode(false)} className="text-xs text-gray-400 hover:text-gray-700 bg-transparent border-none cursor-pointer">✕ Cancel</button>
+          </div>
+          {(() => {
+            const f = "w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+            const l = "block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1"
+            const field = (key: string, label: string, type = "text") => (
+              <div key={key}>
+                <label className={l}>{label}</label>
+                <input
+                  type={type}
+                  value={editFields[key] ?? ""}
+                  onChange={e => setEditFields(prev => ({ ...prev, [key]: e.target.value }))}
+                  className={f}
+                />
+              </div>
+            )
+            const sel = (key: string, label: string, opts: string[]) => (
+              <div key={key}>
+                <label className={l}>{label}</label>
+                <select
+                  value={editFields[key] ?? ""}
+                  onChange={e => setEditFields(prev => ({ ...prev, [key]: e.target.value }))}
+                  className={f}
+                >
+                  <option value="">—</option>
+                  {opts.map(o => <option key={o}>{o}</option>)}
+                </select>
+              </div>
+            )
+            return (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {field("first_name",  "First Name")}
+                {field("middle_name", "Middle Name")}
+                {field("last_name",   "Last Name")}
+                {field("dob",         "Date of Birth", "date")}
+                {sel  ("sex",         "Sex",     ["Male", "Female", "Other"])}
+                {sel  ("race",        "Race",    ["Black", "White", "Hispanic", "Asian", "Native American", "Other"])}
+                {field("oln",         "Driver License # (OLN)")}
+                {field("ssn",         "SSN (last 4)")}
+                {field("ban_date",    "Ban Date", "date")}
+                {field("banned_by",   "Banned By")}
+                {field("community",   "Location / Community")}
+                <div className="sm:col-span-2">
+                  <label className={l}>Reason / Ban Notes</label>
+                  <input value={editFields.reason ?? ""} onChange={e => setEditFields(p => ({ ...p, reason: e.target.value }))} className={f} />
+                </div>
+                <div className="sm:col-span-2">
+                  <label className={l}>Officer Notes / Comments</label>
+                  <textarea
+                    rows={3}
+                    value={editFields.notes ?? ""}
+                    onChange={e => setEditFields(p => ({ ...p, notes: e.target.value }))}
+                    className={f + " resize-y"}
+                  />
+                </div>
+              </div>
+            )
+          })()}
+          {editError && <div className="mt-3 text-xs text-red-600 font-medium">{editError}</div>}
+          <div className="flex gap-2 mt-4">
+            <button
+              onClick={saveEdit}
+              disabled={editSaving}
+              className="px-5 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50"
+            >
+              {editSaving ? "Saving…" : "Save Changes"}
+            </button>
+            <button
+              onClick={() => setEditMode(false)}
+              className="px-4 py-2 bg-white border border-gray-300 text-gray-600 text-sm rounded-lg cursor-pointer hover:bg-gray-50"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* NOTES */}
       <div className={sectionCls}>
