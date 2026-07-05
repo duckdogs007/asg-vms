@@ -142,8 +142,15 @@ export default function ProfilePage({ params }: any) {
         if (baseIds.has(r.id)) return false
         const pi = (r.persons_involved || "").toLowerCase()
         if (!pi.includes(last)) return false
-        // Bidirectional first-name match: "Theo" matches "Theodore" and vice versa
-        return pi.split(/\W+/).some((w: string) => w && (w.includes(first) || first.includes(w)))
+        const tokens = pi.split(/\W+/).filter(Boolean)
+        const minLen = Math.min(4, first.length)
+        // Accept on first-name match (full/nickname/initial) or last-name-only entry
+        const firstMatch = tokens.some((w: string) => {
+          if (w.length === 1) return w === first[0]           // "T" → "Theodore"
+          return w.length >= minLen && (w.includes(first) || first.includes(w))
+        })
+        const hasOtherTokens = tokens.some(w => w !== last && w.length >= 2)
+        return firstMatch || !hasOtherTokens
       })
       setIncidents(
         [...base, ...(extra as IncidentRow[])]
