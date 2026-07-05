@@ -3,7 +3,7 @@
 **App:** https://asg-psp.com
 **Stack:** Next.js · TypeScript · Supabase · Vercel
 **Supabase project:** ASG-VMS (`xmomsoobriehgrnppewa`)
-**Last updated:** July 3, 2026
+**Last updated:** July 5, 2026
 
 > Shared task list for Claude.ai ↔ Claude Code. Keep this file in the repo root as the single source of truth. Companion: `CLAUDE_CODE_HANDOFF.md` (sequenced build plan + migration files).
 
@@ -19,6 +19,18 @@
 | 57 | AI quota limit error handling | Review Gemini quota/rate-limit errors surfaced in report summary (`/api/ai/summary`); add graceful user-facing message + retry/fallback strategy |
 
 ---
+
+## Recently completed (July 3–5, 2026)
+
+- [x] **Approval stamp on reports** — report detail page shows green "Approved & Sent" banner with reviewer + timestamp; Recent Submissions list shows approval status inline
+- [x] **Audit log Reports filter fix** — filter now matches both `Report Queue` and `Report` resource types (resend entries were silently dropped)
+- [x] **Reviewer actions on report detail page** — Edit, Approve & Send, and Return for Revision buttons directly on detail page; per-type editable field config; inline edit form; all writes audit-logged
+- [x] **Passdown logs open to all users** — UI gate removed + RLS policy updated so guest-role users can submit; UPDATE remains non-guest
+- [x] **Report Type filter on Reports page** — dropdown in the top filter bar filters Reports by Community cards and Recent Submissions simultaneously
+- [x] **New incident types** — Fight / Altercation, Shot Detection Alert, Juvenile Issue added; first two trigger high-priority supervisor alerts
+- [x] **Multi-select incident types** — officers can now check multiple types per report (e.g., Juvenile Issue + Fight / Altercation); stored as comma-joined text; alerts fire if any selected type is high-priority
+- [x] **Common area locations expanded** — Playground, Community Bldg, Leasing Office added to LocationField dropdown
+- [x] **Structured persons & vehicles on incident reports** — `persons_data jsonb` + `vehicles_data jsonb` columns on `incident_reports`; form replaced with Add Person / Add Vehicle cards (name, role, DOB, sex, race, address; make, model, year, color, plate, state); detail page renders structured cards for new reports, flat display for legacy
 
 ## Recently completed (June 27–29, 2026)
 
