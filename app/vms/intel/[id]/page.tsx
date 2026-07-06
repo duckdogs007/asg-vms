@@ -5,7 +5,7 @@ import { useParams } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
-import { SignedImage } from "@/components/SignedImage"
+import { SignedImage, SignedLink } from "@/components/SignedImage"
 import { ADMIN_EMAILS } from "@/lib/admin"
 
 interface PersonRow extends WatchlistEntry {
@@ -75,6 +75,7 @@ export default function ProfilePage() {
   const id = (Array.isArray(routeParams?.id) ? routeParams.id[0] : routeParams?.id) as string | undefined
 
   const [person,    setPerson]    = useState<PersonRow | null>(null)
+  const [communityName, setCommunityName] = useState("")
   const [notes,     setNotes]     = useState<NoteRow[]>([])
   const [flags,     setFlags]     = useState<FlagRow[]>([])
   const [incidents, setIncidents] = useState<IncidentRow[]>([])
@@ -129,6 +130,13 @@ export default function ProfilePage() {
     setLoading(false)
     if (pErr) { setError("Failed to load profile."); return }
     setPerson(p as PersonRow | null)
+    // Resolve the community_id (uuid) to a readable name for the Location line.
+    if (p?.community_id) {
+      const { data: c } = await supabase.from("communities").select("name").eq("id", p.community_id).maybeSingle()
+      setCommunityName((c as { name?: string } | null)?.name || "")
+    } else {
+      setCommunityName("")
+    }
     setNotes((n as NoteRow[]) || [])
     setFlags((f as FlagRow[]) || [])
 
@@ -246,7 +254,7 @@ export default function ProfilePage() {
       banned_by:   person.banned_by   || person.flagged_by || "",
       reason:      person.reason      || "",
       notes:       person.notes       || person.comments   || "",
-      community:   person.community   || "",
+      community:   person.property     || "",
     })
     setEditError("")
     setEditMode(true)
@@ -267,9 +275,8 @@ export default function ProfilePage() {
       ban_date:    editFields.ban_date    || null,
       banned_by:   editFields.banned_by   || null,
       reason:      editFields.reason      || null,
-      notes:       editFields.notes       || null,
       comments:    editFields.notes       || null,
-      community:   editFields.community   || null,
+      property:    editFields.community   || null,
     }).eq("id", id)
     if (err) { setEditError(err.message); setEditSaving(false); return }
     // Audit log
@@ -306,16 +313,54 @@ export default function ProfilePage() {
           <h1 className="text-2xl font-bold capitalize mb-2">
             {person.first_name} {person.middle_name || ""} {person.last_name}
           </h1>
-          <div className="flex flex-col gap-1 text-sm text-gray-700">
-            {person.dob       && <div><span className="text-gray-500">DOB:</span> {person.dob}</div>}
-            {person.oln       && <div><span className="text-gray-500">DL:</span> {person.oln}</div>}
-            {person.community && <div><span className="text-gray-500">Location:</span> {person.community}</div>}
-            {person.ban_date  && <div><span className="text-gray-500">Ban Date:</span> {person.ban_date}</div>}
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-x-4 gap-y-1.5 text-sm text-gray-700">
+            {person.sex       && <div><span className="text-gray-500">Sex:</span> {person.sex}</div>}
+            {person.race      && <div><span className="text-gray-500">Race:</span> {person.race}</div>}
+            {person.dob       && <div><span className="text-gray-500">DOB:</span> {fmtDate(person.dob)}</div>}
+            {person.oln       && <div><span className="text-gray-500">DL / OLN:</span> {person.oln}</div>}
+            {person.ssn       && <div><span className="text-gray-500">SSN:</span> {person.ssn}</div>}
+            {(communityName || person.property) && <div><span className="text-gray-500">Location:</span> {communityName || person.property}</div>}
+            {person.ban_date  && <div><span className="text-gray-500">Ban Date:</span> {fmtDate(person.ban_date)}</div>}
             {person.banned_by && <div><span className="text-gray-500">Banned By:</span> {person.banned_by}</div>}
+            {person.status    && <div><span className="text-gray-500">Status:</span> {person.status}</div>}
           </div>
+
+          {person.firearm_flag && (
+            <div className="mt-3 inline-flex items-center gap-1.5 px-2 py-1 bg-amber-50 border border-amber-300 rounded text-xs font-semibold text-amber-800">
+              🔫 Firearm flag
+            </div>
+          )}
+
           {person.reason && (
             <div className="mt-3 p-2 bg-red-50 border border-red-200 rounded text-sm text-red-800 font-medium">
               🚨 {person.reason}
+            </div>
+          )}
+
+          {person.comments && (
+            <div className="mt-3">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Notes / Comments</div>
+              <div className="text-sm text-gray-800 whitespace-pre-wrap">{person.comments}</div>
+            </div>
+          )}
+
+          {Array.isArray(person.ban_sheet_urls) && person.ban_sheet_urls.length > 0 && (
+            <div className="mt-3">
+              <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Ban Sheet</div>
+              <div className="flex flex-wrap items-center gap-2">
+                {person.ban_sheet_urls.map((url: string, i: number) => {
+                  const isImg = /\.(png|jpe?g|gif|webp|bmp)(\?|$)/i.test(url)
+                  return isImg ? (
+                    <SignedLink key={i} href={url} bucket="photos" title={`Ban sheet ${i + 1}`}>
+                      <SignedImage src={url} bucket="photos" alt={`Ban sheet ${i + 1}`} className="w-12 h-14 object-cover rounded border border-gray-300 hover:border-red-400" />
+                    </SignedLink>
+                  ) : (
+                    <SignedLink key={i} href={url} bucket="photos" className="text-xs text-blue-600 hover:underline">
+                      📄 Page {i + 1}
+                    </SignedLink>
+                  )
+                })}
+              </div>
             </div>
           )}
           <div className="mt-4 flex gap-2 flex-wrap">
