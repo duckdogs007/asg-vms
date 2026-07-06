@@ -87,6 +87,19 @@ export async function POST(req: NextRequest) {
     }).eq("id", queueId)
     if (updateErr) throw new Error("Queue status update failed: " + updateErr.message)
 
+    // Authoritative audit trail — written server-side so every approval is
+    // recorded regardless of the client (the browser is no longer relied on
+    // for this). Best-effort: never fail an already-completed approval.
+    const { error: auditErr } = await supabase.from("audit_logs").insert({
+      user_email:    user.email || "unknown",
+      action:        "approved",
+      resource_type: "Report Queue",
+      resource_id:   queueId,
+      detail:        `Approved ${emailType} report — emailed to ${recipients.join(", ") || "no contacts"}`,
+      created_at:    now,
+    })
+    if (auditErr) console.error("[approve] audit log insert failed:", auditErr.message)
+
     return NextResponse.json({ ok: true, recipients })
   } catch (e: any) {
     return NextResponse.json({ ok: false, error: e?.message || String(e) }, { status: 500 })

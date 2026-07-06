@@ -666,14 +666,9 @@ export default function ReportsPage() {
       : `Error: ${data.error || "unknown"}`
     setQueueMsg(prev => ({ ...prev, [queueId]: { ok: data.ok, msg } }))
     if (data.ok) {
-      supabase.auth.getUser().then(({ data: { user } }) => {
-        supabase.from("audit_logs").insert({
-          user_email: user?.email || "unknown",
-          action: "approved", resource_type: "Report Queue", resource_id: queueId,
-          detail: `Approved report — emailed to ${data.recipients?.join(", ") || "no contacts"}`,
-          created_at: new Date().toISOString(),
-        })
-      })
+      // Audit logging for approvals is handled authoritatively server-side in
+      // /api/reports/queue/approve (no client-side insert — avoids duplicates
+      // and guarantees every approval is recorded).
       setTimeout(() => {
         setQueue(prev => prev.filter(q => q.id !== queueId))
         setQueueMsg(prev => { const u = { ...prev }; delete u[queueId]; return u })
