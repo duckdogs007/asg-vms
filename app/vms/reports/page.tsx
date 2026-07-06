@@ -266,7 +266,7 @@ export default function ReportsPage() {
   const [rptDetailLoading, setRptDetailLoading] = useState(false)
 
   const [topTypeFilter, setTopTypeFilter] = useState("all")
-  const [activeTab,     setActiveTab]     = useState<"reports" | "activity" | "property">("reports")
+  const [activeTab,     setActiveTab]     = useState<"reports" | "activity" | "registry">("reports")
 
   const [runnerType,    setRunnerType]    = useState("all")
   const [runnerRows,    setRunnerRows]    = useState<RunnerRow[]>([])
@@ -1081,7 +1081,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
         {([
           { key: "reports",  label: "Reports",          icon: "📋" },
           { key: "activity", label: "Visitor Activity",  icon: "📊" },
-          { key: "property", label: "Property",          icon: "🏠" },
+          { key: "registry", label: "Registry",           icon: "🚗" },
         ] as const).map(tab => (
           <button key={tab.key} onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px whitespace-nowrap flex items-center gap-1.5 ${
@@ -2088,7 +2088,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       })()}
 
       {/* ── VEHICLE & VISITOR REGISTRY ── (own gate; current registry, not date-ranged) */}
-      {activeTab === "property" && community && !loading && registry.length > 0 && (() => {
+      {activeTab === "registry" && community && !loading && registry.length > 0 && (() => {
         const residents = registry.filter(v => v.kind === "resident").length
         const visitors  = registry.filter(v => v.kind === "visitor").length
         const expired   = registry.filter(regExpired).length
