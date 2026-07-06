@@ -1036,6 +1036,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               {REPORT_TYPES.map(rt => (
                 <option key={rt.key} value={rt.key}>{rt.label}</option>
               ))}
+              <option value="watchlist">Watchlist (Barred Persons)</option>
             </select>
           </div>
           {community && !loading && (
@@ -1327,6 +1328,11 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               <div className="text-gray-400 text-sm animate-pulse py-4">Loading…</div>
             ) : (
               <>
+                {topTypeFilter === "watchlist" && (
+                  <div className="mb-4 text-sm text-gray-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-3">
+                    <span className="font-semibold text-rose-700">Watchlist (Barred Persons)</span> is a live roster, not a date-ranged report. Scroll to the <span className="font-semibold">Report Runner</span> below and click <span className="font-semibold">▶ Run Report</span> to list and export barred persons for {communityName || "this location"}.
+                  </div>
+                )}
                 {/* Summary cards — each is a link to expand inline detail */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-4">
                   {REPORT_TYPES.filter(rt => topTypeFilter === "all" || rt.key === topTypeFilter).map(rt => {
