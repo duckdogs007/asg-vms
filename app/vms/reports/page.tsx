@@ -293,6 +293,8 @@ export default function ReportsPage() {
   // Review queue (admin/supervisor)
   const [queue,        setQueue]        = useState<any[]>([])
   const [queueLoading, setQueueLoading] = useState(false)
+  const [approved,        setApproved]        = useState<any[]>([])
+  const [approvedLoading, setApprovedLoading] = useState(false)
   const [approvingId,  setApprovingId]  = useState<string | null>(null)
   const [returnId,     setReturnId]     = useState<string | null>(null)
   const [returnNotes,  setReturnNotes]  = useState("")
@@ -550,7 +552,7 @@ export default function ReportsPage() {
   useEffect(() => { loadRecentSubmissions() }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load queue whenever approve-eligibility resolves
-  useEffect(() => { if (canApprove) loadQueue() }, [canApprove]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (canApprove) { loadQueue(); loadApproved() } }, [canApprove]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function loadRecentSubmissions() {
     setRecentSubsLoading(true)
@@ -637,6 +639,19 @@ export default function ReportsPage() {
     setQueueLoading(false)
   }
 
+  // Recently approved reports — report_queue rows that have been reviewed and
+  // sent to the client. status='sent' is set by the approve endpoint.
+  async function loadApproved() {
+    setApprovedLoading(true)
+    const { data } = await supabase.from("report_queue")
+      .select("*")
+      .eq("status", "sent")
+      .order("reviewed_at", { ascending: false })
+      .limit(15)
+    setApproved(data || [])
+    setApprovedLoading(false)
+  }
+
   async function approveReport(queueId: string) {
     setApprovingId(queueId)
     const res = await fetch("/api/reports/queue/approve", {
@@ -663,6 +678,7 @@ export default function ReportsPage() {
         setQueue(prev => prev.filter(q => q.id !== queueId))
         setQueueMsg(prev => { const u = { ...prev }; delete u[queueId]; return u })
         loadRecentSubmissions()
+        loadApproved()
       }, 2000)
     }
   }
@@ -1197,6 +1213,68 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                         </div>
                       </div>
                     )}
+                  </div>
+                )
+              })}
+            </div>
+          )}
+        </Section>
+      )}
+
+      {/* ── RECENTLY APPROVED ── */}
+      {canApprove && (
+        <Section label={`Recently Approved${approved.length > 0 ? ` (${approved.length})` : ""}`}>
+          <div className="flex items-center justify-between mb-3">
+            <div className="text-xs text-gray-400">Reports reviewed and sent to the client (last 15)</div>
+            <button
+              onClick={loadApproved}
+              disabled={approvedLoading}
+              className="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 text-xs rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50 border-solid"
+            >
+              {approvedLoading ? "Loading…" : "↻ Refresh"}
+            </button>
+          </div>
+
+          {approvedLoading ? (
+            <div className="text-gray-400 text-sm animate-pulse py-4">Loading…</div>
+          ) : approved.length === 0 ? (
+            <div className="py-8 text-center text-gray-400 text-sm bg-white border border-gray-200 rounded-xl">
+              No approved reports yet.
+            </div>
+          ) : (
+            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+              {approved.map((q, i) => {
+                const badge = SUB_BADGE[q.report_type] || "bg-gray-100 text-gray-700"
+                const comm  = communities.find(c => c.id === q.community_id)?.name || "—"
+                return (
+                  <div key={q.id} className={`flex items-center gap-3 px-4 py-3 ${i < approved.length - 1 ? "border-b border-gray-100" : ""}`}>
+                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${badge}`}>
+                      {q.report_type.replace(/_/g, " ")}
+                    </span>
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-green-100 text-green-700 flex-shrink-0">
+                      ✓ Sent
+                    </span>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-gray-800 truncate">{q.summary || "—"}</div>
+                      <div className="text-xs text-gray-500 truncate">
+                        {q.officer_name || q.submitted_by || "—"} · {comm}
+                        {q.reviewed_by && <> · Approved by {q.reviewed_by}</>}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <div className="text-xs text-gray-400 text-right mr-1">
+                        <div>{q.reviewed_at ? timeAgo(q.reviewed_at) : "—"}</div>
+                        <div className="text-[10px] text-gray-300">
+                          {q.reviewed_at ? new Date(utc(q.reviewed_at)).toLocaleDateString("en-US", { month: "short", day: "numeric" }) : ""}
+                        </div>
+                      </div>
+                      <Link
+                        href={`/vms/reports/${QUEUE_TYPE_SLUG[q.report_type] ?? q.report_type}/${q.report_id}`}
+                        className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg whitespace-nowrap"
+                      >
+                        🔍 View
+                      </Link>
+                    </div>
                   </div>
                 )
               })}
