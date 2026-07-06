@@ -64,6 +64,7 @@ const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
   ],
   "vehicle-fi": [
     { key: "date",         label: "Date",         type: "date"     },
+    { key: "time",         label: "Time",         type: "text"     },
     { key: "officer_name", label: "Officer",      type: "text"     },
     { key: "plate",        label: "Plate",        type: "text"     },
     { key: "state",        label: "State",        type: "text"     },
@@ -75,6 +76,7 @@ const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
   ],
   "parking": [
     { key: "date",           label: "Date",           type: "date"     },
+    { key: "time",           label: "Time",           type: "text"     },
     { key: "officer_name",   label: "Officer",        type: "text"     },
     { key: "violation_type", label: "Violation Type", type: "text"     },
     { key: "plate",          label: "Plate",          type: "text"     },
@@ -90,6 +92,8 @@ const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
     { key: "narrative",    label: "Narrative", type: "textarea" },
   ],
   "maintenance": [
+    { key: "date",         label: "Date",        type: "date"     },
+    { key: "time",         label: "Time",        type: "text"     },
     { key: "officer_name", label: "Officer",     type: "text"     },
     { key: "issue_type",   label: "Issue Type",  type: "text"     },
     { key: "description",  label: "Description", type: "textarea" },
