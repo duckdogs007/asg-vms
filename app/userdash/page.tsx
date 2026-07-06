@@ -169,7 +169,8 @@ export default function UserDashboard() {
   // Daily log
   const [dailyDate,      setDailyDate]      = useState(new Date().toISOString().split("T")[0])
   const [dailyShift,      setDailyShift]      = useState("Day")
-  const [dailyShiftTimes, setDailyShiftTimes] = useState("")
+  const [dailyShiftStart, setDailyShiftStart] = useState("")
+  const [dailyShiftEnd,   setDailyShiftEnd]   = useState("")
   const [dailyCommunity, setDailyCommunity] = useState("")
   const [dailyOfficer,   setDailyOfficer]   = useState("")
   const [dailyWeather,   setDailyWeather]   = useState("")
@@ -664,7 +665,9 @@ export default function UserDashboard() {
       ? checklistAnswers.map(a => ({ question: a.question, answer: a.answer, explanation: a.explanation || null }))
       : null
     const { data: ins, error } = await supabase.from("officer_daily_logs").insert({
-      date: dailyDate, shift: dailyShift, shift_times: dailyShiftTimes || null, community_id: dailyCommunity,
+      date: dailyDate, shift: dailyShift,
+      shift_times: dailyShiftStart && dailyShiftEnd ? `${dailyShiftStart} - ${dailyShiftEnd}` : (dailyShiftStart || dailyShiftEnd || null),
+      community_id: dailyCommunity,
       officer_name: dailyOfficer, weather: dailyWeather,
       narrative: dailyNarrative, notes: dailyNotes,
       photo_urls: photoUrls.length ? photoUrls : null,
@@ -676,6 +679,7 @@ export default function UserDashboard() {
     if (ins?.id) enqueueReport("daily_log", ins.id, dailyCommunity, dailyOfficer || officerName, `Daily Log — ${dailyDate}`)
     setReportMessage("✅ Daily log submitted — pending supervisor review.")
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather(""); setDailyPhotoFiles([])
+    setDailyShiftStart(""); setDailyShiftEnd("")
     setChecklistAnswers(prev => prev.map(a => ({ ...a, answer: "", explanation: "" })))
     logActivity("created", "Daily Log", "", `Daily log submitted — ${dailyDate}`)
   }
@@ -1990,12 +1994,28 @@ export default function UserDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
                 <div><label className={labelCls}>Date</label>
                   <input type="date" value={dailyDate} onChange={e => setDailyDate(e.target.value)} className={inputCls} /></div>
-                <div><label className={labelCls}>Shift</label>
-                  <select value={dailyShift} onChange={e => setDailyShift(e.target.value)} className={inputCls}>
-                    <option>Day</option><option>Evening</option><option>Night</option><option>Overnight</option>
-                  </select></div>
-                <div><label className={labelCls}>Shift Times</label>
-                  <input value={dailyShiftTimes} onChange={e => setDailyShiftTimes(e.target.value)} placeholder="e.g. 0700-1700" className={inputCls} /></div>
+                <div className="sm:col-span-2">
+                  <label className={labelCls}>Shift &amp; Hours <span className="text-red-500">*</span></label>
+                  <div className="flex flex-wrap gap-2 items-center">
+                    <select value={dailyShift} onChange={e => setDailyShift(e.target.value)}
+                      className="px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white flex-shrink-0">
+                      <option>Day</option><option>Evening</option><option>Night</option><option>Overnight</option>
+                    </select>
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <div className="flex flex-col gap-0.5 flex-1 min-w-[110px]">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Start</span>
+                        <input type="time" value={dailyShiftStart} onChange={e => setDailyShiftStart(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                      </div>
+                      <span className="text-gray-400 font-bold mt-4">—</span>
+                      <div className="flex flex-col gap-0.5 flex-1 min-w-[110px]">
+                        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">End</span>
+                        <input type="time" value={dailyShiftEnd} onChange={e => setDailyShiftEnd(e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={dailyOfficer} onChange={e => setDailyOfficer(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Location</label>
@@ -2008,7 +2028,7 @@ export default function UserDashboard() {
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <label className={labelCls + " mb-0"}>Patrol Narrative <span className="text-red-500">*</span></label>
-                  <AiAssist kind="daily" value={dailyNarrative} onChange={setDailyNarrative} fields={{ shift: dailyShift }} />
+                  <AiAssist kind="daily" value={dailyNarrative} onChange={setDailyNarrative} fields={{ shift: dailyShift, shift_times: dailyShiftStart && dailyShiftEnd ? `${dailyShiftStart} - ${dailyShiftEnd}` : undefined }} />
                 </div>
                 <textarea rows={5} value={dailyNarrative} onChange={e => setDailyNarrative(e.target.value)}
                   placeholder="Describe patrol activities, observations, and any notable events..."
