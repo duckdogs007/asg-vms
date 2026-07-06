@@ -344,6 +344,14 @@ export default function ReportsPage() {
   // Sync Report Runner type when top-bar filter changes
   useEffect(() => { setRunnerType(topTypeFilter) }, [topTypeFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-run the Watchlist (Barred Persons) roster when it becomes the active
+  // type — it's a current-state list, so there's nothing to configure; showing
+  // it immediately avoids confusion with the (now-hidden) Entry Log section.
+  useEffect(() => {
+    if (runnerType === "watchlist" && rptCommunity) runReport()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [runnerType, rptCommunity])
+
   useEffect(() => {
     if (!community) return
     // Listen for any change (INSERT/UPDATE/DELETE) on visitor_logs for this
@@ -1403,7 +1411,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               <>
                 {topTypeFilter === "watchlist" && (
                   <div className="mb-4 text-sm text-gray-600 bg-rose-50 border border-rose-200 rounded-lg px-4 py-3">
-                    <span className="font-semibold text-rose-700">Watchlist (Barred Persons)</span> is a live roster, not a date-ranged report. Scroll to the <span className="font-semibold">Report Runner</span> below and click <span className="font-semibold">▶ Run Report</span> to list and export barred persons for {communityName || "this location"}.
+                    <span className="font-semibold text-rose-700">Watchlist (Barred Persons)</span> is a live roster, not a date-ranged report. The barred-persons list for {communityName || "this location"} is shown in the <span className="font-semibold">Report Runner</span> below — use <span className="font-semibold">⬇ Export CSV</span> or <span className="font-semibold">🖨 Print</span> there to export it.
                   </div>
                 )}
                 {/* Summary cards — each is a link to expand inline detail */}
@@ -1677,8 +1685,9 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       )}
 
       {/* ── VISITOR ACTIVITY (per community) ── */}
-
-      {hasData && (
+      {/* Hidden when the Watchlist (Barred Persons) roster is selected — those
+          visitor/report sections (Entry Log, etc.) are unrelated to the roster. */}
+      {hasData && topTypeFilter !== "watchlist" && (
         <>
           {/* ── ENTRY LOG ── */}
           <Section label={`Entry Log${
