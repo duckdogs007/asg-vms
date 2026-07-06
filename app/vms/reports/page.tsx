@@ -554,7 +554,7 @@ export default function ReportsPage() {
     const N = 20
     const [incR, ctR, vfiR, pvR, logR, mntR, gcR] = await Promise.all([
       supabase.from("incident_reports").select("id,community_id,created_at,incident_type,officer_name,issued_by").order("created_at", { ascending: false }).limit(N),
-      supabase.from("contact_history").select("id,community_id,created_at,officer_name,contact_name").order("created_at", { ascending: false }).limit(N),
+      supabase.from("contact_history").select("id,community_id,created_at,officer,first_name,last_name").order("created_at", { ascending: false }).limit(N),
       supabase.from("vehicle_fi_logs").select("id,community_id,created_at,officer_name,plate").order("created_at", { ascending: false }).limit(N),
       supabase.from("parking_violations").select("id,community_id,created_at,officer_name,plate,violation_type").order("created_at", { ascending: false }).limit(N),
       supabase.from("officer_daily_logs").select("id,community_id,created_at,officer_name").order("created_at", { ascending: false }).limit(N),
@@ -569,8 +569,8 @@ export default function ReportsPage() {
       })),
       ...(ctR.data || []).map(r => ({
         id: r.id, typeKey: "fieldContact" as const, typeLabel: "Field Contact",
-        officer: r.officer_name || "—", community_id: r.community_id,
-        created_at: r.created_at, summary: r.contact_name || "—",
+        officer: r.officer || "—", community_id: r.community_id,
+        created_at: r.created_at, summary: [r.first_name, r.last_name].filter(Boolean).join(" ") || "—",
       })),
       ...(vfiR.data || []).map(r => ({
         id: r.id, typeKey: "vehicleFI" as const, typeLabel: "Vehicle FI",

@@ -293,11 +293,11 @@ export default function IntelPage() {
       setBanHistory(watchMatches)
       setConfirmedBanId(null)
 
-      // Load contact history (last_name + contact_name cover both Intel-logged and officer-filed contacts)
+      // Load contact history (last_name + first_name cover both Intel-logged and officer-filed contacts)
       const { data: contactData } = await supabase
         .from("contact_history")
         .select("*")
-        .or(`last_name.ilike.%${last}%,contact_name.ilike.%${first}%`)
+        .or(`last_name.ilike.%${last}%,first_name.ilike.%${first}%`)
         .order("contacted_at", { ascending: false })
 
       const filtered = (contactData || []).filter((c: ContactRecord) => nameMatch(c, first, last))

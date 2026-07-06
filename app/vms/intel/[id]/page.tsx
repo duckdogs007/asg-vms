@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useParams } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
@@ -65,9 +66,13 @@ const SEVERITY_BADGE: Record<string, string> = {
   HIGH:   "bg-red-100    text-red-800",
 }
 
-export default function ProfilePage({ params }: any) {
+export default function ProfilePage() {
 
-  const { id } = params as { id: string }
+  // Next 15+: route params arrive as a Promise on the `params` prop, so reading
+  // them synchronously yields undefined (→ id="undefined" → uuid cast error).
+  // useParams() unwraps them safely in this client component.
+  const routeParams = useParams()
+  const id = (Array.isArray(routeParams?.id) ? routeParams.id[0] : routeParams?.id) as string | undefined
 
   const [person,    setPerson]    = useState<PersonRow | null>(null)
   const [notes,     setNotes]     = useState<NoteRow[]>([])
@@ -113,6 +118,7 @@ export default function ProfilePage({ params }: any) {
   useEffect(() => { loadAll() }, [id])
 
   async function loadAll() {
+    if (!id || id === "undefined") { setLoading(false); setError("Failed to load profile."); return }
     setLoading(true); setError("")
     const [{ data: p, error: pErr }, { data: n }, { data: f }, { data: i }] = await Promise.all([
       supabase.from("watchlist").select("*").eq("id", id).maybeSingle(),
