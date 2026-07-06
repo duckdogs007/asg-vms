@@ -161,6 +161,7 @@ interface SubmissionRow {
 interface RunnerRow {
   id: string; typeKey: string; typeLabel: string; color: string
   date: string; summary: string; officer: string; slug: string
+  raw?: any // original record — used by the Watchlist roster export for full columns
 }
 
 const REPORT_TYPES = [
@@ -195,6 +196,7 @@ const RUNNER_BADGE_KEY: Record<string, string> = {
   maintenance:    "maintenance",
   gateChecklists: "gateChecklist",
   visitorLogs:    "visitorLog",
+  watchlist:      "watchlist",
 }
 
 // Maps top-bar type filter key → SubmissionRow.typeKey for Recent Submissions filtering
@@ -219,6 +221,7 @@ const SUB_BADGE: Record<string, string> = {
   maintenance:   "bg-emerald-100 text-emerald-700",
   gateChecklist: "bg-slate-100 text-slate-700",
   visitorLog:    "bg-indigo-100 text-indigo-700",
+  watchlist:     "bg-rose-100 text-rose-700",
   // snake_case keys — Review Queue (q.report_type)
   field_contact: "bg-purple-100 text-purple-700",
   vehicle_fi:    "bg-orange-100 text-orange-700",
@@ -712,9 +715,36 @@ export default function ReportsPage() {
     setDeleting(null)
   }
 
+  // Watchlist (Barred Persons) roster — current state for a community, not
+  // date-ranged. Powers "export a list of barred persons by property location".
+  async function runWatchlistRoster() {
+    const { data } = await supabase
+      .from("watchlist").select("*")
+      .eq("community_id", rptCommunity)
+      .order("last_name", { ascending: true })
+      .limit(2000)
+    const rows: RunnerRow[] = (data || []).map((w: any) => {
+      const name = [w.first_name, w.middle_name, w.last_name].filter(Boolean).join(" ").trim()
+      const summary = [
+        name || "—",
+        w.reason,
+        [w.sex, w.race].filter(Boolean).join("/"),
+        w.dob ? `DOB ${w.dob}` : null,
+        w.status && w.status !== "Active" ? `(${w.status})` : null,
+        w.firearm_flag ? "🔫" : null,
+      ].filter(Boolean).join(" · ")
+      return {
+        id: w.id, typeKey: "watchlist", typeLabel: "Barred Person", color: "rose",
+        date: w.ban_date || "", summary, officer: w.banned_by || "—", slug: "intel", raw: w,
+      }
+    })
+    setRunnerRows(rows); setRunnerLoading(false); setRunnerRan(true)
+  }
+
   async function runReport() {
     if (!rptCommunity) return
     setRunnerLoading(true); setRunnerRan(false); setRunnerRows([])
+    if (runnerType === "watchlist") { await runWatchlistRoster(); return }
     const typesToRun = runnerType === "all"
       ? REPORT_TYPES
       : REPORT_TYPES.filter(rt => rt.key === runnerType)
@@ -766,6 +796,23 @@ export default function ReportsPage() {
 
   function exportRunnerCSV() {
     const communityLabel = communities.find(c => c.id === rptCommunity)?.name || ""
+    // Barred-persons roster gets its own full-column layout instead of the
+    // generic Date/Type/Details columns.
+    if (runnerType === "watchlist") {
+      const header = ["Last Name", "First Name", "Middle Name", "DOB", "Sex", "Race", "OLN / DL", "SSN", "Reason", "Status", "Firearm Flag", "Banned By", "Ban Date", "Location"]
+      const data = runnerRows.map(r => {
+        const w = r.raw || {}
+        return [w.last_name || "", w.first_name || "", w.middle_name || "", w.dob || "", w.sex || "", w.race || "",
+          w.oln || "", w.ssn || "", w.reason || "", w.status || "", w.firearm_flag ? "Yes" : "", w.banned_by || "", w.ban_date || "", communityLabel]
+      })
+      const csv = [header, ...data].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
+      const blob = new Blob([csv], { type: "text/csv" })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement("a"); a.href = url
+      a.download = `barred-persons-${communityLabel.replace(/\s+/g, "-").toLowerCase() || "community"}.csv`
+      a.click(); URL.revokeObjectURL(url)
+      return
+    }
     const header = ["Date", "Type", "Details", "Officer", "Community", "ID"]
     const data = runnerRows.map(r => [r.date, r.typeLabel, r.summary, r.officer, communityLabel, r.id])
     const csv = [header, ...data].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
@@ -778,6 +825,22 @@ export default function ReportsPage() {
 
   function printRunnerReport() {
     const communityLabel = communities.find(c => c.id === rptCommunity)?.name || ""
+    // Barred-persons roster prints as a person-detail table for client delivery.
+    if (runnerType === "watchlist") {
+      const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      const html = `<!DOCTYPE html><html><head><title>Barred Persons — ${esc(communityLabel)}</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px}h1{font-size:16px;margin-bottom:4px}.meta{color:#666;font-size:11px;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;text-align:left;padding:6px 8px;font-size:11px;border-bottom:2px solid #d1d5db}td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:11px}</style>
+</head><body>
+<h1>Barred Persons — ${esc(communityLabel)}</h1>
+<div class="meta">${runnerRows.length} person${runnerRows.length !== 1 ? "s" : ""} · Printed ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>
+<table><thead><tr><th>Name</th><th>DOB</th><th>Sex</th><th>Race</th><th>Reason</th><th>Status</th><th>Banned By</th><th>Ban Date</th></tr></thead><tbody>
+${runnerRows.map(r => { const w = r.raw || {}; const nm = [w.first_name, w.middle_name, w.last_name].filter(Boolean).join(" ")
+  return `<tr><td>${esc(nm) || "—"}${w.firearm_flag ? " 🔫" : ""}</td><td>${esc(w.dob) || "—"}</td><td>${esc(w.sex) || "—"}</td><td>${esc(w.race) || "—"}</td><td>${esc(w.reason) || "—"}</td><td>${esc(w.status) || "—"}</td><td>${esc(w.banned_by) || "—"}</td><td>${esc(w.ban_date) || "—"}</td></tr>` }).join("\n")}
+</tbody></table></body></html>`
+      const w = window.open("", "_blank")
+      if (w) { w.document.write(html); w.document.close(); w.print() }
+      return
+    }
     const typeLabel = runnerType === "all" ? "All Report Types" : (REPORT_TYPES.find(rt => rt.key === runnerType)?.label || runnerType)
     const html = `<!DOCTYPE html><html><head><title>Report Summary — ${communityLabel}</title>
 <style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px}h1{font-size:16px;margin-bottom:4px}.meta{color:#666;font-size:11px;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;text-align:left;padding:6px 8px;font-size:11px;border-bottom:2px solid #d1d5db}td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:11px}.badge{font-size:10px;font-weight:bold;text-transform:uppercase;white-space:nowrap}</style>
@@ -1466,6 +1529,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
                 <option value="all">All types</option>
                 {REPORT_TYPES.map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
+                <option value="watchlist">Watchlist (Barred Persons)</option>
               </select>
             </div>
             <button
@@ -1495,14 +1559,16 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
           {runnerRan && !runnerLoading && (
             runnerRows.length === 0 ? (
               <div className="text-gray-400 text-sm py-8 text-center bg-white border border-gray-200 rounded-xl">
-                No reports found for this community + date range.
+                {runnerType === "watchlist"
+                  ? "No barred persons on file for this community."
+                  : "No reports found for this community + date range."}
               </div>
             ) : (
               <>
                 <div className="text-xs text-gray-500 mb-2 font-semibold">
-                  {runnerRows.length} record{runnerRows.length !== 1 ? "s" : ""} ·&nbsp;
-                  {communities.find(c => c.id === rptCommunity)?.name} ·&nbsp;
-                  {dateFrom} to {dateTo}
+                  {runnerRows.length} {runnerType === "watchlist" ? `barred person${runnerRows.length !== 1 ? "s" : ""}` : `record${runnerRows.length !== 1 ? "s" : ""}`} ·&nbsp;
+                  {communities.find(c => c.id === rptCommunity)?.name}
+                  {runnerType !== "watchlist" && <>&nbsp;· {dateFrom} to {dateTo}</>}
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                   {runnerRows.map((r, i) => {
@@ -1517,7 +1583,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                           <div className="text-sm text-gray-800 truncate">{r.summary}</div>
                           <div className="text-xs text-gray-400 truncate">{r.officer}</div>
                         </div>
-                        <Link href={`/vms/reports/${r.slug}/${r.id}`}
+                        <Link href={r.typeKey === "watchlist" ? `/vms/intel/${r.id}` : `/vms/reports/${r.slug}/${r.id}`}
                           className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium flex-shrink-0">
                           View →
                         </Link>
