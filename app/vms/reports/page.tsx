@@ -266,6 +266,7 @@ export default function ReportsPage() {
   const [rptDetailLoading, setRptDetailLoading] = useState(false)
 
   const [topTypeFilter, setTopTypeFilter] = useState("all")
+  const [activeTab,     setActiveTab]     = useState<"reports" | "activity" | "property">("reports")
 
   const [runnerType,    setRunnerType]    = useState("all")
   const [runnerRows,    setRunnerRows]    = useState<RunnerRow[]>([])
@@ -337,12 +338,13 @@ export default function ReportsPage() {
   }, [community])
 
   useEffect(() => { if (community) loadData() }, [community, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { if (community) loadRegistry() }, [community]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { if (community) { setRptOpenDetail(null); setRptDetailRows([]); loadRptSummary() } }, [community, dateFrom, dateTo]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Sync Report Runner type when top-bar filter changes
-  useEffect(() => { setRunnerType(topTypeFilter) }, [topTypeFilter]) // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => { setRunnerType(topTypeFilter); setRunnerRan(false) }, [topTypeFilter]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-run the Watchlist (Barred Persons) roster when it becomes the active
   // type — it's a current-state list, so there's nothing to configure; showing
@@ -423,14 +425,6 @@ export default function ReportsPage() {
     }, {})
     setLeaseViols(lvRows.map(r => ({ ...r, _offenders: offByReport[r.id] || [] })))
 
-    // Registered vehicles for this community (resident + visitor). Not date-
-    // ranged — this is the current registry, surfaced for officer lookup.
-    const { data: rv } = await supabase
-      .from("registered_vehicles").select("*")
-      .eq("community_id", community)
-      .order("kind", { ascending: true }).order("plate", { ascending: true })
-    setRegistry(rv || [])
-
     // Fire-and-forget: prior period count for comparison delta.
     const prior = priorRange(dateFrom, dateTo)
     supabase.from("visitor_logs")
@@ -439,6 +433,15 @@ export default function ReportsPage() {
       .gte("created_at", prior.from + "T00:00:00")
       .lte("created_at", prior.to   + "T23:59:59")
       .then(({ count }) => setPriorTotal(count ?? 0))
+  }
+
+  async function loadRegistry() {
+    if (!community) return
+    const { data: rv } = await supabase
+      .from("registered_vehicles").select("*")
+      .eq("community_id", community)
+      .order("kind", { ascending: true }).order("plate", { ascending: true })
+    setRegistry(rv || [])
   }
 
   async function loadRptSummary() {
@@ -1016,15 +1019,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
     <main className="p-5 max-w-6xl">
 
       {/* PAGE HEADER */}
-      <div className="flex items-center justify-between mb-5">
-        <h1 className="text-2xl font-bold">Reports & Analytics</h1>
-        {hasData && (
-          <button onClick={exportCSV}
-            className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 border-none cursor-pointer">
-            ⬇ Export CSV
-          </button>
-        )}
-      </div>
+      <h1 className="text-2xl font-bold mb-5">Reports & Analytics</h1>
 
       {/* FILTERS */}
       <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
@@ -1081,6 +1076,28 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
         </div>
       </div>
 
+      {/* TAB BAR */}
+      <div className="flex gap-0.5 mb-6 border-b border-gray-200">
+        {([
+          { key: "reports",  label: "Reports",          icon: "📋" },
+          { key: "activity", label: "Visitor Activity",  icon: "📊" },
+          { key: "property", label: "Property",          icon: "🏠" },
+        ] as const).map(tab => (
+          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+            className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px whitespace-nowrap flex items-center gap-1.5 ${
+              activeTab === tab.key
+                ? "border-blue-700 text-blue-700"
+                : "border-transparent text-gray-500 hover:text-gray-800 hover:border-gray-300 bg-transparent"
+            }`}>
+            <span>{tab.icon}</span>
+            <span>{tab.label}</span>
+            {tab.key === "reports" && canApprove && queue.length > 0 && (
+              <span className="ml-1 px-1.5 py-0.5 bg-red-600 text-white text-[10px] font-bold rounded-full leading-none">{queue.length}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
       {error && (
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-5">{error}</div>
       )}
@@ -1108,7 +1125,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       )}
 
       {/* ── REVIEW QUEUE (admin + supervisor) ── */}
-      {canApprove && (
+      {activeTab === "reports" && canApprove && (
         <Section label={`Review Queue${queue.length > 0 ? ` (${queue.length} pending)` : ""}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="text-xs text-gray-400">Reports awaiting supervisor approval before sending to the client</div>
@@ -1287,6 +1304,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       )}
 
       {/* ── RECENT SUBMISSIONS ── */}
+      {activeTab === "reports" && (
       <Section label="Recent Report Submissions">
         <div className="flex items-center justify-between mb-3">
           <div className="text-xs text-gray-400">Latest reports filed across all communities (last 15)</div>
@@ -1355,7 +1373,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               return (
                 <>
                   {/* ── Awaiting Review (officers only — supervisors/admins use the Review Queue above) ── */}
-                  {pending.length > 0 && !canApprove && (
+                  {pending.length > 0 && (
                     <div className="mb-4">
                       <div className="flex items-center gap-2 mb-1.5">
                         <span className="text-xs font-bold text-amber-700 uppercase tracking-wide">⏳ Awaiting Review</span>
@@ -1370,7 +1388,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                   {/* ── Submitted ── */}
                   {submitted.length > 0 && (
                     <>
-                      {pending.length > 0 && !canApprove && (
+                      {pending.length > 0 && (
                         <div className="flex items-center gap-2 mb-1.5">
                           <span className="text-xs font-semibold text-gray-400 uppercase tracking-wide">Submitted</span>
                         </div>
@@ -1394,9 +1412,10 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
           </>
         )}
       </Section>
+      )}
 
       {/* ── REPORTS BY COMMUNITY ── */}
-      {communities.length > 0 && (
+      {activeTab === "reports" && communities.length > 0 && (
         <Section label="Reports by Community">
           {communityName && (
             <div className="mb-3 text-xs text-gray-500">
@@ -1525,7 +1544,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                                 <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">{row.date || "—"}</div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-semibold text-gray-800 truncate">{row.officer_name || row.officer || "—"}</div>
-                                  <div className="text-xs text-gray-500 truncate">{[row.shift, row.log_type].filter(Boolean).join(" · ") || "—"}</div>
+                                  <div className="text-xs text-gray-500 truncate">{[row.shift, row.shift_times, row.log_type].filter(Boolean).join(" · ") || "—"}</div>
                                   {(row.narrative || row.notes) && <div className="text-xs text-gray-400 truncate mt-0.5">{row.narrative || row.notes}</div>}
                                 </div>
                               </div>
@@ -1546,7 +1565,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                               <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
                                 <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">{row.checklist_date || "—"}</div>
                                 <div className="flex-1 min-w-0">
-                                  <div className="text-sm font-semibold text-gray-800 truncate">{row.officer_name || "—"}</div>
+                                  <div className="text-sm font-semibold text-gray-800 truncate">{row.guard_name || "—"}</div>
                                   <div className="text-xs text-gray-500 truncate">{row.shift || "—"}</div>
                                 </div>
                               </div>
@@ -1588,7 +1607,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       )}
 
       {/* ── REPORT RUNNER ── */}
-      {communities.length > 0 && (
+      {activeTab === "reports" && communities.length > 0 && (
         <Section label="Report Runner">
           {communityName && (
             <div className="text-xs text-gray-400 mb-4">
@@ -1685,9 +1704,8 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       )}
 
       {/* ── VISITOR ACTIVITY (per community) ── */}
-      {/* Hidden when the Watchlist (Barred Persons) roster is selected — those
-          visitor/report sections (Entry Log, etc.) are unrelated to the roster. */}
-      {hasData && topTypeFilter !== "watchlist" && (
+
+      {activeTab === "activity" && hasData && (
         <>
           {/* ── ENTRY LOG ── */}
           <Section label={`Entry Log${
@@ -1695,7 +1713,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               ? ` — ${filteredEntries.length} match${filteredEntries.length === 1 ? "" : "es"} of ${visits.length}`
               : visits.length > logLimit ? ` (showing ${logLimit} of ${visits.length})` : ` (${visits.length})`
           }`}>
-            <div className="mb-3 flex gap-2">
+            <div className="mb-3 flex gap-2 items-center">
               <input
                 type="text"
                 value={entryLogSearch}
@@ -1709,6 +1727,12 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                   className="px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md border-none cursor-pointer"
                 >
                   ✕ Clear
+                </button>
+              )}
+              {hasData && (
+                <button onClick={exportCSV}
+                  className="px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700 border-none cursor-pointer whitespace-nowrap ml-auto">
+                  ⬇ Export CSV
                 </button>
               )}
             </div>
@@ -1927,7 +1951,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       )}
 
       {/* ── PARKING VIOLATIONS ── (own gate so it shows even with no visitor entries) */}
-      {community && !loading && parking.length > 0 && (() => {
+      {activeTab === "reports" && community && !loading && parking.length > 0 && (() => {
         const byType = parking.reduce((m: Record<string, number>, p) => {
           const k = p.violation_type || "Other"; m[k] = (m[k] || 0) + 1; return m
         }, {})
@@ -1989,7 +2013,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       })()}
 
       {/* ── LEASE VIOLATIONS ── (own gate; incident_reports with lvl_issued) */}
-      {community && !loading && leaseViols.length > 0 && (() => {
+      {activeTab === "reports" && community && !loading && leaseViols.length > 0 && (() => {
         const byType = leaseViols.reduce((m: Record<string, number>, v) => {
           const k = v.violation_type || "Other"; m[k] = (m[k] || 0) + 1; return m
         }, {})
@@ -2064,7 +2088,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       })()}
 
       {/* ── VEHICLE & VISITOR REGISTRY ── (own gate; current registry, not date-ranged) */}
-      {community && !loading && registry.length > 0 && (() => {
+      {activeTab === "property" && community && !loading && registry.length > 0 && (() => {
         const residents = registry.filter(v => v.kind === "resident").length
         const visitors  = registry.filter(v => v.kind === "visitor").length
         const expired   = registry.filter(regExpired).length
@@ -2159,8 +2183,11 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
 
 function Section({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="mb-6">
-      <div className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-3">{label}</div>
+    <div className="mb-7">
+      <div className="flex items-center gap-3 mb-3">
+        <div className="text-xs font-bold text-gray-500 uppercase tracking-widest whitespace-nowrap">{label}</div>
+        <div className="flex-1 h-px bg-gray-200" />
+      </div>
       {children}
     </div>
   )
