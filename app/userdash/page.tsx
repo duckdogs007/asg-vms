@@ -1996,22 +1996,22 @@ export default function UserDashboard() {
                   <input type="date" value={dailyDate} onChange={e => setDailyDate(e.target.value)} className={inputCls} /></div>
                 <div className="sm:col-span-2">
                   <label className={labelCls}>Shift &amp; Hours <span className="text-red-500">*</span></label>
-                  <div className="flex flex-wrap gap-2 items-center">
+                  <div className="flex flex-wrap gap-2 items-end">
                     <select value={dailyShift} onChange={e => setDailyShift(e.target.value)}
                       className="px-3 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white flex-shrink-0">
                       <option>Day</option><option>Evening</option><option>Night</option><option>Overnight</option>
                     </select>
-                    <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <div className="flex flex-col gap-0.5 flex-1 min-w-[110px]">
+                    <div className="flex items-end gap-2">
+                      <div className="flex flex-col gap-0.5 w-[90px]">
                         <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Start</span>
                         <input type="time" value={dailyShiftStart} onChange={e => setDailyShiftStart(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                          className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
                       </div>
-                      <span className="text-gray-400 font-bold mt-4">—</span>
-                      <div className="flex flex-col gap-0.5 flex-1 min-w-[110px]">
+                      <span className="text-gray-400 font-bold pb-2">—</span>
+                      <div className="flex flex-col gap-0.5 w-[90px]">
                         <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">End</span>
                         <input type="time" value={dailyShiftEnd} onChange={e => setDailyShiftEnd(e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                          className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
                       </div>
                     </div>
                   </div>
