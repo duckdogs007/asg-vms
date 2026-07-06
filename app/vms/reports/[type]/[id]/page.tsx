@@ -86,10 +86,11 @@ const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
     { key: "notes",          label: "Notes",          type: "textarea" },
   ],
   "daily-log": [
-    { key: "date",         label: "Date",      type: "date"     },
-    { key: "officer_name", label: "Officer",   type: "text"     },
-    { key: "shift",        label: "Shift",     type: "text"     },
-    { key: "narrative",    label: "Narrative", type: "textarea" },
+    { key: "date",         label: "Date",        type: "date"     },
+    { key: "officer_name", label: "Officer",     type: "text"     },
+    { key: "shift",        label: "Shift",       type: "text"     },
+    { key: "shift_times",  label: "Shift Times", type: "text"     },
+    { key: "narrative",    label: "Narrative",   type: "textarea" },
   ],
   "maintenance": [
     { key: "date",         label: "Date",        type: "date"     },
@@ -100,10 +101,12 @@ const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
     { key: "notes",        label: "Notes",       type: "textarea" },
   ],
   "gate-checklist": [
-    { key: "checklist_date",  label: "Date",             type: "date"     },
-    { key: "guard_name",      label: "Guard",            type: "text"     },
-    { key: "shift",           label: "Shift",            type: "text"     },
-    { key: "additional_notes",label: "Additional Notes", type: "textarea" },
+    { key: "checklist_date",   label: "Date",             type: "date"     },
+    { key: "guard_name",       label: "Guard",            type: "text"     },
+    { key: "shift",            label: "Shift",            type: "text"     },
+    { key: "start_time",       label: "Start Time",       type: "text"     },
+    { key: "end_time",         label: "End Time",         type: "text"     },
+    { key: "additional_notes", label: "Additional Notes", type: "textarea" },
   ],
 }
 

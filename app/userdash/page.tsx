@@ -168,7 +168,8 @@ export default function UserDashboard() {
 
   // Daily log
   const [dailyDate,      setDailyDate]      = useState(new Date().toISOString().split("T")[0])
-  const [dailyShift,     setDailyShift]     = useState("Day")
+  const [dailyShift,      setDailyShift]      = useState("Day")
+  const [dailyShiftTimes, setDailyShiftTimes] = useState("")
   const [dailyCommunity, setDailyCommunity] = useState("")
   const [dailyOfficer,   setDailyOfficer]   = useState("")
   const [dailyWeather,   setDailyWeather]   = useState("")
@@ -663,7 +664,7 @@ export default function UserDashboard() {
       ? checklistAnswers.map(a => ({ question: a.question, answer: a.answer, explanation: a.explanation || null }))
       : null
     const { data: ins, error } = await supabase.from("officer_daily_logs").insert({
-      date: dailyDate, shift: dailyShift, community_id: dailyCommunity,
+      date: dailyDate, shift: dailyShift, shift_times: dailyShiftTimes || null, community_id: dailyCommunity,
       officer_name: dailyOfficer, weather: dailyWeather,
       narrative: dailyNarrative, notes: dailyNotes,
       photo_urls: photoUrls.length ? photoUrls : null,
@@ -1993,6 +1994,8 @@ export default function UserDashboard() {
                   <select value={dailyShift} onChange={e => setDailyShift(e.target.value)} className={inputCls}>
                     <option>Day</option><option>Evening</option><option>Night</option><option>Overnight</option>
                   </select></div>
+                <div><label className={labelCls}>Shift Times</label>
+                  <input value={dailyShiftTimes} onChange={e => setDailyShiftTimes(e.target.value)} placeholder="e.g. 0700-1700" className={inputCls} /></div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={dailyOfficer} onChange={e => setDailyOfficer(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Location</label>
