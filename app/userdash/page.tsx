@@ -10,7 +10,7 @@ import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
 import { fireAlert } from "@/lib/alerts"
 import { maskSSN } from "@/lib/format"
-import { checkIsAdmin, checkIsGuest } from "@/lib/admin"
+import { checkIsAdmin, checkIsGuest, checkCanIssueLeaseViolation } from "@/lib/admin"
 import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/LocationField"
 import { buildHohSnapshot, EMPTY_SNAPSHOT } from "@/lib/hohSnapshot"
 import LeaseViolationForm from "@/components/LeaseViolationForm"
@@ -133,6 +133,7 @@ export default function UserDashboard() {
   // Watchlist edit (admin-only). Default false so no buttons render before
   // the admin check resolves; failure leaves it false (safe fallback).
   const [isAdmin,        setIsAdmin]        = useState(false)
+  const [canIssueLV,     setCanIssueLV]     = useState(false)
   const [isGuest,        setIsGuest]        = useState(false)
   const [editingWlId,    setEditingWlId]    = useState<string | null>(null)
   const [editFirst,      setEditFirst]      = useState("")
@@ -344,6 +345,7 @@ export default function UserDashboard() {
 
   useEffect(() => {
     checkIsAdmin().then(ok => setIsAdmin(ok)).catch(() => setIsAdmin(false))
+    checkCanIssueLeaseViolation().then(ok => setCanIssueLV(ok)).catch(() => setCanIssueLV(false))
     checkIsGuest().then(ok => setIsGuest(ok)).catch(() => setIsGuest(false))
   }, [])
 
@@ -2949,7 +2951,7 @@ export default function UserDashboard() {
                               className="px-4 py-1.5 bg-red-700 text-white text-xs font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
                               🗑 Delete
                             </button>
-                            {isAdmin && r._type === "Incident" && (
+                            {canIssueLV && r._type === "Incident" && (
                               <button onClick={() => setViolationForId(violationForId === r.id ? null : r.id)}
                                 className="px-4 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 border-none cursor-pointer">
                                 ⚖️ {r.lvl_issued ? "Edit Violation" : "Issue Violation"}
@@ -3012,7 +3014,7 @@ export default function UserDashboard() {
                             communities={communities}
                             defaultCommunityId={r.community_id || communityId}
                             existingRecord={{ id: r.id, community_id: r.community_id, building: r.building, apartment: r.apartment, hoh_name: r.hoh_name, location: r.location }}
-                            isAdmin={isAdmin}
+                            isAdmin={canIssueLV}
                             onSaved={() => { setViolationForId(null); loadPastReports() }}
                           />
                         </div>

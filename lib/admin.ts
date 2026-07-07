@@ -54,6 +54,21 @@ export async function checkIsGuest(): Promise<boolean> {
   return !error && !!data
 }
 
+// Returns true if the current user can issue lease violations
+// (admin OR role admin_super/property_manager/supervisor). Mirrors the DB
+// can_issue_violation() function used by the violation_offenders RLS policy.
+export async function checkCanIssueLeaseViolation(): Promise<boolean> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return false
+  const { data: admin } = await supabase
+    .from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle()
+  if (admin) return true
+  const { data } = await supabase
+    .from("user_assignments").select("role").eq("user_id", user.id)
+    .in("role", ["admin_super", "property_manager", "supervisor"]).maybeSingle()
+  return !!data
+}
+
 // Returns true if the current user can edit Property Hub data
 // (admin_users hardlist OR role admin_super/property_manager).
 export async function checkCanEditPropertyHub(): Promise<boolean> {
