@@ -169,11 +169,21 @@ export async function POST(req: Request) {
     })
   }
   for (const a of (alertRows || []) as any[]) {
-    const subj = (a.payload && (a.payload.subject || a.payload.Subject)) || a.type || "alert"
+    // Alert detail lives in flat payload fields (Type, Location, ActionTaken,
+    // Persons, etc.) — serialize them so the model has the actual facts, not
+    // just the raw alert type.
+    const p = a.payload && typeof a.payload === "object" ? a.payload : {}
+    const skip = new Set(["Community", "UserAgent", "Page", "subject", "body"])
+    const detail = Object.entries(p)
+      .filter(([k, v]) => !skip.has(k) && v != null && String(v).trim() !== "")
+      .map(([k, v]) => `${k}: ${String(v).trim()}`)
+      .join(", ")
+      .slice(0, 300)
+    const kind = (p as any).Type || a.type || "alert"
     recs.push({
       date: a.sent_at ? String(a.sent_at).slice(0, 10) : "", category: "Alert",
-      line: `Alert (${a.severity || "?"}) | ${a.type || "—"} | ${String(subj).slice(0, 160)}${a.status ? ` | status ${a.status}` : ""}`,
-      href: "/alerts", label: `Alert: ${a.type || "—"}`,
+      line: `Alert (${a.severity || "?"}) | ${kind}${detail ? ` | ${detail}` : ""} | status ${a.status || "?"}`,
+      href: "/alerts", label: `Alert: ${kind}`,
     })
   }
 
