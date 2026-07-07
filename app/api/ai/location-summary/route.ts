@@ -15,6 +15,18 @@ export const runtime = "nodejs"
 
 type Body = { communityId?: string; from?: string; to?: string }
 
+// unit_activity.source_table → /vms/reports/[type] slug (for source links).
+const UA_SOURCE_SLUG: Record<string, string> = {
+  incident_reports:             "incident",
+  parking_violations:           "parking",
+  vehicle_fi_logs:              "vehicle-fi",
+  contact_history:              "field-contact",
+  officer_daily_logs:           "daily-log",
+  property_maintenance_reports: "maintenance",
+  gate_checklists:              "gate-checklist",
+  visitor_logs:                 "visitor-log",
+}
+
 const RESPONSE_SCHEMA = {
   type: "object",
   properties: {
@@ -28,6 +40,7 @@ const RESPONSE_SCHEMA = {
           severity: { type: "string", enum: ["high", "medium", "low"] },
           detail:   { type: "string" },
           location: { type: "string" },
+          sources:  { type: "array", items: { type: "string" } },
         },
         required: ["title", "severity"],
       },
@@ -40,6 +53,7 @@ const RESPONSE_SCHEMA = {
           title:    { type: "string" },
           detail:   { type: "string" },
           location: { type: "string" },
+          sources:  { type: "array", items: { type: "string" } },
         },
         required: ["title"],
       },
@@ -48,7 +62,11 @@ const RESPONSE_SCHEMA = {
       type: "array",
       items: {
         type: "object",
-        properties: { title: { type: "string" }, detail: { type: "string" } },
+        properties: {
+          title:   { type: "string" },
+          detail:  { type: "string" },
+          sources: { type: "array", items: { type: "string" } },
+        },
         required: ["title"],
       },
     },
@@ -89,60 +107,113 @@ export async function POST(req: Request) {
     )
   }
 
-  // Community name + activity feed for the window.
-  const [{ data: comm }, { data: activity }] = await Promise.all([
+  // Gather all sources for the community + window in parallel: unit activity,
+  // BOLOs, new watchlist (barred-person) additions, and alerts.
+  const [
+    { data: comm },
+    { data: activity },
+    { data: boloRows },
+    { data: wlRows },
+    { data: alertRows },
+  ] = await Promise.all([
     supabase.from("communities").select("name").eq("id", communityId).maybeSingle(),
     supabase.from("unit_activity").select("*")
       .eq("community_id", communityId)
-      .gte("event_at", from + "T00:00:00")
-      .lte("event_at", to + "T23:59:59")
-      .order("event_at", { ascending: true })
-      .limit(1500),
+      .gte("event_at", from + "T00:00:00").lte("event_at", to + "T23:59:59")
+      .order("event_at", { ascending: true }).limit(1500),
+    supabase.from("bolos").select("id, name, description, reason, plate, vehicle, firearm_flag, created_at")
+      .eq("community_id", communityId)
+      .gte("created_at", from + "T00:00:00").lte("created_at", to + "T23:59:59").limit(200),
+    supabase.from("watchlist").select("id, first_name, last_name, reason, firearm_flag, created_at")
+      .eq("community_id", communityId)
+      .gte("created_at", from + "T00:00:00").lte("created_at", to + "T23:59:59").limit(300),
+    supabase.from("alerts").select("id, type, severity, payload, status, sent_at")
+      .eq("community_id", communityId)
+      .gte("sent_at", from + "T00:00:00").lte("sent_at", to + "T23:59:59").limit(200),
   ])
-
-  const rows = (activity || []) as any[]
-  if (rows.length === 0) {
-    return NextResponse.json({ error: "No activity on record for this location and period." }, { status: 404 })
-  }
 
   const communityName = (comm as { name?: string } | null)?.name || "the property"
 
-  // Counts by record type.
+  // Unified record list. Each record gets a stable [Rn] ref, a prompt line, and
+  // (where available) a link to the underlying record for UI source-linking.
+  // PII: names/reasons kept; SSN/DOB/OLN/plate-owner data intentionally excluded.
+  type Rec = { date: string; category: string; line: string; href: string | null; label: string }
+  const recs: Rec[] = []
+
+  for (const r of (activity || []) as any[]) {
+    const date = r.event_at ? new Date(r.event_at).toISOString().slice(0, 10) : ""
+    const loc  = [r.building, r.apartment].filter(Boolean).join("-") || "common area"
+    const refNos = [r.reliant_case_no && `Reliant#${r.reliant_case_no}`, r.hpd_report_no && `HPD#${r.hpd_report_no}`, r.asg_report_no && `ASG#${r.asg_report_no}`].filter(Boolean).join(" ")
+    const detail = String(r.detail || "").replace(/\s+/g, " ").slice(0, 240)
+    const slug = UA_SOURCE_SLUG[r.source_table]
+    recs.push({
+      date, category: r.record_type || "Activity",
+      line: `${loc} | ${r.record_type || "Activity"}${r.hoh_name ? ` | HOH: ${r.hoh_name}` : ""}${detail ? ` | ${detail}` : ""}${refNos ? ` | ${refNos}` : ""}`,
+      href: slug && r.source_id ? `/vms/reports/${slug}/${r.source_id}` : null,
+      label: `${r.record_type || "Activity"} @ ${loc}`,
+    })
+  }
+  for (const b of (boloRows || []) as any[]) {
+    recs.push({
+      date: b.created_at ? String(b.created_at).slice(0, 10) : "", category: "BOLO",
+      line: `BOLO | ${b.name || "—"}${b.reason || b.description ? ` | ${b.reason || b.description}` : ""}${b.plate ? ` | plate ${b.plate}` : ""}${b.vehicle ? ` | ${b.vehicle}` : ""}${b.firearm_flag ? " | FIREARM" : ""}`,
+      href: `/vms/intel/bolo/${b.id}`, label: `BOLO: ${b.name || "—"}`,
+    })
+  }
+  for (const w of (wlRows || []) as any[]) {
+    const name = [w.first_name, w.last_name].filter(Boolean).join(" ") || "—"
+    recs.push({
+      date: w.created_at ? String(w.created_at).slice(0, 10) : "", category: "Watchlist add",
+      line: `Watchlist addition (barred) | ${name}${w.reason ? ` | ${w.reason}` : ""}${w.firearm_flag ? " | FIREARM" : ""}`,
+      href: `/vms/intel/${w.id}`, label: `Watchlist: ${name}`,
+    })
+  }
+  for (const a of (alertRows || []) as any[]) {
+    const subj = (a.payload && (a.payload.subject || a.payload.Subject)) || a.type || "alert"
+    recs.push({
+      date: a.sent_at ? String(a.sent_at).slice(0, 10) : "", category: "Alert",
+      line: `Alert (${a.severity || "?"}) | ${a.type || "—"} | ${String(subj).slice(0, 160)}${a.status ? ` | status ${a.status}` : ""}`,
+      href: "/alerts", label: `Alert: ${a.type || "—"}`,
+    })
+  }
+
+  if (recs.length === 0) {
+    return NextResponse.json({ error: "No activity on record for this location and period." }, { status: 404 })
+  }
+  recs.sort((a, b) => (a.date || "").localeCompare(b.date || ""))
+
   const counts: Record<string, number> = {}
-  for (const r of rows) counts[r.record_type || "Other"] = (counts[r.record_type || "Other"] || 0) + 1
+  for (const r of recs) counts[r.category] = (counts[r.category] || 0) + 1
   const countsStr = Object.entries(counts).map(([k, v]) => `${k}: ${v}`).join(", ")
 
-  // Compact record lines (cap detail length; names kept, no SSN/DOB in the view).
-  const lines = rows.map((r) => {
-    const date = r.event_at ? new Date(r.event_at).toISOString().slice(0, 10) : "—"
-    const loc  = [r.building, r.apartment].filter(Boolean).join("-") || "common area"
-    const refs = [
-      r.reliant_case_no && `Reliant#${r.reliant_case_no}`,
-      r.hpd_report_no && `HPD#${r.hpd_report_no}`,
-      r.asg_report_no && `ASG#${r.asg_report_no}`,
-    ].filter(Boolean).join(" ")
-    const detail = String(r.detail || "").replace(/\s+/g, " ").slice(0, 240)
-    return `${date} | ${loc} | ${r.record_type || "Activity"}${r.hoh_name ? ` | HOH: ${r.hoh_name}` : ""}${detail ? ` | ${detail}` : ""}${refs ? ` | ${refs}` : ""}`
-  }).join("\n").slice(0, 24000)
+  // Ref map (Rn → link) for the UI + tagged lines for the prompt.
+  const refMap: Record<string, { label: string; href: string | null }> = {}
+  const lines = recs.map((r, i) => {
+    const ref = `R${i + 1}`
+    refMap[ref] = { label: r.label, href: r.href }
+    return `[${ref}] ${r.date || "—"} | ${r.line}`
+  }).join("\n").slice(0, 26000)
 
   const prompt = `You are a security operations supervisor reviewing ALL logged activity at a single residential property for a period. Evaluate and triage — do NOT recap.
 
 Property: ${communityName}
 Period: ${from} to ${to}
-Total records: ${rows.length}
+Total records: ${recs.length}
 Counts by type: ${countsStr}
 
-Records (date | location | type | people | detail | ref#):
+Each record is prefixed with a reference tag like [R12]. Records include unit/incident activity, BOLOs, new watchlist (barred-person) additions, and alerts.
+
+Records:
 ${lines}
 
 Analyze and return:
 - executive_summary: 2-4 sentences on the overall security picture for this property this period.
-- concerns: safety/security issues — weapons, violence, threats, repeat trespass, serious incidents. Rank by severity (high/medium/low). Include the location.
+- concerns: safety/security issues — weapons, violence, threats, repeat trespass, serious incidents, new BOLOs/barred persons. Rank by severity (high/medium/low). Include the location.
 - follow_ups: unresolved items and required actions, especially serious incidents that may not have been referred/notified to authorities (Reliant/HPD).
 - patterns: the SAME unit or person recurring across multiple records, escalating behavior, or clusters by area/time.
 - recommendations: concrete next actions for site management.
 
-Base everything ONLY on the records provided — never invent facts. If a category has nothing, return an empty array.`
+For EVERY concern, follow_up, and pattern, include a "sources" array listing the record reference tags (e.g. "R12") it is based on. Base everything ONLY on the records provided — never invent facts or reference tags not shown above. If a category has nothing, return an empty array.`
 
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash"
   const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
@@ -199,9 +270,20 @@ Base everything ONLY on the records provided — never invent facts. If a catego
       return NextResponse.json({ error: `Model returned malformed output.${why}` }, { status: 502 })
     }
 
+    // Only return links for the record refs the model actually cited (keeps the
+    // payload small and the UI relevant).
+    const cited = new Set<string>()
+    for (const key of ["concerns", "follow_ups", "patterns"]) {
+      for (const item of (summary[key] || [])) {
+        for (const ref of (item?.sources || [])) cited.add(String(ref))
+      }
+    }
+    const sources: Record<string, { label: string; href: string | null }> = {}
+    for (const ref of cited) if (refMap[ref]) sources[ref] = refMap[ref]
+
     return NextResponse.json({
       summary,
-      meta: { community: communityName, from, to, totalRecords: rows.length, counts },
+      meta: { community: communityName, from, to, totalRecords: recs.length, counts, sources },
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "AI request failed." }, { status: 502 })

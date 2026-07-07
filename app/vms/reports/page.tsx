@@ -831,6 +831,22 @@ export default function ReportsPage() {
     }
   }
 
+  // Render the source-record links a finding cites (via aiMeta.sources map).
+  function renderSources(refs?: string[]) {
+    if (!refs?.length || !aiMeta?.sources) return null
+    const items = refs.map((r: string) => aiMeta.sources[r]).filter(Boolean)
+    if (!items.length) return null
+    return (
+      <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5">
+        {items.map((s: any, i: number) => s.href ? (
+          <a key={i} href={s.href} target="_blank" rel="noopener noreferrer" className="text-[11px] text-blue-700 hover:underline">🔗 {s.label}</a>
+        ) : (
+          <span key={i} className="text-[11px] text-gray-400">{s.label}</span>
+        ))}
+      </div>
+    )
+  }
+
   function printAiSummary() {
     if (!aiResult || !aiMeta) return
     const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
@@ -2376,7 +2392,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                         {aiResult.concerns.map((c: any, i: number) => (
                           <div key={i} className="flex items-start gap-2">
                             <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full flex-shrink-0 ${c.severity === "high" ? "bg-red-100 text-red-700" : c.severity === "medium" ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-600"}`}>{c.severity}</span>
-                            <div className="text-sm"><span className="font-semibold text-gray-800">{c.title}</span>{c.location && <span className="text-gray-500"> — {c.location}</span>}{c.detail && <div className="text-xs text-gray-500 mt-0.5">{c.detail}</div>}</div>
+                            <div className="text-sm"><span className="font-semibold text-gray-800">{c.title}</span>{c.location && <span className="text-gray-500"> — {c.location}</span>}{c.detail && <div className="text-xs text-gray-500 mt-0.5">{c.detail}</div>}{renderSources(c.sources)}</div>
                           </div>
                         ))}
                       </div>
@@ -2388,7 +2404,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                       <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Follow-ups</div>
                       <ul className="space-y-1.5">
                         {aiResult.follow_ups.map((f: any, i: number) => (
-                          <li key={i} className="text-sm text-gray-800">• <span className="font-medium">{f.title}</span>{f.location && <span className="text-gray-500"> — {f.location}</span>}{f.detail && <div className="text-xs text-gray-500 ml-3">{f.detail}</div>}</li>
+                          <li key={i} className="text-sm text-gray-800">• <span className="font-medium">{f.title}</span>{f.location && <span className="text-gray-500"> — {f.location}</span>}{f.detail && <div className="text-xs text-gray-500 ml-3">{f.detail}</div>}<div className="ml-3">{renderSources(f.sources)}</div></li>
                         ))}
                       </ul>
                     </div>
@@ -2399,7 +2415,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                       <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Patterns</div>
                       <ul className="space-y-1.5">
                         {aiResult.patterns.map((p: any, i: number) => (
-                          <li key={i} className="text-sm text-gray-800">• <span className="font-medium">{p.title}</span>{p.detail && <div className="text-xs text-gray-500 ml-3">{p.detail}</div>}</li>
+                          <li key={i} className="text-sm text-gray-800">• <span className="font-medium">{p.title}</span>{p.detail && <div className="text-xs text-gray-500 ml-3">{p.detail}</div>}<div className="ml-3">{renderSources(p.sources)}</div></li>
                         ))}
                       </ul>
                     </div>
