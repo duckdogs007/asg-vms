@@ -264,8 +264,21 @@ STYLE — write like an operations log, not a threat assessment:
 
 For EVERY concern, follow_up, and pattern, include a "sources" array listing the record reference tags (e.g. "R12") it is based on. Base everything ONLY on the records provided — never invent facts or reference tags not shown above. If a category has nothing, return an empty array.`
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash"
+  // Default to gemini-2.0-flash (higher free-tier limits, ~15/min ~1500/day)
+  // for this heavier report. GEMINI_SUMMARY_MODEL overrides it independently of
+  // the app-wide GEMINI_MODEL.
+  const model = process.env.GEMINI_SUMMARY_MODEL || "gemini-2.0-flash"
   const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
+
+  const generationConfig: any = {
+    temperature: 0.2,
+    maxOutputTokens: 4096,
+    responseMimeType: "application/json",
+    responseSchema: RESPONSE_SCHEMA,
+  }
+  // thinkingConfig only applies to 2.5-family thinking models; sending it to
+  // gemini-2.0-flash would be rejected.
+  if (model.includes("2.5")) generationConfig.thinkingConfig = { thinkingBudget: 0 }
 
   try {
     const res = await fetch(url, {
@@ -273,15 +286,7 @@ For EVERY concern, follow_up, and pattern, include a "sources" array listing the
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.2,
-          maxOutputTokens: 4096,
-          responseMimeType: "application/json",
-          responseSchema: RESPONSE_SCHEMA,
-          // gemini-2.5-flash is a thinking model; without this it can spend the
-          // output budget "thinking" and truncate the JSON. Disable it here.
-          thinkingConfig: { thinkingBudget: 0 },
-        },
+        generationConfig,
       }),
     })
 
