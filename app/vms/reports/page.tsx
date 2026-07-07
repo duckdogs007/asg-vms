@@ -780,7 +780,7 @@ export default function ReportsPage() {
 
   // Unit History report — complete activity for a community from the
   // unit_activity view, sortable by location. Not date-ranged.
-  async function runUnitHistory() {
+  async function runUnitHistory(sortKey: "location" | "date" | "type" = uhSort) {
     const { data } = await supabase
       .from("unit_activity").select("*")
       .eq("community_id", rptCommunity)
@@ -803,7 +803,7 @@ export default function ReportsPage() {
         slug: UA_SOURCE_SLUG[u.source_table] || "", raw: u,
       }
     })
-    setRunnerRows(sortUnitHistory(rows, uhSort)); setRunnerLoading(false); setRunnerRan(true)
+    setRunnerRows(sortUnitHistory(rows, sortKey)); setRunnerLoading(false); setRunnerRan(true)
   }
 
   async function runReport() {
@@ -1695,6 +1695,23 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                 <div className="text-xs text-gray-400">Full gate-by-gate detail by location · Print / PDF</div>
               </div>
             </Link>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!rptCommunity) return
+                setRunnerType("unithistory"); setUhSort("location")
+                setRunnerLoading(true); setRunnerRan(false); setRunnerRows([])
+                runUnitHistory("location")
+              }}
+              disabled={!rptCommunity}
+              className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-slate-400 transition-all group text-left cursor-pointer disabled:opacity-40 border-solid">
+              <span className="text-xl">🏢</span>
+              <div>
+                <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700">Unit History Report</div>
+                <div className="text-xs text-gray-400">Complete unit history by location · sortable · CSV / Print</div>
+              </div>
+            </button>
           </div>
 
           {/* Controls */}
