@@ -283,6 +283,11 @@ export default function ReportsPage() {
   const [runnerType,    setRunnerType]    = useState("all")
   const [runnerRows,    setRunnerRows]    = useState<RunnerRow[]>([])
   const [uhSort,        setUhSort]        = useState<"location" | "date" | "type">("location")
+  const [aiOpen,        setAiOpen]        = useState(false)
+  const [aiLoading,     setAiLoading]     = useState(false)
+  const [aiError,       setAiError]       = useState("")
+  const [aiResult,      setAiResult]      = useState<any>(null)
+  const [aiMeta,        setAiMeta]        = useState<any>(null)
   const [runnerLoading, setRunnerLoading] = useState(false)
   const [runnerRan,     setRunnerRan]     = useState(false)
 
@@ -804,6 +809,46 @@ export default function ReportsPage() {
       }
     })
     setRunnerRows(sortUnitHistory(rows, sortKey)); setRunnerLoading(false); setRunnerRan(true)
+  }
+
+  // AI Summary — scan all activity for the community + date range and produce a
+  // structured operations brief (concerns, follow-ups, patterns). Beta.
+  async function runAiSummary() {
+    if (!rptCommunity) return
+    setAiOpen(true); setAiLoading(true); setAiError(""); setAiResult(null); setAiMeta(null)
+    try {
+      const res = await fetch("/api/ai/location-summary", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ communityId: rptCommunity, from: dateFrom, to: dateTo }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setAiError(data.error || "Failed to generate summary."); return }
+      setAiResult(data.summary); setAiMeta(data.meta)
+    } catch (e: any) {
+      setAiError(e?.message || "Failed to generate summary.")
+    } finally {
+      setAiLoading(false)
+    }
+  }
+
+  function printAiSummary() {
+    if (!aiResult || !aiMeta) return
+    const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    const sec = (title: string, body: string) => body ? `<h2>${esc(title)}</h2>${body}` : ""
+    const list = (arr: any[], fmt: (x: any) => string) => arr?.length ? `<ul>${arr.map(x => `<li>${fmt(x)}</li>`).join("")}</ul>` : "<p class='muted'>None noted.</p>"
+    const html = `<!DOCTYPE html><html><head><title>AI Summary — ${esc(aiMeta.community)}</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;margin:28px;color:#111}h1{font-size:17px;margin-bottom:2px}h2{font-size:13px;margin:16px 0 4px;border-bottom:1px solid #ddd;padding-bottom:2px}.meta{color:#666;font-size:11px;margin-bottom:12px}ul{margin:4px 0 8px 18px;padding:0}li{margin-bottom:4px}.muted{color:#999}.hi{color:#b91c1c;font-weight:bold}.med{color:#b45309;font-weight:bold}.lo{color:#555;font-weight:bold}.tag{font-size:10px}</style>
+</head><body>
+<h1>AI Operations Summary — ${esc(aiMeta.community)}</h1>
+<div class="meta">${esc(aiMeta.from)} to ${esc(aiMeta.to)} · ${aiMeta.totalRecords} records · AI-generated (review before distribution) · ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>
+<p>${esc(aiResult.executive_summary)}</p>
+${sec("Concerns", list(aiResult.concerns, (c: any) => `<span class="${c.severity === "high" ? "hi" : c.severity === "medium" ? "med" : "lo"}">[${esc(c.severity)}]</span> ${esc(c.title)}${c.location ? ` — ${esc(c.location)}` : ""}${c.detail ? `<br><span class="muted">${esc(c.detail)}</span>` : ""}`))}
+${sec("Follow-ups", list(aiResult.follow_ups, (f: any) => `${esc(f.title)}${f.location ? ` — ${esc(f.location)}` : ""}${f.detail ? `<br><span class="muted">${esc(f.detail)}</span>` : ""}`))}
+${sec("Patterns", list(aiResult.patterns, (p: any) => `${esc(p.title)}${p.detail ? `<br><span class="muted">${esc(p.detail)}</span>` : ""}`))}
+${sec("Recommendations", list(aiResult.recommendations, (r: any) => esc(r)))}
+</body></html>`
+    const w = window.open("", "_blank")
+    if (w) { w.document.write(html); w.document.close(); w.print() }
   }
 
   async function runReport() {
@@ -1712,6 +1757,22 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                 <div className="text-xs text-gray-400">Complete unit history by location · sortable · CSV / Print</div>
               </div>
             </button>
+
+            {canApprove && (
+              <button
+                type="button"
+                onClick={runAiSummary}
+                disabled={!rptCommunity}
+                className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-indigo-400 transition-all group text-left cursor-pointer disabled:opacity-40 border-solid">
+                <span className="text-xl">🧠</span>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900 group-hover:text-indigo-700">
+                    AI Summary <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full align-middle">Beta</span>
+                  </div>
+                  <div className="text-xs text-gray-400">AI review of all activity · concerns &amp; follow-ups · {dateFrom} to {dateTo}</div>
+                </div>
+              </button>
+            )}
           </div>
 
           {/* Controls */}
@@ -2282,6 +2343,91 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
           </Section>
         )
       })()}
+
+      {/* AI Summary modal */}
+      {aiOpen && (
+        <div className="fixed inset-0 z-[100] bg-black/50 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setAiOpen(false)}>
+          <div className="bg-white rounded-xl shadow-2xl max-w-3xl w-full my-8" onClick={e => e.stopPropagation()}>
+            <div className="flex items-start justify-between gap-3 px-6 py-4 border-b border-gray-100">
+              <div>
+                <div className="text-lg font-bold text-gray-900 flex items-center gap-2">
+                  🧠 AI Operations Summary
+                  <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Beta</span>
+                </div>
+                {aiMeta && <div className="text-xs text-gray-500 mt-0.5">{aiMeta.community} · {aiMeta.from} to {aiMeta.to} · {aiMeta.totalRecords} records</div>}
+              </div>
+              <button onClick={() => setAiOpen(false)} className="text-gray-400 hover:text-gray-700 bg-transparent border-none cursor-pointer text-xl leading-none">✕</button>
+            </div>
+
+            <div className="px-6 py-4">
+              {aiLoading && <div className="py-10 text-center text-gray-500 text-sm animate-pulse">🧠 Analyzing all activity for this location…</div>}
+              {aiError && !aiLoading && <div className="py-6 text-center text-red-600 text-sm">{aiError}</div>}
+              {aiResult && !aiLoading && (
+                <div className="space-y-4">
+                  <div className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 rounded px-3 py-2">
+                    ⚠ AI-generated from logged records — review before sharing with a client and verify each item against the source report.
+                  </div>
+                  <p className="text-sm text-gray-800 leading-relaxed">{aiResult.executive_summary}</p>
+
+                  {aiResult.concerns?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Concerns</div>
+                      <div className="space-y-2">
+                        {aiResult.concerns.map((c: any, i: number) => (
+                          <div key={i} className="flex items-start gap-2">
+                            <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded-full flex-shrink-0 ${c.severity === "high" ? "bg-red-100 text-red-700" : c.severity === "medium" ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-600"}`}>{c.severity}</span>
+                            <div className="text-sm"><span className="font-semibold text-gray-800">{c.title}</span>{c.location && <span className="text-gray-500"> — {c.location}</span>}{c.detail && <div className="text-xs text-gray-500 mt-0.5">{c.detail}</div>}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {aiResult.follow_ups?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Follow-ups</div>
+                      <ul className="space-y-1.5">
+                        {aiResult.follow_ups.map((f: any, i: number) => (
+                          <li key={i} className="text-sm text-gray-800">• <span className="font-medium">{f.title}</span>{f.location && <span className="text-gray-500"> — {f.location}</span>}{f.detail && <div className="text-xs text-gray-500 ml-3">{f.detail}</div>}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {aiResult.patterns?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Patterns</div>
+                      <ul className="space-y-1.5">
+                        {aiResult.patterns.map((p: any, i: number) => (
+                          <li key={i} className="text-sm text-gray-800">• <span className="font-medium">{p.title}</span>{p.detail && <div className="text-xs text-gray-500 ml-3">{p.detail}</div>}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {aiResult.recommendations?.length > 0 && (
+                    <div>
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Recommendations</div>
+                      <ul className="space-y-1.5">
+                        {aiResult.recommendations.map((r: any, i: number) => (
+                          <li key={i} className="text-sm text-gray-800">• {r}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-3 border-t border-gray-100 flex justify-end gap-2">
+              {aiResult && !aiLoading && (
+                <button onClick={printAiSummary} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 cursor-pointer">🖨 Print / PDF</button>
+              )}
+              <button onClick={() => setAiOpen(false)} className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 border-none cursor-pointer">Close</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   )
 }
