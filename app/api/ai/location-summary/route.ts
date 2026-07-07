@@ -133,6 +133,20 @@ export async function POST(req: Request) {
   ])
 
   const communityName = (comm as { name?: string } | null)?.name || "the property"
+  const activityRows = (activity || []) as any[]
+
+  // unit_activity.detail is a short summary that can omit dispositions (arrests,
+  // notifications). Pull the full narrative for incidents so the model sees the
+  // outcome and doesn't invent "go investigate" follow-ups for resolved events.
+  const incidentIds = activityRows
+    .filter((r) => r.source_table === "incident_reports" && r.source_id)
+    .map((r) => r.source_id)
+  const incMap: Record<string, { description?: string; action_taken?: string }> = {}
+  if (incidentIds.length) {
+    const { data: incs } = await supabase.from("incident_reports")
+      .select("id, description, action_taken").in("id", incidentIds.slice(0, 600))
+    for (const it of (incs || []) as any[]) incMap[it.id] = it
+  }
 
   // Unified record list. Each record gets a stable [Rn] ref, a prompt line, and
   // (where available) a link to the underlying record for UI source-linking.
@@ -140,11 +154,16 @@ export async function POST(req: Request) {
   type Rec = { date: string; category: string; line: string; href: string | null; label: string }
   const recs: Rec[] = []
 
-  for (const r of (activity || []) as any[]) {
+  for (const r of activityRows) {
     const date = r.event_at ? new Date(r.event_at).toISOString().slice(0, 10) : ""
     const loc  = [r.building, r.apartment].filter(Boolean).join("-") || "common area"
     const refNos = [r.reliant_case_no && `Reliant#${r.reliant_case_no}`, r.hpd_report_no && `HPD#${r.hpd_report_no}`, r.asg_report_no && `ASG#${r.asg_report_no}`].filter(Boolean).join(" ")
-    const detail = String(r.detail || "").replace(/\s+/g, " ").slice(0, 240)
+    let detail = String(r.detail || "").replace(/\s+/g, " ").slice(0, 240)
+    const inc = r.source_table === "incident_reports" ? incMap[r.source_id] : null
+    if (inc) {
+      const full = [inc.description, inc.action_taken && `Action taken: ${inc.action_taken}`].filter(Boolean).join(" | ")
+      if (full) detail = full.replace(/\s+/g, " ").slice(0, 700)
+    }
     const slug = UA_SOURCE_SLUG[r.source_table]
     recs.push({
       date, category: r.record_type || "Activity",
@@ -219,7 +238,7 @@ ${lines}
 Analyze and return:
 - executive_summary: 2-4 sentences on the overall security picture for this property this period.
 - concerns: safety/security issues — weapons, violence, threats, repeat trespass, serious incidents, new BOLOs/barred persons. Rank by severity (high/medium/low). Include the location.
-- follow_ups: unresolved items and required actions, especially serious incidents that may not have been referred/notified to authorities (Reliant/HPD).
+- follow_ups: ONLY genuinely open, unresolved action items evident from the records (e.g. a serious incident with no notification recorded, a pending eviction). Do NOT create follow-ups that ask to "investigate", "determine", "confirm", or "look into" something the record already states — if the record shows the outcome (arrest made, subject detained by HPD, Reliant notified), that item is RESOLVED: state it as a fact in the executive summary or concerns, not as a follow-up. If there are no open items, return an empty array.
 - patterns: the SAME unit or person recurring across multiple records, escalating behavior, or clusters by area/time.
 - recommendations: concrete next actions for site management.
 
