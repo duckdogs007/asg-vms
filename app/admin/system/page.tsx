@@ -122,7 +122,7 @@ export default function AdminSystemPage() {
   const [auditLogs,    setAuditLogs]    = useState<any[]>([])
   const [auditLoading, setAuditLoading] = useState(false)
   const [auditLimit,   setAuditLimit]   = useState(20)
-  const [auditFilter,  setAuditFilter]  = useState<string>("auth")
+  const [auditFilter,  setAuditFilter]  = useState<string>("all")
 
   // ── SETTINGS ──
   const [tableCounts,     setTableCounts]     = useState<Record<string, number> | null>(null)
