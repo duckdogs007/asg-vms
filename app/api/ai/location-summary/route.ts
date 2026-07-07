@@ -57,6 +57,17 @@ const RESPONSE_SCHEMA = {
   required: ["executive_summary", "concerns", "follow_ups", "patterns", "recommendations"],
 }
 
+// Parse model output that may be wrapped in ```json fences or padded with prose.
+function extractJson(text: string): any | null {
+  let t = text.trim()
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i)
+  if (fence) t = fence[1].trim()
+  const first = t.indexOf("{")
+  const last  = t.lastIndexOf("}")
+  if (first !== -1 && last !== -1 && last > first) t = t.slice(first, last + 1)
+  try { return JSON.parse(t) } catch { return null }
+}
+
 export async function POST(req: Request) {
   let input: Body
   try { input = await req.json() } catch { return NextResponse.json({ error: "bad json" }, { status: 400 }) }
@@ -144,9 +155,12 @@ Base everything ONLY on the records provided — never invent facts. If a catego
         contents: [{ role: "user", parts: [{ text: prompt }] }],
         generationConfig: {
           temperature: 0.2,
-          maxOutputTokens: 1600,
+          maxOutputTokens: 4096,
           responseMimeType: "application/json",
           responseSchema: RESPONSE_SCHEMA,
+          // gemini-2.5-flash is a thinking model; without this it can spend the
+          // output budget "thinking" and truncate the JSON. Disable it here.
+          thinkingConfig: { thinkingBudget: 0 },
         },
       }),
     })
@@ -169,12 +183,21 @@ Base everything ONLY on the records provided — never invent facts. If a catego
     const blocked = data?.promptFeedback?.blockReason || data?.candidates?.[0]?.finishReason === "SAFETY"
     if (blocked) return NextResponse.json({ error: "AI declined to process this content." }, { status: 422 })
 
+    const finish = data?.candidates?.[0]?.finishReason
     const text: string = (data?.candidates?.[0]?.content?.parts || [])
       .map((p: any) => p?.text || "").join("").trim()
-    if (!text) return NextResponse.json({ error: "Model returned an empty response." }, { status: 502 })
+    if (!text) {
+      const why = finish === "MAX_TOKENS" ? " (response too long — try a shorter date range)" : ""
+      return NextResponse.json({ error: `Model returned an empty response${why}.` }, { status: 502 })
+    }
 
-    let summary: any
-    try { summary = JSON.parse(text) } catch { return NextResponse.json({ error: "Model returned malformed output." }, { status: 502 }) }
+    // Tolerant JSON extraction: strip markdown fences and isolate the object.
+    const summary = extractJson(text)
+    if (!summary) {
+      console.error("[location-summary] unparseable output. finishReason=", finish, "snippet=", text.slice(0, 400))
+      const why = finish === "MAX_TOKENS" ? " The report was too long for one pass — try a shorter date range." : ""
+      return NextResponse.json({ error: `Model returned malformed output.${why}` }, { status: 502 })
+    }
 
     return NextResponse.json({
       summary,
