@@ -187,6 +187,18 @@ const RUNNER_SLUG: Record<string, string> = {
   visitorLogs:    "visitor-log",
 }
 
+// unit_activity.source_table → /vms/reports/[type] slug (for the Unit History report)
+const UA_SOURCE_SLUG: Record<string, string> = {
+  incident_reports:             "incident",
+  parking_violations:           "parking",
+  vehicle_fi_logs:              "vehicle-fi",
+  contact_history:              "field-contact",
+  officer_daily_logs:           "daily-log",
+  property_maintenance_reports: "maintenance",
+  gate_checklists:              "gate-checklist",
+  visitor_logs:                 "visitor-log",
+}
+
 const RUNNER_BADGE_KEY: Record<string, string> = {
   incidents:      "incident",
   fieldContacts:  "fieldContact",
@@ -270,6 +282,7 @@ export default function ReportsPage() {
 
   const [runnerType,    setRunnerType]    = useState("all")
   const [runnerRows,    setRunnerRows]    = useState<RunnerRow[]>([])
+  const [uhSort,        setUhSort]        = useState<"location" | "date" | "type">("location")
   const [runnerLoading, setRunnerLoading] = useState(false)
   const [runnerRan,     setRunnerRan]     = useState(false)
 
@@ -755,10 +768,49 @@ export default function ReportsPage() {
     setRunnerRows(rows); setRunnerLoading(false); setRunnerRan(true)
   }
 
+  // Sort Unit History rows by location (building/apartment), date, or type.
+  function sortUnitHistory(rows: RunnerRow[], key: "location" | "date" | "type"): RunnerRow[] {
+    const locKey = (r: RunnerRow) => `${r.raw?.building ?? ""}|${r.raw?.apartment ?? ""}`
+    const arr = [...rows]
+    if (key === "date")      arr.sort((a, b) => (b.date || "").localeCompare(a.date || ""))
+    else if (key === "type") arr.sort((a, b) => (a.typeLabel || "").localeCompare(b.typeLabel || "") || locKey(a).localeCompare(locKey(b), undefined, { numeric: true }))
+    else                     arr.sort((a, b) => locKey(a).localeCompare(locKey(b), undefined, { numeric: true }) || (b.date || "").localeCompare(a.date || ""))
+    return arr
+  }
+
+  // Unit History report — complete activity for a community from the
+  // unit_activity view, sortable by location. Not date-ranged.
+  async function runUnitHistory() {
+    const { data } = await supabase
+      .from("unit_activity").select("*")
+      .eq("community_id", rptCommunity)
+      .order("building", { ascending: true })
+      .order("apartment", { ascending: true })
+      .order("event_at", { ascending: false })
+      .limit(3000)
+    const rows: RunnerRow[] = (data || []).map((u: any) => {
+      const loc  = [u.building, u.apartment].filter(Boolean).join("-") || "—"
+      const refs = [
+        u.reliant_case_no && `Reliant ${u.reliant_case_no}`,
+        u.hpd_report_no && `HPD ${u.hpd_report_no}`,
+        u.asg_report_no && `ASG ${u.asg_report_no}`,
+      ].filter(Boolean).join(" · ")
+      return {
+        id: u.source_id, typeKey: "unithistory", typeLabel: u.record_type || "Activity", color: "slate",
+        date: u.event_at ? new Date(u.event_at).toLocaleDateString("en-CA") : "",
+        summary: [loc, u.hoh_name].filter(Boolean).join(" · ") || "—",
+        officer: [u.detail, refs].filter(Boolean).join(" · ") || "—",
+        slug: UA_SOURCE_SLUG[u.source_table] || "", raw: u,
+      }
+    })
+    setRunnerRows(sortUnitHistory(rows, uhSort)); setRunnerLoading(false); setRunnerRan(true)
+  }
+
   async function runReport() {
     if (!rptCommunity) return
     setRunnerLoading(true); setRunnerRan(false); setRunnerRows([])
-    if (runnerType === "watchlist") { await runWatchlistRoster(); return }
+    if (runnerType === "watchlist")   { await runWatchlistRoster(); return }
+    if (runnerType === "unithistory") { await runUnitHistory();     return }
     const typesToRun = runnerType === "all"
       ? REPORT_TYPES
       : REPORT_TYPES.filter(rt => rt.key === runnerType)
@@ -827,6 +879,22 @@ export default function ReportsPage() {
       a.click(); URL.revokeObjectURL(url)
       return
     }
+    // Unit History gets location-first columns for sorting/filtering in Excel.
+    if (runnerType === "unithistory") {
+      const header = ["Building", "Apartment", "Location", "HOH", "Type", "Detail", "Date", "Reliant #", "HPD #", "ASG #", "Source", "Community"]
+      const data = runnerRows.map(r => {
+        const u = r.raw || {}
+        return [u.building || "", u.apartment || "", [u.building, u.apartment].filter(Boolean).join("-"), u.hoh_name || "",
+          u.record_type || "", u.detail || "", r.date || "", u.reliant_case_no || "", u.hpd_report_no || "", u.asg_report_no || "", u.record_source || "", communityLabel]
+      })
+      const csv = [header, ...data].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
+      const blob = new Blob([csv], { type: "text/csv" })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement("a"); a.href = url
+      a.download = `unit-history-${communityLabel.replace(/\s+/g, "-").toLowerCase() || "community"}.csv`
+      a.click(); URL.revokeObjectURL(url)
+      return
+    }
     const header = ["Date", "Type", "Details", "Officer", "Community", "ID"]
     const data = runnerRows.map(r => [r.date, r.typeLabel, r.summary, r.officer, communityLabel, r.id])
     const csv = [header, ...data].map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(",")).join("\n")
@@ -850,6 +918,22 @@ export default function ReportsPage() {
 <table><thead><tr><th>Name</th><th>DOB</th><th>Sex</th><th>Race</th><th>Reason</th><th>Status</th><th>Banned By</th><th>Ban Date</th></tr></thead><tbody>
 ${runnerRows.map(r => { const w = r.raw || {}; const nm = [w.first_name, w.middle_name, w.last_name].filter(Boolean).join(" ")
   return `<tr><td>${esc(nm) || "—"}${w.firearm_flag ? " 🔫" : ""}</td><td>${esc(w.dob) || "—"}</td><td>${esc(w.sex) || "—"}</td><td>${esc(w.race) || "—"}</td><td>${esc(w.reason) || "—"}</td><td>${esc(w.status) || "—"}</td><td>${esc(w.banned_by) || "—"}</td><td>${esc(w.ban_date) || "—"}</td></tr>` }).join("\n")}
+</tbody></table></body></html>`
+      const w = window.open("", "_blank")
+      if (w) { w.document.write(html); w.document.close(); w.print() }
+      return
+    }
+    // Unit History prints as a location-sorted activity table.
+    if (runnerType === "unithistory") {
+      const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+      const html = `<!DOCTYPE html><html><head><title>Unit History — ${esc(communityLabel)}</title>
+<style>body{font-family:Arial,sans-serif;font-size:12px;margin:24px}h1{font-size:16px;margin-bottom:4px}.meta{color:#666;font-size:11px;margin-bottom:16px}table{width:100%;border-collapse:collapse}th{background:#f3f4f6;text-align:left;padding:6px 8px;font-size:11px;border-bottom:2px solid #d1d5db}td{padding:5px 8px;border-bottom:1px solid #e5e7eb;vertical-align:top;font-size:11px}</style>
+</head><body>
+<h1>Unit History — ${esc(communityLabel)}</h1>
+<div class="meta">${runnerRows.length} record${runnerRows.length !== 1 ? "s" : ""} · Sorted by ${uhSort} · Printed ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</div>
+<table><thead><tr><th>Location</th><th>HOH</th><th>Type</th><th>Detail</th><th>Date</th></tr></thead><tbody>
+${runnerRows.map(r => { const u = r.raw || {}; const loc = [u.building, u.apartment].filter(Boolean).join("-") || "—"
+  return `<tr><td>${esc(loc)}</td><td>${esc(u.hoh_name) || "—"}</td><td>${esc(u.record_type) || "—"}</td><td>${esc(u.detail) || "—"}</td><td>${esc(r.date) || "—"}</td></tr>` }).join("\n")}
 </tbody></table></body></html>`
       const w = window.open("", "_blank")
       if (w) { w.document.write(html); w.document.close(); w.print() }
@@ -1622,8 +1706,20 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                 <option value="all">All types</option>
                 {REPORT_TYPES.map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
                 <option value="watchlist">Watchlist (Barred Persons)</option>
+                <option value="unithistory">Unit History</option>
               </select>
             </div>
+            {runnerType === "unithistory" && runnerRan && runnerRows.length > 0 && (
+              <div className="flex flex-col gap-1 w-40">
+                <label className="text-xs font-semibold text-gray-500">Sort by</label>
+                <select value={uhSort} onChange={e => { const k = e.target.value as "location" | "date" | "type"; setUhSort(k); setRunnerRows(prev => sortUnitHistory(prev, k)) }}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+                  <option value="location">Location</option>
+                  <option value="date">Date</option>
+                  <option value="type">Type</option>
+                </select>
+              </div>
+            )}
             <button
               onClick={runReport}
               disabled={!rptCommunity || runnerLoading}
@@ -1653,14 +1749,16 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               <div className="text-gray-400 text-sm py-8 text-center bg-white border border-gray-200 rounded-xl">
                 {runnerType === "watchlist"
                   ? "No barred persons on file for this community."
+                  : runnerType === "unithistory"
+                  ? "No unit history on file for this community."
                   : "No reports found for this community + date range."}
               </div>
             ) : (
               <>
                 <div className="text-xs text-gray-500 mb-2 font-semibold">
-                  {runnerRows.length} {runnerType === "watchlist" ? `barred person${runnerRows.length !== 1 ? "s" : ""}` : `record${runnerRows.length !== 1 ? "s" : ""}`} ·&nbsp;
+                  {runnerRows.length} {runnerType === "watchlist" ? `barred person${runnerRows.length !== 1 ? "s" : ""}` : runnerType === "unithistory" ? `unit-activity record${runnerRows.length !== 1 ? "s" : ""}` : `record${runnerRows.length !== 1 ? "s" : ""}`} ·&nbsp;
                   {communities.find(c => c.id === rptCommunity)?.name}
-                  {runnerType !== "watchlist" && <>&nbsp;· {dateFrom} to {dateTo}</>}
+                  {runnerType !== "watchlist" && runnerType !== "unithistory" && <>&nbsp;· {dateFrom} to {dateTo}</>}
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
                   {runnerRows.map((r, i) => {
@@ -1675,10 +1773,14 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                           <div className="text-sm text-gray-800 truncate">{r.summary}</div>
                           <div className="text-xs text-gray-400 truncate">{r.officer}</div>
                         </div>
-                        <Link href={r.typeKey === "watchlist" ? `/vms/intel/${r.id}` : `/vms/reports/${r.slug}/${r.id}`}
-                          className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium flex-shrink-0">
-                          View →
-                        </Link>
+                        {(r.typeKey === "watchlist" || r.slug) ? (
+                          <Link href={r.typeKey === "watchlist" ? `/vms/intel/${r.id}` : `/vms/reports/${r.slug}/${r.id}`}
+                            className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium flex-shrink-0">
+                            View →
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-gray-300 whitespace-nowrap flex-shrink-0">—</span>
+                        )}
                       </div>
                     )
                   })}
