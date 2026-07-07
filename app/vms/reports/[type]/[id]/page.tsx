@@ -1,8 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef } from "react"
-import { useParams } from "next/navigation"
-import Link from "next/link"
+import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { SignedImage } from "@/components/SignedImage"
 import { checkCanApprove } from "@/lib/admin"
@@ -144,6 +143,13 @@ export default function ReportDetailPage() {
   const type   = params.type as string
   const id     = params.id   as string
   const config = TYPE_CONFIG[type]
+  const router = useRouter()
+  // Return to wherever the user came from (e.g. Property Hub → Unit History)
+  // instead of always forcing them back to the Reports page.
+  const goBack = () => {
+    if (typeof window !== "undefined" && window.history.length > 1) router.back()
+    else router.push("/vms/reports")
+  }
 
   const [report,          setReport]          = useState<Record<string, any> | null>(null)
   const [queue,           setQueue]           = useState<Record<string, any> | null>(null)
@@ -332,7 +338,7 @@ export default function ReportDetailPage() {
   if (notFound || !config) return (
     <div className="p-8">
       <div className="text-gray-500 text-sm mb-3">Report not found.</div>
-      <Link href="/vms/reports" className="text-blue-700 text-sm hover:underline">← Back to Reports</Link>
+      <button onClick={goBack} className="text-blue-700 text-sm hover:underline bg-transparent border-none cursor-pointer p-0">← Back</button>
     </div>
   )
 
@@ -369,7 +375,7 @@ export default function ReportDetailPage() {
       {/* Breadcrumb + action bar */}
       <div className="mb-4 no-print">
         <div className="flex items-center justify-between flex-wrap gap-2">
-          <Link href="/vms/reports" className="text-xs text-blue-700 hover:underline">← Reports</Link>
+          <button onClick={goBack} className="text-xs text-blue-700 hover:underline bg-transparent border-none cursor-pointer p-0">← Back</button>
           <div className="flex items-center gap-2">
             {canEmail && (
               <button
