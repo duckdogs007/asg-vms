@@ -582,46 +582,67 @@ export default function ReportDetailPage() {
       </Section>
 
       {/* Gate-by-gate inspection (gate checklists) */}
-      {isGateChecklist && Array.isArray(r.gates) && r.gates.length > 0 && (
-        <Section title="Gate Inspections">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-gray-200">
-                  {["Gate", "Op V", "Op P", "Locks V", "Locks P", "Dmg V", "Dmg P", "Init", "Notes"].map(h => (
-                    <th key={h} className="px-2 py-1.5 font-semibold whitespace-nowrap">{h}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {(r.gates as any[]).map((g, gi) => {
-                  const cell = (val: any, bad: string) => {
-                    const v = String(val ?? "").toLowerCase()
-                    return <td className={`px-2 py-1.5 font-semibold ${v === bad ? "text-red-700" : v ? "text-green-700" : "text-gray-300"}`}>{val ? String(val).toUpperCase() : "—"}</td>
-                  }
-                  const flagged = g.operation_vehicle === "no" || g.operation_pedestrian === "no" || g.locks_vehicle === "no" || g.locks_pedestrian === "no" || g.damage_vehicle === "yes" || g.damage_pedestrian === "yes"
-                  return (
-                    <tr key={gi} className={`border-b border-gray-100 ${flagged ? "bg-red-50" : ""}`}>
-                      <td className="px-2 py-1.5 font-bold text-gray-800 whitespace-nowrap">Gate {g.gate_number ?? gi + 1}</td>
-                      {cell(g.operation_vehicle, "no")}
-                      {cell(g.operation_pedestrian, "no")}
-                      {cell(g.locks_vehicle, "no")}
-                      {cell(g.locks_pedestrian, "no")}
-                      {cell(g.damage_vehicle, "yes")}
-                      {cell(g.damage_pedestrian, "yes")}
-                      <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{g.initials || "—"}</td>
-                      <td className="px-2 py-1.5 text-gray-600">{g.notes || "—"}</td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-          <div className="text-[11px] text-gray-400 mt-2">
-            Op = operational · Locks = secured · Dmg = damage present. Red flags an item needing attention (operation/locks “No”, or damage “Yes”).
-          </div>
-        </Section>
-      )}
+      {isGateChecklist && Array.isArray(r.gates) && r.gates.length > 0 && (() => {
+        const gateFlagged = (g: any) =>
+          g.operation_vehicle === "no" || g.operation_pedestrian === "no" ||
+          g.locks_vehicle === "no" || g.locks_pedestrian === "no" ||
+          g.damage_vehicle === "yes" || g.damage_pedestrian === "yes"
+        const gates = r.gates as any[]
+        const flaggedGates = gates.filter(gateFlagged)
+        return (
+          <Section title="Gate Inspections">
+            {/* Flagged summary banner */}
+            {flaggedGates.length > 0 ? (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-300 text-red-800 text-sm font-semibold">
+                ⚠ {flaggedGates.length} of {gates.length} gate{gates.length !== 1 ? "s" : ""} flagged:{" "}
+                {flaggedGates.map((g: any, i: number) => `Gate ${g.gate_number ?? i + 1}`).join(", ")}
+              </div>
+            ) : (
+              <div className="mb-3 px-3 py-2 rounded-lg bg-green-50 border border-green-200 text-green-700 text-sm font-semibold">
+                ✓ All {gates.length} gates OK
+              </div>
+            )}
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="text-left text-xs text-gray-400 uppercase tracking-wider border-b border-gray-200">
+                    {["Gate", "Op V", "Op P", "Locks V", "Locks P", "Dmg V", "Dmg P", "Init", "Notes"].map(h => (
+                      <th key={h} className="px-2 py-1.5 font-semibold whitespace-nowrap">{h}</th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {gates.map((g, gi) => {
+                    const cell = (val: any, bad: string) => {
+                      const v = String(val ?? "").toLowerCase()
+                      return <td className={`px-2 py-1.5 font-semibold ${v === bad ? "text-red-700" : v ? "text-green-700" : "text-gray-300"}`}>{val ? String(val).toUpperCase() : "—"}</td>
+                    }
+                    const flagged = gateFlagged(g)
+                    return (
+                      <tr key={gi} className={`border-b border-gray-100 ${flagged ? "bg-red-50 border-l-4 border-l-red-500" : ""}`}>
+                        <td className={`px-2 py-1.5 font-bold whitespace-nowrap ${flagged ? "text-red-700" : "text-gray-800"}`}>
+                          {flagged && <span className="mr-1">⚠</span>}Gate {g.gate_number ?? gi + 1}
+                        </td>
+                        {cell(g.operation_vehicle, "no")}
+                        {cell(g.operation_pedestrian, "no")}
+                        {cell(g.locks_vehicle, "no")}
+                        {cell(g.locks_pedestrian, "no")}
+                        {cell(g.damage_vehicle, "yes")}
+                        {cell(g.damage_pedestrian, "yes")}
+                        <td className="px-2 py-1.5 text-gray-600 whitespace-nowrap">{g.initials || "—"}</td>
+                        <td className="px-2 py-1.5 text-gray-600">{g.notes || "—"}</td>
+                      </tr>
+                    )
+                  })}
+                </tbody>
+              </table>
+            </div>
+            <div className="text-[11px] text-gray-400 mt-2">
+              Op = operational · Locks = secured · Dmg = damage present. Red = needs attention (operation/locks “No”, or damage “Yes”).
+            </div>
+          </Section>
+        )
+      })()}
 
       {/* Persons */}
       {hasPersonInfo && (
