@@ -1200,6 +1200,20 @@ export default function UserDashboard() {
     loadPastReports()
   }
 
+  // Admin-only delete of a lease violation (incident_reports row; offenders
+  // cascade). Audits as a "Lease Violation" so it tracks in the Audit Log, and
+  // removes it from the Reports / unit-history views. DB DELETE policy is
+  // is_admin(), so this is enforced admin-only server-side as well.
+  async function deleteViolation(r: any) {
+    const unit = [r.building, r.apartment].filter(Boolean).join("-") || r.location || "—"
+    if (!window.confirm(`Delete this lease violation?\n\n${r.violation_type || "Violation"} @ ${unit}\n\nThis permanently removes the record and its offenders and cannot be undone.`)) return
+    const { error } = await supabase.from("incident_reports").delete().eq("id", r.id)
+    if (error) { alert("Delete failed: " + error.message); return }
+    await logActivity("deleted", "Lease Violation", r.id, `Lease violation deleted — ${r.violation_type || "—"} @ ${unit}`)
+    setExpandedReport(null)
+    loadPastReports()
+  }
+
   function printReport(r: any) {
     const esc = (s: any) => String(s ?? "").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;")
     const typeLabel =
@@ -2955,6 +2969,12 @@ export default function UserDashboard() {
                               <button onClick={() => setViolationForId(violationForId === r.id ? null : r.id)}
                                 className="px-4 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 border-none cursor-pointer">
                                 ⚖️ {r.lvl_issued ? "Edit Violation" : "Issue Violation"}
+                              </button>
+                            )}
+                            {isAdmin && r._type === "Incident" && r.lvl_issued && (
+                              <button onClick={() => deleteViolation(r)} title="Delete lease violation (admin only)"
+                                className="px-4 py-1.5 bg-red-100 text-red-700 text-xs font-semibold rounded-lg hover:bg-red-200 border-none cursor-pointer">
+                                🗑 Delete Violation
                               </button>
                             )}
                           </>
