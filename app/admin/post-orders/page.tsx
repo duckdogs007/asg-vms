@@ -99,8 +99,11 @@ export default function PostOrdersEditorPage() {
     const { error: err } = await savePostOrders(communityId, orders)
     if (err) { setSaving(false); setError("Save failed: " + err); return }
 
-    // Sync report delivery recipients: delete all then re-insert
-    await supabase.from("report_delivery_recipients").delete().eq("community_id", communityId)
+    // Sync report delivery recipients: delete all then re-insert.
+    // Surface any error — a silent RLS rejection here previously meant emails
+    // appeared to save but never persisted.
+    const { error: delErr } = await supabase.from("report_delivery_recipients").delete().eq("community_id", communityId)
+    if (delErr) { setSaving(false); setError("Save failed updating report recipients: " + delErr.message); return }
     const rows: any[] = []
     for (const { key } of REPORT_TYPES) {
       const recipients = reportDelivery[key] || []
@@ -108,7 +111,10 @@ export default function PostOrdersEditorPage() {
         if (r.email.trim()) rows.push({ community_id: communityId, report_type: key, email: r.email.trim(), label: r.label.trim() || null, sort_order: i })
       })
     }
-    if (rows.length > 0) await supabase.from("report_delivery_recipients").insert(rows)
+    if (rows.length > 0) {
+      const { error: insErr } = await supabase.from("report_delivery_recipients").insert(rows)
+      if (insErr) { setSaving(false); setError("Save failed saving report recipients: " + insErr.message); return }
+    }
 
     setSaving(false)
     const communityName = communities.find(c => c.id === communityId)?.name || communityId
