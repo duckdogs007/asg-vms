@@ -73,11 +73,33 @@ export async function POST(req: NextRequest) {
     const emailType = EMAIL_TYPE_MAP[qRow.report_type] || "Report"
     const parts     = [emailType, report.date, report.officer_name || report.officer].filter(Boolean)
 
-    await sendEmail({
+    const emailResult = await sendEmail({
       to:      recipients,
       subject: `ASG VMS — ${parts.join(" · ")}`,
       html:    buildReportEmailHtml({ ...report, _type: emailType }),
     })
+
+    // Record the delivery attempt (sent or failed) so every remittance is traceable
+    // in the Audit Log — approvals previously emailed without any email audit row.
+    await supabase.from("audit_logs").insert({
+      user_email:    user.email || "unknown",
+      action:        emailResult.ok ? "email_sent" : "email_failed",
+      resource_type: "Report",
+      resource_id:   queueId,
+      detail:        emailResult.ok
+        ? `${emailType} report emailed to ${recipients.join(", ")}`
+        : `${emailType} report email FAILED: ${emailResult.error || "unknown error"}`,
+      created_at:    now,
+    })
+
+    // If delivery failed, do NOT mark the report sent — leave it in the queue so a
+    // supervisor can retry, and surface the error instead of a false "sent".
+    if (!emailResult.ok) {
+      return NextResponse.json(
+        { ok: false, error: `Email delivery failed: ${emailResult.error || "unknown error"}` },
+        { status: 502 }
+      )
+    }
 
     const { error: updateErr } = await supabase.from("report_queue").update({
       status:      "sent",
