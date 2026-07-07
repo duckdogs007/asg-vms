@@ -213,6 +213,11 @@ Analyze and return:
 - patterns: the SAME unit or person recurring across multiple records, escalating behavior, or clusters by area/time.
 - recommendations: concrete next actions for site management.
 
+STYLE — write like an operations log, not a threat assessment:
+- State only the concrete facts of each item: who, what, where, and the outcome/disposition (e.g. "Wanted person arrested by HPD at Bldg 4", "Firearm recovered, Reliant notified", "Vehicle towed").
+- Do NOT add generic risk, impact, or editorial commentary. Ban vague filler such as "poses a risk to the safety and security of residents and staff", "raises concerns", "could escalate", or similar. If it isn't a specific fact from a record, leave it out.
+- Prefer outcomes over adjectives. Keep each item to the facts.
+
 For EVERY concern, follow_up, and pattern, include a "sources" array listing the record reference tags (e.g. "R12") it is based on. Base everything ONLY on the records provided — never invent facts or reference tags not shown above. If a category has nothing, return an empty array.`
 
   const model = process.env.GEMINI_MODEL || "gemini-2.5-flash"
