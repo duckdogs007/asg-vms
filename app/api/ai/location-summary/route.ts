@@ -13,7 +13,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 // repeat-person pattern detection depends on them.
 export const runtime = "nodejs"
 
-type Body = { communityId?: string; from?: string; to?: string }
+type Body = { communityId?: string; from?: string; to?: string; force?: boolean }
 
 // unit_activity.source_table → /vms/reports/[type] slug (for source links).
 const UA_SOURCE_SLUG: Record<string, string> = {
@@ -98,6 +98,21 @@ export async function POST(req: Request) {
   const supabase = await createSupabaseServerClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "unauthenticated" }, { status: 401 })
+
+  // Return the cached summary unless a regenerate was requested.
+  if (!input.force) {
+    const { data: cached } = await supabase.from("ai_location_summaries")
+      .select("summary, meta, generated_at, generated_by")
+      .eq("community_id", communityId).eq("period_from", from).eq("period_to", to)
+      .maybeSingle()
+    if (cached) {
+      const c = cached as any
+      return NextResponse.json({
+        summary: c.summary, meta: c.meta, cached: true,
+        generatedAt: c.generated_at, generatedBy: c.generated_by,
+      })
+    }
+  }
 
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) {
@@ -315,10 +330,17 @@ For EVERY concern, follow_up, and pattern, include a "sources" array listing the
     const sources: Record<string, { label: string; href: string | null }> = {}
     for (const ref of cited) if (refMap[ref]) sources[ref] = refMap[ref]
 
-    return NextResponse.json({
-      summary,
-      meta: { community: communityName, from, to, totalRecords: recs.length, counts, sources },
-    })
+    const meta = { community: communityName, from, to, totalRecords: recs.length, counts, sources }
+    const generatedAt = new Date().toISOString()
+
+    // Cache the result so re-opening this community + period doesn't re-call the model.
+    await supabase.from("ai_location_summaries").upsert({
+      community_id: communityId, period_from: from, period_to: to,
+      summary, meta, total_records: recs.length,
+      generated_at: generatedAt, generated_by: user.email || null,
+    }, { onConflict: "community_id,period_from,period_to" })
+
+    return NextResponse.json({ summary, meta, cached: false, generatedAt, generatedBy: user.email || null })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || "AI request failed." }, { status: 502 })
   }

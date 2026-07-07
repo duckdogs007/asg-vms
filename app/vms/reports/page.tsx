@@ -288,6 +288,9 @@ export default function ReportsPage() {
   const [aiError,       setAiError]       = useState("")
   const [aiResult,      setAiResult]      = useState<any>(null)
   const [aiMeta,        setAiMeta]        = useState<any>(null)
+  const [aiCached,      setAiCached]      = useState(false)
+  const [aiGenAt,       setAiGenAt]       = useState("")
+  const [aiGenBy,       setAiGenBy]       = useState("")
   const [runnerLoading, setRunnerLoading] = useState(false)
   const [runnerRan,     setRunnerRan]     = useState(false)
 
@@ -813,17 +816,18 @@ export default function ReportsPage() {
 
   // AI Summary — scan all activity for the community + date range and produce a
   // structured operations brief (concerns, follow-ups, patterns). Beta.
-  async function runAiSummary() {
+  async function runAiSummary(force = false) {
     if (!rptCommunity) return
     setAiOpen(true); setAiLoading(true); setAiError(""); setAiResult(null); setAiMeta(null)
     try {
       const res = await fetch("/api/ai/location-summary", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ communityId: rptCommunity, from: dateFrom, to: dateTo }),
+        body: JSON.stringify({ communityId: rptCommunity, from: dateFrom, to: dateTo, force }),
       })
       const data = await res.json()
       if (!res.ok) { setAiError(data.error || "Failed to generate summary."); return }
       setAiResult(data.summary); setAiMeta(data.meta)
+      setAiCached(!!data.cached); setAiGenAt(data.generatedAt || ""); setAiGenBy(data.generatedBy || "")
     } catch (e: any) {
       setAiError(e?.message || "Failed to generate summary.")
     } finally {
@@ -1777,7 +1781,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
             {canApprove && (
               <button
                 type="button"
-                onClick={runAiSummary}
+                onClick={() => runAiSummary()}
                 disabled={!rptCommunity}
                 className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-indigo-400 transition-all group text-left cursor-pointer disabled:opacity-40 border-solid">
                 <span className="text-xl">🧠</span>
@@ -2371,6 +2375,11 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                   <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full">Beta</span>
                 </div>
                 {aiMeta && <div className="text-xs text-gray-500 mt-0.5">{aiMeta.community} · {aiMeta.from} to {aiMeta.to} · {aiMeta.totalRecords} records</div>}
+                {aiGenAt && !aiLoading && (
+                  <div className="text-[11px] text-gray-400 mt-0.5">
+                    {aiCached ? "Cached" : "Generated"} {new Date(aiGenAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })}{aiGenBy ? ` by ${aiGenBy}` : ""}
+                  </div>
+                )}
               </div>
               <button onClick={() => setAiOpen(false)} className="text-gray-400 hover:text-gray-700 bg-transparent border-none cursor-pointer text-xl leading-none">✕</button>
             </div>
@@ -2437,7 +2446,10 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
 
             <div className="px-6 py-3 border-t border-gray-100 flex justify-end gap-2">
               {aiResult && !aiLoading && (
-                <button onClick={printAiSummary} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 cursor-pointer">🖨 Print / PDF</button>
+                <>
+                  <button onClick={() => runAiSummary(true)} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 cursor-pointer mr-auto">🔄 Regenerate</button>
+                  <button onClick={printAiSummary} className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 cursor-pointer">🖨 Print / PDF</button>
+                </>
               )}
               <button onClick={() => setAiOpen(false)} className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 border-none cursor-pointer">Close</button>
             </div>
