@@ -13,10 +13,12 @@ export default function LeaseViolationsTab({
   communityId,
   communityName,
   isAdmin,
+  canDelete = false,
 }: {
   communityId: string
   communityName?: string
   isAdmin: boolean
+  canDelete?: boolean
 }) {
   const [rows, setRows]       = useState<any[]>([])
   const [loading, setLoading] = useState(false)
@@ -40,6 +42,27 @@ export default function LeaseViolationsTab({
   }
 
   useEffect(() => { setShow(false); load() /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [communityId])
+
+  // Admin-only delete. Deleting the incident_reports row cascade-removes its
+  // violation_offenders. Writes a Lease Violation "deleted" audit entry.
+  async function deleteViolation(r: any) {
+    const unit = [r.building, r.apartment].filter(Boolean).join("-") || r.location || "—"
+    if (!confirm(`Delete this lease violation?\n\n${r.violation_type || "Violation"} @ ${unit}\n\nThis permanently removes the record and its offenders and cannot be undone.`)) return
+    const { error } = await supabase.from("incident_reports").delete().eq("id", r.id)
+    if (error) { alert("Delete failed: " + error.message); return }
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from("audit_logs").insert({
+        user_email:    user?.email || "unknown",
+        action:        "deleted",
+        resource_type: "Lease Violation",
+        resource_id:   r.id,
+        detail:        `Lease violation deleted — ${r.violation_type || "—"} @ ${unit}`,
+        created_at:    new Date().toISOString(),
+      })
+    } catch { /* audit is best-effort */ }
+    load()
+  }
 
   const communities = communityId ? [{ id: communityId, name: communityName || "This location" }] : []
 
@@ -108,6 +131,12 @@ export default function LeaseViolationsTab({
                   <div>{r.lvl_posted_date || r.date || "—"}</div>
                   <div className="truncate">{r.issued_by || "—"}</div>
                 </div>
+                {canDelete && (
+                  <button onClick={() => deleteViolation(r)} title="Delete lease violation (admin only)"
+                    className="flex-shrink-0 px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded border-none cursor-pointer">
+                    🗑
+                  </button>
+                )}
               </div>
             )
           })}

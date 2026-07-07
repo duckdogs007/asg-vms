@@ -4,7 +4,7 @@ export const dynamic = "force-dynamic"
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
-import { checkCanEditPropertyHub, checkCanIssueLeaseViolation } from "@/lib/admin"
+import { checkCanEditPropertyHub, checkCanIssueLeaseViolation, checkIsAdmin } from "@/lib/admin"
 import PostOrdersTab from "@/components/PostOrdersTab"
 import RentRollTab from "@/components/RentRollTab"
 import UnitActivityTab from "@/components/UnitActivityTab"
@@ -41,6 +41,7 @@ export default function PropertyHubPage() {
   const [tab,         setTab]         = useState<Tab>("post-orders")
   const [canEdit,     setCanEdit]     = useState(false)
   const [canIssueViolation, setCanIssueViolation] = useState(false)
+  const [canDeleteViolation, setCanDeleteViolation] = useState(false)
   const [userEmail,   setUserEmail]   = useState("")
   const [msg,         setMsg]         = useState("")
 
@@ -69,6 +70,7 @@ export default function PropertyHubPage() {
   useEffect(() => {
     checkCanEditPropertyHub().then(setCanEdit).catch(() => setCanEdit(false))
     checkCanIssueLeaseViolation().then(setCanIssueViolation).catch(() => setCanIssueViolation(false))
+    checkIsAdmin().then(setCanDeleteViolation).catch(() => setCanDeleteViolation(false))
     supabase.auth.getUser().then(({ data: { user } }) => setUserEmail(user?.email || ""))
     supabase.from("communities").select("id, name, address, phone, jurisdiction").order("name").then(({ data }) => {
       const list = (data as Community[]) || []
@@ -229,7 +231,7 @@ export default function PropertyHubPage() {
       {tab === "history" && <UnitActivityTab />}
 
       {/* LEASE VIOLATIONS */}
-      {tab === "violations" && <LeaseViolationsTab communityId={communityId} communityName={community?.name} isAdmin={canIssueViolation} />}
+      {tab === "violations" && <LeaseViolationsTab communityId={communityId} communityName={community?.name} isAdmin={canIssueViolation} canDelete={canDeleteViolation} />}
 
       {/* RENT ROLL */}
       {tab === "rentroll" && <RentRollTab communityId={communityId} communityName={community?.name} isAdmin={canEdit} />}

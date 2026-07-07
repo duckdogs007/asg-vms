@@ -268,6 +268,22 @@ export default function LeaseViolationForm({
     if (offErr) throw offErr
   }
 
+  // Best-effort audit trail for lease-violation issue/edit. Failure here must not
+  // fail the save (the violation is already persisted).
+  async function logViolationAudit(action: string, reportId: string, detail: string) {
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      await supabase.from("audit_logs").insert({
+        user_email:    user?.email || "unknown",
+        action,
+        resource_type: "Lease Violation",
+        resource_id:   reportId,
+        detail,
+        created_at:    new Date().toISOString(),
+      })
+    } catch { /* audit is best-effort */ }
+  }
+
   async function handleSubmit() {
     setError(null)
     setSuccess(null)
@@ -315,6 +331,8 @@ export default function LeaseViolationForm({
         if (updErr) throw updErr
 
         await insertOffenders(existingRecord.id)
+        const unitA = [existingRecord.building, existingRecord.apartment].filter(Boolean).join("-") || existingRecord.location || "—"
+        await logViolationAudit("updated", existingRecord.id, `Lease violation issued/updated — ${violationType} · ${noticeLevel} @ ${unitA}`)
         setSuccess("Lease violation issued onto the report.")
         onSaved?.()
       } else {
@@ -362,6 +380,8 @@ export default function LeaseViolationForm({
         if (insErr) throw insErr
 
         await insertOffenders((inserted as any).id)
+        const unitB = [locationValue.building, locationValue.apartment].filter(Boolean).join("-") || locationValue.location || "—"
+        await logViolationAudit("created", (inserted as any).id, `Lease violation created — ${violationType} · ${noticeLevel} @ ${unitB}`)
         setSuccess("Lease violation record created.")
         resetForm()
         onSaved?.()
