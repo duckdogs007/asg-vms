@@ -816,23 +816,34 @@ export default function ReportsPage() {
 
   // AI Summary — scan all activity for the community + date range and produce a
   // structured operations brief (concerns, follow-ups, patterns). Beta.
-  async function runAiSummary(force = false) {
+  async function runAiSummary(force = false, isRetry = false) {
     if (!rptCommunity) return
-    setAiOpen(true); setAiLoading(true); setAiError(""); setAiResult(null); setAiMeta(null)
+    if (!isRetry) { setAiOpen(true); setAiResult(null); setAiMeta(null) }
+    setAiLoading(true); setAiError("")
+    let res: Response, data: any
     try {
-      const res = await fetch("/api/ai/location-summary", {
+      res = await fetch("/api/ai/location-summary", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ communityId: rptCommunity, from: dateFrom, to: dateTo, force }),
       })
-      const data = await res.json()
-      if (!res.ok) { setAiError(data.error || "Failed to generate summary."); return }
-      setAiResult(data.summary); setAiMeta(data.meta)
-      setAiCached(!!data.cached); setAiGenAt(data.generatedAt || ""); setAiGenBy(data.generatedBy || "")
+      data = await res.json().catch(() => ({}))
     } catch (e: any) {
-      setAiError(e?.message || "Failed to generate summary.")
-    } finally {
-      setAiLoading(false)
+      setAiError(e?.message || "Failed to generate summary."); setAiLoading(false); return
     }
+    // Transparent single auto-retry on a rate-limit (short delays only).
+    if (res.status === 429 && !isRetry && (Number(data.retryAfter) || 99) <= 30) {
+      const wait = Math.min(30, Math.max(3, Number(data.retryAfter) || 12))
+      setAiLoading(false)
+      for (let s = wait; s > 0; s--) {
+        setAiError(`Rate limited by the AI service — auto-retrying in ${s}s…`)
+        await new Promise(r => setTimeout(r, 1000))
+      }
+      return runAiSummary(force, true)
+    }
+    if (!res.ok) { setAiError(data.error || "Failed to generate summary."); setAiLoading(false); return }
+    setAiResult(data.summary); setAiMeta(data.meta)
+    setAiCached(!!data.cached); setAiGenAt(data.generatedAt || ""); setAiGenBy(data.generatedBy || "")
+    setAiLoading(false)
   }
 
   // Render the source-record links a finding cites (via aiMeta.sources map).

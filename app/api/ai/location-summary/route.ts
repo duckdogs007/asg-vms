@@ -294,7 +294,7 @@ For EVERY concern, follow_up, and pattern, include a "sources" array listing the
         const retrySeconds = retryDelayStr ? Math.ceil(parseFloat(retryDelayStr))
           : retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null
         const retryMsg = retrySeconds ? ` Try again in ~${retrySeconds}s.` : " Try again in a moment."
-        return NextResponse.json({ error: `AI summary is temporarily unavailable (quota exceeded).${retryMsg}` }, { status: 429 })
+        return NextResponse.json({ error: `AI summary is temporarily unavailable (quota exceeded).${retryMsg}`, retryAfter: retrySeconds || 12 }, { status: 429 })
       }
       const msg = data?.error?.message || `AI request failed (${res.status}).`
       return NextResponse.json({ error: msg }, { status: 502 })
