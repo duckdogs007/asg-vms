@@ -23,12 +23,9 @@ export default function LoginPage() {
       if (error) {
         setError(error.message)
       } else if (data.session) {
-        supabase.from("audit_logs").insert({
-          user_email: email.toLowerCase().trim(),
-          action: "login", resource_type: "Auth", resource_id: "",
-          detail: "User signed in",
-          created_at: new Date().toISOString(),
-        })
+        // Login auditing is handled centrally in TopNav's auth listener (which
+        // also captures restored sessions). A fire-and-forget insert here was
+        // aborted by the immediate navigation below, so it never persisted.
         // Sign-on flow: officer must confirm their post for this shift.
         // The confirm page saves the assignment + localStorage and then
         // routes everyone to the Home page (/).

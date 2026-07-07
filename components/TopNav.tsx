@@ -90,23 +90,35 @@ export default function TopNav() {
   }
 
   useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      if (user) {
-        setUserEmail(user.email || "")
-        setIsAdmin(ADMIN_EMAILS.includes(user.email || ""))
-        resolveUserRole(user)
-      }
-    })
+    // Apply the session to UI state and, once per browser tab-session, record a
+    // "login" audit event. This is the single source of login auditing — it
+    // captures both fresh sign-ins AND restored/persisted sessions that never
+    // hit the login page (the case that left logged-in users invisible).
+    function applySession(user: { id: string; email?: string }) {
+      setUserEmail(user.email || "")
+      setIsAdmin(ADMIN_EMAILS.includes(user.email || ""))
+      resolveUserRole(user)
+      try {
+        if (sessionStorage.getItem("asg-auth-logged") !== user.id) {
+          sessionStorage.setItem("asg-auth-logged", user.id)
+          supabase.from("audit_logs").insert({
+            user_email:    user.email || "unknown",
+            action:        "login",
+            resource_type: "Auth",
+            resource_id:   user.id,
+            detail:        "Signed in / session active",
+            created_at:    new Date().toISOString(),
+          })
+        }
+      } catch { /* audit is best-effort */ }
+    }
+
+    supabase.auth.getUser().then(({ data: { user } }) => { if (user) applySession(user) })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       const user = session?.user
-      if (user) {
-        setUserEmail(user.email || "")
-        setIsAdmin(ADMIN_EMAILS.includes(user.email || ""))
-        resolveUserRole(user)
-      } else {
-        setUserEmail(""); setIsAdmin(false); setUserRole("")
-      }
+      if (user) applySession(user)
+      else { setUserEmail(""); setIsAdmin(false); setUserRole("") }
     })
 
     return () => subscription.unsubscribe()
@@ -128,6 +140,7 @@ export default function TopNav() {
       detail: "User signed out",
       created_at: new Date().toISOString(),
     })
+    try { sessionStorage.removeItem("asg-auth-logged") } catch {}
     await supabase.auth.signOut()
     router.push("/login")
   }
