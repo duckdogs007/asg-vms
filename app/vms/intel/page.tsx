@@ -167,6 +167,7 @@ export default function IntelPage() {
   const [selectedPerson, setSelectedPerson] = useState<PersonProfile | null>(null)
   const [banHistory,     setBanHistory]     = useState<WatchlistEntry[]>([])
   const [history,        setHistory]        = useState<VisitorLog[]>([])
+  const [visitPhotos,    setVisitPhotos]    = useState<any[]>([])
   const [contacts,       setContacts]       = useState<ContactRecord[]>([])
   const [communities,    setCommunities]    = useState<Community[]>([])
   const [loading,        setLoading]        = useState(false)
@@ -265,6 +266,17 @@ export default function IntelPage() {
       const visitData = (visits || []).filter((v: VisitorLog) => nameMatch(v, first, last))
       setHistory(visitData)
       setHistoryLimit(25)
+
+      // ID/Live photos on file for the matched person(s), aggregated across
+      // visits (item #58).
+      const visitorIds = [...new Set(visitData.map((v: any) => v.visitor_id).filter(Boolean))] as string[]
+      if (visitorIds.length) {
+        supabase.from("visitor_photos").select("*").in("visitor_id", visitorIds)
+          .order("captured_at", { ascending: false })
+          .then(({ data: ph }) => setVisitPhotos(ph || []))
+      } else {
+        setVisitPhotos([])
+      }
 
       const { data: watch, error: watchErr } = await supabase
         .from("watchlist")
@@ -688,6 +700,20 @@ export default function IntelPage() {
                   Showing visits for <strong>all {banHistory.length} candidates</strong>. Confirm a match in the Ban History tab to narrow this list.
                 </div>
               )}
+              {visitPhotos.length > 0 && (
+                <div className="mb-3">
+                  <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Photos on File ({visitPhotos.length})</div>
+                  <div className="flex flex-wrap gap-2">
+                    {visitPhotos.slice(0, 12).map((p) => (
+                      <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer"
+                        title={`${p.photo_type === "id" ? "ID" : "Live"}${p.captured_at ? " · " + fmtDate(p.captured_at) : ""}`}>
+                        <SignedImage src={p.url} bucket="photos" alt={p.photo_type}
+                          className="w-16 h-20 object-cover rounded border border-gray-200 hover:border-blue-400 transition-colors" />
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
               {displayedHistory.length > 0 ? (
                 <>
                   <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
@@ -696,7 +722,9 @@ export default function IntelPage() {
                       : `${displayedHistory.length} visit${displayedHistory.length === 1 ? "" : "s"}`}
                   </div>
                   {displayedHistory.slice(0, historyLimit).map((v) => (
-                    <div key={v.id} className="bg-white border border-gray-200 px-4 py-3 rounded-lg mb-2 hover:border-gray-300 transition-colors">
+                    <div key={v.id}
+                      onClick={() => router.push(`/vms/reports/visitor-log/${v.id}`)}
+                      className="bg-white border border-gray-200 px-4 py-3 rounded-lg mb-2 hover:border-blue-300 hover:bg-gray-50 transition-colors cursor-pointer">
                       <div className="font-semibold text-gray-900">{v.first_name} {v.last_name}
                         <span className="text-gray-500 font-normal ml-2 text-sm">({v.person_type})</span>
                       </div>
@@ -704,8 +732,9 @@ export default function IntelPage() {
                         {getCommunityName(v.community_id || "")} · Unit: {v.unit_number || "N/A"}
                         {v.resident_name && ` · Visiting: ${v.resident_name}`}
                       </div>
-                      <div className="text-xs text-gray-400 mt-0.5">
-                        {fmtDate(v.created_at)}
+                      <div className="text-xs text-gray-400 mt-0.5 flex items-center justify-between">
+                        <span>{fmtDate(v.created_at)}</span>
+                        <span className="text-blue-700 font-medium">View →</span>
                       </div>
                     </div>
                   ))}
