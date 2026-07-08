@@ -110,6 +110,23 @@ export default function ScanID(){
   async function autoLogEntry(p: any) {
     setSaving(true); setSaveError("")
     try {
+      // Duplicate-scan guard: if the SAME license (OLN) was auto-logged within the
+      // last 60s, reuse that row instead of creating a second entry. Enrichment
+      // (unit/resident/type) then patches the original.
+      if (p.oln) {
+        const cutoff = new Date(Date.now() - 60_000).toISOString()
+        const { data: recent } = await supabase.from("visitor_logs")
+          .select("id").eq("dl_scanned", true).eq("oln", p.oln)
+          .gte("created_at", cutoff)
+          .order("created_at", { ascending: false }).limit(1).maybeSingle()
+        if (recent) {
+          setLogId(recent.id)
+          setDetailMsg("Already logged moments ago — not duplicated")
+          setTimeout(() => setDetailMsg(""), 2500)
+          return
+        }
+      }
+
       let visitorId: string | null = null
       const { data: existing } = await supabase
         .from("visitors").select("id")
