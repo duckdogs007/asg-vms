@@ -179,15 +179,26 @@ export default function ManualEntry() {
     setMessage("")
 
     try {
-      const { data: visitor, error: visitorError } = await supabase
-        .from("visitors")
-        .insert([{ first_name: firstName, last_name: lastName, dob: dob || null, oln: oln || null, plate: plate || null }])
-        .select()
-
-      if (visitorError) { setError(visitorError.message); return }
+      // De-dupe the person: reuse an existing visitor matched by name (+ DOB
+      // when provided) so photos and visit history follow one visitor_id.
+      let visitorId: string
+      let vq = supabase.from("visitors").select("id")
+        .ilike("first_name", firstName).ilike("last_name", lastName)
+      if (dob) vq = vq.eq("dob", dob)
+      const { data: existingVisitor } = await vq.limit(1).maybeSingle()
+      if (existingVisitor) {
+        visitorId = (existingVisitor as { id: string }).id
+      } else {
+        const { data: created, error: visitorError } = await supabase
+          .from("visitors")
+          .insert([{ first_name: firstName, last_name: lastName, dob: dob || null, oln: oln || null, plate: plate || null }])
+          .select("id").single()
+        if (visitorError || !created) { setError(visitorError?.message || "Failed to create visitor record."); return }
+        visitorId = (created as { id: string }).id
+      }
 
       const { data: logRow, error: logError } = await supabase.from("visitor_logs").insert([{
-        visitor_id:    visitor[0].id,
+        visitor_id:    visitorId,
         first_name:    firstName,
         last_name:     lastName,
         person_type:   visitorType,
@@ -204,7 +215,7 @@ export default function ManualEntry() {
       if (idPhotos.length || livePhotos.length) {
         const { data: { user } } = await supabase.auth.getUser()
         await saveVisitorPhotos(idPhotos, livePhotos, {
-          visitorId:    visitor[0].id,
+          visitorId,
           visitorLogId: (logRow as { id?: string } | null)?.id || null,
           communityId:  community || null,
           capturedBy:   user?.email || null,
