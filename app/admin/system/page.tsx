@@ -399,6 +399,7 @@ export default function AdminSystemPage() {
         <button onClick={() => setActiveTab("settings")}    className={tabBtnCls("settings")}>🛠 Settings</button>
         <button onClick={() => setActiveTab("audit")}       className={tabBtnCls("audit")}>🔒 Audit Log</button>
         <Link href="/admin/post-orders" className="px-4 py-2 text-sm font-semibold rounded-t-md transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200">📋 Post Orders</Link>
+        <Link href="/admin/community-policies" className="px-4 py-2 text-sm font-semibold rounded-t-md transition-colors bg-gray-100 text-gray-700 hover:bg-gray-200 whitespace-nowrap">⚙️ Community Policies</Link>
       </div>
 
       {/* COMMUNITIES */}
