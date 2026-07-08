@@ -5,6 +5,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { Community } from "@/lib/types"
 import { checkIsAdmin } from "@/lib/admin"
+import { SignedLink } from "@/components/SignedImage"
 import {
   PostOrders,
   PostOrderContact,
@@ -44,6 +45,11 @@ export default function PostOrdersEditorPage() {
   const [reportDelivery,  setReportDelivery]  = useState<Record<string, DeliveryRecipient[]>>(
     () => Object.fromEntries(REPORT_TYPES.map(t => [t.key, []]))
   )
+  const [docs,         setDocs]         = useState<any[]>([])
+  const [docTitle,     setDocTitle]     = useState("")
+  const [docFile,      setDocFile]      = useState<File | null>(null)
+  const [docUploading, setDocUploading] = useState(false)
+  const [docMsg,       setDocMsg]       = useState("")
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => setUserEmail(user?.email || ""))
@@ -85,12 +91,42 @@ export default function PostOrdersEditorPage() {
       if (grouped[r.report_type]) grouped[r.report_type].push({ email: r.email, label: r.label || "" })
     }
     setReportDelivery(grouped)
+    loadDocs(id)
     setLoading(false)
   }
 
   function selectCommunity(id: string) {
     setCommunityId(id)
     void loadFor(id)
+  }
+
+  // ── Community documents (shared store with Property Hub → Documents) ──
+  async function loadDocs(id: string) {
+    if (!id) { setDocs([]); return }
+    const { data } = await supabase.from("community_documents").select("*")
+      .eq("community_id", id).order("created_at", { ascending: false })
+    setDocs(data || [])
+  }
+  async function uploadDoc() {
+    if (!docFile || !communityId) { setDocMsg("⚠ Choose a file."); return }
+    setDocUploading(true); setDocMsg("")
+    const ext  = docFile.name.split(".").pop() || "bin"
+    const path = `${communityId}/${Date.now()}.${ext}`
+    const { data: up, error: upErr } = await supabase.storage.from("community-docs").upload(path, docFile, { upsert: false })
+    if (upErr || !up) { setDocUploading(false); setDocMsg("⚠ Upload failed: " + (upErr?.message || "")); return }
+    const { data: { publicUrl } } = supabase.storage.from("community-docs").getPublicUrl(up.path)
+    const { error } = await supabase.from("community_documents").insert({
+      community_id: communityId, title: docTitle.trim() || docFile.name, doc_type: "Post Orders", file_url: publicUrl, uploaded_by: userEmail,
+    })
+    setDocUploading(false)
+    if (error) { setDocMsg("⚠ " + error.message); return }
+    setDocTitle(""); setDocFile(null); setDocMsg("✅ Document uploaded.")
+    loadDocs(communityId)
+  }
+  async function deleteDoc(id: string) {
+    if (!confirm("Delete this document?")) return
+    await supabase.from("community_documents").delete().eq("id", id)
+    loadDocs(communityId)
   }
 
   async function save() {
@@ -357,6 +393,44 @@ export default function PostOrdersEditorPage() {
                 </div>
               ))}
             </div>
+          </div>
+
+          {/* COMMUNITY DOCUMENTS */}
+          <div className={sectionCls}>
+            <h3 className="text-sm font-bold text-gray-800 mb-1">📁 Community Documents</h3>
+            <p className="text-xs text-gray-500 mb-4">Upload community-related documents for this location (post orders, site maps, lease, house rules, POC sheets, etc.). Multiple files supported. Shared with Property Hub → Documents.</p>
+            <div className="flex flex-wrap items-end gap-2 mb-4">
+              <div className="flex-1 min-w-[180px]">
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Title (optional)</label>
+                <input value={docTitle} onChange={e => setDocTitle(e.target.value)} placeholder="e.g. Post Orders 2026, Site Map"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">File</label>
+                <input type="file" onChange={e => setDocFile(e.target.files?.[0] || null)}
+                  className="text-sm text-gray-600 file:mr-2 file:py-1.5 file:px-3 file:rounded file:border-0 file:text-xs file:bg-blue-800 file:text-white hover:file:bg-blue-900" />
+              </div>
+              <button type="button" onClick={uploadDoc} disabled={docUploading || !docFile}
+                className="px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded-md hover:bg-blue-800 border-none cursor-pointer disabled:opacity-50">
+                {docUploading ? "Uploading…" : "Upload"}
+              </button>
+              {docMsg && <span className="text-xs self-center text-gray-600">{docMsg}</span>}
+            </div>
+            {docs.length === 0 ? (
+              <div className="text-xs text-gray-400">No documents uploaded for this location yet.</div>
+            ) : (
+              <div className="space-y-1.5">
+                {docs.map((d: any) => (
+                  <div key={d.id} className="flex items-center justify-between gap-2 border border-gray-200 rounded-lg px-3 py-2 bg-gray-50">
+                    <SignedLink href={d.file_url} bucket="community-docs" className="font-semibold text-blue-700 hover:text-blue-900 truncate text-sm">
+                      📄 {d.title || "Untitled"}
+                    </SignedLink>
+                    <button type="button" onClick={() => deleteDoc(d.id)}
+                      className="px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded border-none cursor-pointer flex-shrink-0">Delete</button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
 
           {/* Sticky save */}
