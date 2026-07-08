@@ -9,6 +9,8 @@ import CadTicker from "@/components/CadTicker"
 import BoloTicker from "@/components/BoloTicker"
 import { fireAlert } from "@/lib/alerts"
 import { checkIsGuest } from "@/lib/admin"
+import VisitorPhotoCapture from "@/components/VisitorPhotoCapture"
+import { saveVisitorPhotos } from "@/lib/visitorPhotos"
 
 type MatchStatus = "none" | "verify" | "confirmed" | "cleared"
 
@@ -38,6 +40,8 @@ export default function VMSPage() {
   const [isGuest,        setIsGuest]        = useState(false)
   const [saving,         setSaving]         = useState(false)
   const [saveError,      setSaveError]      = useState("")
+  const [idPhotos,       setIdPhotos]       = useState<File[]>([])
+  const [livePhotos,     setLivePhotos]     = useState<File[]>([])
   const [loadError,      setLoadError]      = useState("")
   const [confirmed,      setConfirmed]      = useState<string | null>(null)
 
@@ -244,6 +248,7 @@ export default function VMSPage() {
     setSelectedPerson(null)
     setEnteredDOB("")
     setSaveError("")
+    setIdPhotos([]); setLivePhotos([])
   }
 
   async function handleNameInput(input: string) {
@@ -290,7 +295,7 @@ export default function VMSPage() {
       }
 
       const selectedResident = residents.find(r => r.id === residentId)
-      const { error } = await supabase.from("visitor_logs").insert({
+      const { data: logRow, error } = await supabase.from("visitor_logs").insert({
         visitor_id:    visitorId,
         first_name:    first,
         last_name:     last,
@@ -299,9 +304,20 @@ export default function VMSPage() {
         unit_number:   unitNumber,
         resident_name: selectedResident?.name || null,
         created_at:    new Date().toISOString()
-      })
+      }).select("id").single()
 
       if (error) { setSaveError("Check-in failed: " + error.message); return }
+
+      // Attach any captured ID/Live photos to the person + this check-in.
+      if (idPhotos.length || livePhotos.length) {
+        const { data: { user } } = await supabase.auth.getUser()
+        await saveVisitorPhotos(idPhotos, livePhotos, {
+          visitorId:    visitorId as string,
+          visitorLogId: (logRow as { id?: string } | null)?.id || null,
+          communityId:  communityId || null,
+          capturedBy:   user?.email || null,
+        })
+      }
 
       const displayName = `${first} ${last}`.trim()
       supabase.auth.getUser().then(({ data: { user } }) => {
@@ -412,6 +428,10 @@ export default function VMSPage() {
                   <option>Employee</option>
                 </select>
               </div>
+
+              {!isGuest && (
+                <VisitorPhotoCapture idFiles={idPhotos} liveFiles={livePhotos} setIdFiles={setIdPhotos} setLiveFiles={setLivePhotos} />
+              )}
 
               {saveError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2 rounded-md text-xs">

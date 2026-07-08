@@ -6,6 +6,8 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import CommunitySelector from "@/components/CommunitySelector"
 import SecurityAlert from "@/components/SecurityAlert"
 import { WatchlistEntry, VehicleWatchlistEntry } from "@/lib/types"
+import VisitorPhotoCapture from "@/components/VisitorPhotoCapture"
+import { saveVisitorPhotos } from "@/lib/visitorPhotos"
 
 // Accepts YYYY-MM-DD (already valid), YYYYMMDD, or MMDDYYYY (Virginia AAMVA)
 // and returns YYYY-MM-DD or "" if it can't be parsed.
@@ -41,6 +43,8 @@ export default function ManualEntry() {
   const [apartment,    setApartment]    = useState("")
   const [residentName, setResidentName] = useState("")
   const [visitorType,  setVisitorType]  = useState("Visitor")
+  const [idPhotos,     setIdPhotos]     = useState<File[]>([])
+  const [livePhotos,   setLivePhotos]   = useState<File[]>([])
 
   const [alertPerson,     setAlertPerson]     = useState<WatchlistEntry | null>(null)
   const [returningVisitor,setReturningVisitor] = useState<any>(null)
@@ -182,7 +186,7 @@ export default function ManualEntry() {
 
       if (visitorError) { setError(visitorError.message); return }
 
-      const { error: logError } = await supabase.from("visitor_logs").insert([{
+      const { data: logRow, error: logError } = await supabase.from("visitor_logs").insert([{
         visitor_id:    visitor[0].id,
         first_name:    firstName,
         last_name:     lastName,
@@ -192,9 +196,20 @@ export default function ManualEntry() {
         apartment:     apartment || null,
         resident_name: residentName || null,
         created_at:    new Date().toISOString()
-      }])
+      }]).select("id").single()
 
       if (logError) { setError(logError.message); return }
+
+      // Attach any captured ID/Live photos to the person + this check-in.
+      if (idPhotos.length || livePhotos.length) {
+        const { data: { user } } = await supabase.auth.getUser()
+        await saveVisitorPhotos(idPhotos, livePhotos, {
+          visitorId:    visitor[0].id,
+          visitorLogId: (logRow as { id?: string } | null)?.id || null,
+          communityId:  community || null,
+          capturedBy:   user?.email || null,
+        })
+      }
 
       const manualName = `${firstName} ${lastName}`.trim()
       supabase.auth.getUser().then(({ data: { user } }) => {
@@ -208,6 +223,7 @@ export default function ManualEntry() {
       setMessage("Visitor logged successfully.")
       setFirstName(""); setLastName(""); setDob(""); setOln("")
       setPlate(""); setApartment(""); setResidentName("")
+      setIdPhotos([]); setLivePhotos([])
       setVisitorType("Visitor"); setReturningVisitor(null); setVisitStats(null)
       firstRef.current?.focus()
     } finally {
@@ -274,6 +290,8 @@ export default function ManualEntry() {
           <option value="Delivery Driver">Delivery Driver</option>
           <option value="Employee">Employee</option>
         </select>
+
+        <VisitorPhotoCapture idFiles={idPhotos} liveFiles={livePhotos} setIdFiles={setIdPhotos} setLiveFiles={setLivePhotos} />
 
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 px-3 py-2.5 rounded-md text-sm">

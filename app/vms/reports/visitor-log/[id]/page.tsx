@@ -57,6 +57,7 @@ export default function VisitorLogDetailPage() {
   const [notFound,      setNotFound]      = useState(false)
   const [isAdmin,       setIsAdmin]       = useState(false)
   const [deleting,      setDeleting]      = useState(false)
+  const [photos,        setPhotos]        = useState<any[]>([])
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -87,6 +88,13 @@ export default function VisitorLogDetailPage() {
       .then(({ data }) => {
         if (!data) { setNotFound(true); setLoading(false); return }
         setRecord(data)
+        // All photos captured for this person, across visits (item #58).
+        if (data.visitor_id) {
+          supabase.from("visitor_photos").select("*")
+            .eq("visitor_id", data.visitor_id)
+            .order("captured_at", { ascending: false })
+            .then(({ data: ph }) => setPhotos(ph || []))
+        }
         if (data.community_id) {
           supabase.from("communities").select("name").eq("id", data.community_id).maybeSingle()
             .then(({ data: c }) => setCommunityName(c?.name ?? ""))
@@ -254,6 +262,31 @@ export default function VisitorLogDetailPage() {
               className="w-32 h-36 object-cover rounded-lg border border-gray-200 hover:border-blue-400 transition-colors"
             />
           </a>
+        </Section>
+      )}
+
+      {/* Visitor photos — ID + Live, attached to the person across visits (#58) */}
+      {photos.length > 0 && (
+        <Section title={`Visitor Photos (${photos.length})`}>
+          {(["id", "live"] as const).map(pt => {
+            const group = photos.filter(p => p.photo_type === pt)
+            if (group.length === 0) return null
+            return (
+              <div key={pt} className="mb-3 last:mb-0">
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">{pt === "id" ? "ID Photos" : "Live Photos"}</div>
+                <div className="flex flex-wrap gap-2">
+                  {group.map(p => (
+                    <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer" className="inline-block"
+                      title={`${p.captured_at ? fmtDateTime(p.captured_at) : ""}${p.captured_by ? ` · ${p.captured_by}` : ""}`}>
+                      <SignedImage src={p.url} bucket="photos" alt={`${pt} photo`}
+                        className="w-24 h-28 object-cover rounded-lg border border-gray-200 hover:border-blue-400 transition-colors" />
+                    </a>
+                  ))}
+                </div>
+              </div>
+            )
+          })}
+          <div className="text-[10px] text-gray-400 mt-2">Photos attach to the person and appear on every check-in for {fullName}.</div>
         </Section>
       )}
 
