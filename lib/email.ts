@@ -24,7 +24,7 @@ export interface SendEmailResult {
 
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const key  = process.env.RESEND_API_KEY
-  const from = process.env.RESEND_FROM_EMAIL || "ASG-PSP <onboarding@resend.dev>"
+  const from = process.env.RESEND_FROM_EMAIL || "ASG-PSP <noreply@asg-psp.com>"
 
   if (!key) return { ok: false, error: "RESEND_API_KEY not set" }
   if (!input.to.length) return { ok: true } // no recipients == no-op (not failure)
