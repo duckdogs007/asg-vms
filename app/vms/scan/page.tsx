@@ -46,7 +46,9 @@ export default function ScanID(){
   const [personType,    setPersonType]    = useState("Visitor")
   const [saving,        setSaving]        = useState(false)
   const [saveError,     setSaveError]     = useState("")
-  const [savedName,     setSavedName]     = useState("")  // brief confirmation after save
+  const [logId,         setLogId]         = useState<string | null>(null) // id of the auto-logged visitor_logs row
+  const [detailMsg,     setDetailMsg]     = useState("")  // subtle "saved" feedback on enrichment updates
+  const autoSavedRef    = useRef(false)                   // dedupe auto-log per scan result
 
   const textareaRef       = useRef<HTMLTextAreaElement>(null)
   const lastResultRef     = useRef<number>(0)
@@ -102,14 +104,16 @@ export default function ScanID(){
     setResidents(data || [])
   }
 
-  async function saveEntry() {
-    if (!person) return
+  // Auto-log the visitor the moment a scan comes back CLEAR — no click required,
+  // so an entry is never missed. Unit/resident/type default now and can be
+  // enriched afterward (see updateEntry), which patches this same row.
+  async function autoLogEntry(p: any) {
     setSaving(true); setSaveError("")
     try {
       let visitorId: string | null = null
       const { data: existing } = await supabase
         .from("visitors").select("id")
-        .ilike("first_name", person.first_name).ilike("last_name", person.last_name)
+        .ilike("first_name", p.first_name).ilike("last_name", p.last_name)
         .limit(1).maybeSingle()
       if (existing) {
         visitorId = existing.id
@@ -117,54 +121,61 @@ export default function ScanID(){
         const { data: created, error: createErr } = await supabase
           .from("visitors")
           .insert({
-            first_name: person.first_name,
-            last_name:  person.last_name,
-            dob:        parseDOBToISO(person.dob),
-            oln:        person.oln || null,
+            first_name: p.first_name,
+            last_name:  p.last_name,
+            dob:        parseDOBToISO(p.dob),
+            oln:        p.oln || null,
           })
           .select("id").single()
-        if (createErr) { setSaveError("Failed to create visitor: " + createErr.message); return }
+        if (createErr) { setSaveError("Auto-log failed to create visitor: " + createErr.message); return }
         visitorId = created!.id
       }
-      const selectedRes = residents.find(r => r.id === residentId)
-      const { error: logErr } = await supabase.from("visitor_logs").insert({
+      const { data: logRow, error: logErr } = await supabase.from("visitor_logs").insert({
         visitor_id:     visitorId,
-        first_name:     person.first_name,
-        last_name:      person.last_name,
-        middle_name:    person.middle_name || null,
+        first_name:     p.first_name,
+        last_name:      p.last_name,
+        middle_name:    p.middle_name || null,
         person_type:    personType,
         community_id:   communityId || null,
         unit_number:    unitId || null,
-        resident_name:  selectedRes?.name || null,
+        resident_name:  null,
         // DL scan fields — full AAMVA record
         dl_scanned:     true,
-        dob:            parseDOBToISO(person.dob),
-        oln:            person.oln || null,
-        address:        person.address || null,
-        city:           person.city || null,
-        state_of_issue: person.state || null,
-        zip:            person.zip || null,
-        sex:            person.sex || null,
-        height:         person.height || null,
-        eye_color:      person.eye_color || null,
+        dob:            parseDOBToISO(p.dob),
+        oln:            p.oln || null,
+        address:        p.address || null,
+        city:           p.city || null,
+        state_of_issue: p.state || null,
+        zip:            p.zip || null,
+        sex:            p.sex || null,
+        height:         p.height || null,
+        eye_color:      p.eye_color || null,
         created_at:     new Date().toISOString(),
-      })
-      if (logErr) { setSaveError("Save failed: " + logErr.message); return }
-      const dlName = `${person.first_name} ${person.last_name}`.trim()
+      }).select("id").single()
+      if (logErr) { setSaveError("Auto-log failed: " + logErr.message); return }
+      setLogId(logRow!.id)
+      const dlName = `${p.first_name} ${p.last_name}`.trim()
       supabase.auth.getUser().then(({ data: { user } }) => {
         supabase.from("audit_logs").insert({
           user_email: user?.email || "unknown",
-          action: "created", resource_type: "Visitor Check-In (DL Scan)", resource_id: "",
-          detail: `${dlName} checked in — ${personType}${unitId ? ` · Unit ${unitId}` : ""}`,
+          action: "created", resource_type: "Visitor Check-In (DL Scan)", resource_id: logRow!.id,
+          detail: `${dlName} auto-logged on license scan — ${personType}${unitId ? ` · Unit ${unitId}` : ""}`,
           created_at: new Date().toISOString(),
         })
       })
-      // Brief confirmation, then reset for next scan
-      setSavedName(dlName)
-      setTimeout(() => { setSavedName(""); reset() }, 1200)
     } finally {
       setSaving(false)
     }
+  }
+
+  // Patch the already-logged row as the guard fills in unit / resident / type.
+  async function updateEntry(patch: Record<string, any>) {
+    if (!logId) return
+    setSaveError(""); setDetailMsg("Saving…")
+    const { error } = await supabase.from("visitor_logs").update(patch).eq("id", logId)
+    setDetailMsg(error ? "" : "✓ Saved")
+    if (error) setSaveError("Update failed: " + error.message)
+    else setTimeout(() => setDetailMsg(""), 1500)
   }
 
   /* DRIVER LICENSE PARSER (AAMVA) */
@@ -320,12 +331,18 @@ export default function ScanID(){
       }
     } else {
       setStatus("clear")
+      // Auto-save the visitor entry immediately on a CLEAR result (once).
+      if (!autoSavedRef.current) {
+        autoSavedRef.current = true
+        autoLogEntry(parsed)
+      }
     }
     lastResultRef.current = Date.now()
   }
 
   function reset() {
     barredFiredRef.current = false
+    autoSavedRef.current = false
     lastProcessedRef.current = ""
     if (textareaRef.current) textareaRef.current.value = ""
     setPerson(null)
@@ -336,6 +353,8 @@ export default function ScanID(){
     setResidentId("")
     setPersonType("Visitor")
     setSaveError("")
+    setLogId(null)
+    setDetailMsg("")
     setTimeout(() => textareaRef.current?.focus(), 50)
   }
 
@@ -366,6 +385,7 @@ export default function ScanID(){
       const newPart = oldScan && v.startsWith(oldScan) ? v.slice(oldScan.length) : v
       if (textareaRef.current) textareaRef.current.value = newPart
       barredFiredRef.current = false
+      autoSavedRef.current = false
       lastProcessedRef.current = ""
       setPerson(null)
       setAlertPerson(null)
@@ -375,6 +395,8 @@ export default function ScanID(){
       setResidentId("")
       setPersonType("Visitor")
       setSaveError("")
+      setLogId(null)
+      setDetailMsg("")
     }
 
     // (Re)start the scan-end timer. Each new keystroke pushes it back; when
@@ -395,8 +417,8 @@ export default function ScanID(){
 
       <h2 className="text-2xl font-bold mb-1">📷 Scan Driver License</h2>
       <p className="text-sm text-gray-500 mb-4">
-        Scan with the connected reader. Result auto-checks against the watchlist.
-        The next scan auto-clears the previous result.
+        Scan with the connected reader. Result auto-checks against the watchlist and,
+        when clear, the visitor entry is logged automatically. The next scan clears the previous result.
       </p>
 
       <textarea
@@ -423,19 +445,14 @@ export default function ScanID(){
         </div>
       )}
 
-      {status === "clear" && !savedName && (
+      {status === "clear" && (
         <div className="mt-4 px-5 py-4 rounded-xl bg-green-900 border-2 border-green-500 text-white">
           <div className="text-2xl font-bold">🟢 CLEAR — OK to proceed</div>
           {displayName && <div className="text-lg mt-1 font-semibold">{displayName}</div>}
           {communityName && <div className="text-green-300 text-xs mt-1">📍 {communityName}</div>}
-        </div>
-      )}
-
-      {savedName && (
-        <div className="mt-4 px-5 py-4 rounded-xl bg-green-700 border-2 border-green-400 text-white text-center">
-          <div className="text-xl font-bold">✅ Visitor Logged</div>
-          <div className="text-base mt-1">{savedName}</div>
-          <div className="text-green-200 text-xs mt-1">Ready for next scan…</div>
+          <div className="mt-2 text-sm font-semibold">
+            {logId ? "✅ Entry auto-logged" : saving ? "Logging entry…" : ""}
+          </div>
         </div>
       )}
 
@@ -455,21 +472,22 @@ export default function ScanID(){
 
       {/* Inline visitor-entry form — appears under CLEAR result so guard can capture
           unit + resident + type without leaving the scan page */}
-      {status === "clear" && person && !savedName && (
+      {status === "clear" && person && (
         <div className="mt-4 max-w-xl bg-white border border-gray-200 rounded-xl p-4">
-          <div className="flex justify-between items-baseline mb-3 flex-wrap gap-2">
-            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Log Visitor Entry</div>
+          <div className="flex justify-between items-baseline mb-1 flex-wrap gap-2">
+            <div className="text-xs font-bold text-gray-400 uppercase tracking-widest">Visitor Entry {logId ? "· auto-logged" : ""}</div>
             {communityName && (
               <div className="text-xs text-gray-600">📍 <span className="font-semibold">{communityName}</span></div>
             )}
           </div>
+          <p className="text-xs text-gray-500 mb-3">Entry is already saved. Add unit / resident / type below — changes save automatically.</p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
             <div>
               <label className="block text-xs font-semibold text-gray-500 mb-1">Unit</label>
               <select
                 value={unitId}
-                onChange={e => loadResidents(e.target.value)}
+                onChange={e => { const u = e.target.value; loadResidents(u); updateEntry({ unit_number: u || null, resident_name: null }) }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
               >
                 <option value="">Select Unit</option>
@@ -483,7 +501,7 @@ export default function ScanID(){
               <label className="block text-xs font-semibold text-gray-500 mb-1">Resident Visiting</label>
               <select
                 value={residentId}
-                onChange={e => setResidentId(e.target.value)}
+                onChange={e => { setResidentId(e.target.value); const r = residents.find(x => x.id === e.target.value); updateEntry({ resident_name: r?.name || null }) }}
                 disabled={residents.length === 0}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600 disabled:opacity-50"
               >
@@ -498,7 +516,7 @@ export default function ScanID(){
               <label className="block text-xs font-semibold text-gray-500 mb-1">Type</label>
               <select
                 value={personType}
-                onChange={e => setPersonType(e.target.value)}
+                onChange={e => { setPersonType(e.target.value); updateEntry({ person_type: e.target.value }) }}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
               >
                 <option>Visitor</option>
@@ -513,13 +531,18 @@ export default function ScanID(){
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{saveError}</div>
           )}
 
-          <button
-            onClick={saveEntry}
-            disabled={saving}
-            className="w-full py-3 bg-green-700 hover:bg-green-800 text-white text-sm font-bold rounded-md border-none cursor-pointer disabled:opacity-50"
-          >
-            {saving ? "Saving…" : "✅ Save Entry"}
-          </button>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-sm font-semibold text-green-700">
+              {logId ? "✅ Entry logged" : saving ? "Logging…" : ""}
+              {detailMsg && <span className="ml-2 text-gray-400 font-normal">{detailMsg}</span>}
+            </div>
+            <button
+              onClick={reset}
+              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-md border-none cursor-pointer"
+            >
+              ✓ Done — Next Visitor
+            </button>
+          </div>
 
           <div className="mt-4 pt-3 border-t border-gray-100">
             <div className="flex items-center justify-between mb-2">
