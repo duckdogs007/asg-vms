@@ -24,7 +24,7 @@ export interface SendEmailResult {
 
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResult> {
   const key  = process.env.RESEND_API_KEY
-  const from = process.env.RESEND_FROM_EMAIL || "ASG VMS <onboarding@resend.dev>"
+  const from = process.env.RESEND_FROM_EMAIL || "ASG-PSP <onboarding@resend.dev>"
 
   if (!key) return { ok: false, error: "RESEND_API_KEY not set" }
   if (!input.to.length) return { ok: true } // no recipients == no-op (not failure)
@@ -129,7 +129,7 @@ export function buildAlertEmailHtml(opts: {
       ${body ? `<p style="padding:14px 18px 0;color:#374151;line-height:1.5;font-size:14px;">${body}</p>` : ""}
       ${factRows ? `<table style="margin:14px 18px;border-collapse:collapse;">${factRows}</table>` : ""}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 18px 12px;" />
-      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG VMS · ${escapeHtml(ET_NOW())} ET</p>
+      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG-PSP · ${escapeHtml(ET_NOW())} ET</p>
     </div>
   `
 }
@@ -192,7 +192,7 @@ export function buildWatchlistEmailHtml(opts: {
       ${factRows ? `<table style="margin:14px 18px;border-collapse:collapse;">${factRows}</table>` : ""}
       ${commentsBlock}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 18px 12px;" />
-      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG VMS · ${escapeHtml(ET_NOW())} ET</p>
+      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG-PSP · ${escapeHtml(ET_NOW())} ET</p>
     </div>
   `
 }
@@ -239,7 +239,7 @@ export function buildBoloEmailHtml(opts: {
       ${factRows ? `<table style="margin:14px 18px;border-collapse:collapse;">${factRows}</table>` : ""}
       ${descriptionBlock}
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 18px 12px;" />
-      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG VMS · ${escapeHtml(ET_NOW())} ET</p>
+      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG-PSP · ${escapeHtml(ET_NOW())} ET</p>
     </div>
   `
 }
@@ -318,7 +318,7 @@ export function buildReportEmailHtml(r: any): string {
 
   const photoCount = (Array.isArray(r.photo_urls) ? r.photo_urls.length : 0) + (r.photo_url ? 1 : 0)
   const photoNote = photoCount > 0
-    ? `<div style="margin:0 0 14px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;color:#166534;font-size:13px;">📷 ${photoCount} photo${photoCount > 1 ? "s" : ""} attached — view in VMS</div>`
+    ? `<div style="margin:0 0 14px;padding:10px 14px;background:#f0fdf4;border:1px solid #bbf7d0;border-radius:6px;color:#166534;font-size:13px;">📷 ${photoCount} photo${photoCount > 1 ? "s" : ""} attached — view in ASG-PSP</div>`
     : ""
   const followUpNote = (r.follow_up_required || r.follow_up)
     ? `<div style="padding:10px 14px;background:#fff7ed;border:1px solid #fed7aa;border-radius:6px;color:#9a3412;font-size:13px;font-weight:600;">⚠ Follow-up action required</div>`
@@ -340,7 +340,7 @@ export function buildReportEmailHtml(r: any): string {
         ${followUpNote}
       </div>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 18px 12px;" />
-      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG VMS · ${escapeHtml(ET_NOW())} ET</p>
+      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG-PSP · ${escapeHtml(ET_NOW())} ET</p>
     </div>
   `
 }
@@ -363,7 +363,7 @@ export function buildPassdownEmailHtml(opts: {
       </table>
       <div style="margin:0 18px;padding:14px;border:1px solid #e5e7eb;border-radius:6px;background:#fff;color:#111827;font-size:14px;line-height:1.55;white-space:pre-wrap;">${escapeHtml(opts.notes || "")}</div>
       <hr style="border:none;border-top:1px solid #e5e7eb;margin:22px 18px 12px;" />
-      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG VMS · ${escapeHtml(ET_NOW())} ET</p>
+      <p style="padding:0 18px 18px;color:#9ca3af;font-size:11px;">ASG-PSP · ${escapeHtml(ET_NOW())} ET</p>
     </div>
   `
 }

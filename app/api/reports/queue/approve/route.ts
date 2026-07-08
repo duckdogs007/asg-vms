@@ -75,7 +75,7 @@ export async function POST(req: NextRequest) {
 
     const emailResult = await sendEmail({
       to:      recipients,
-      subject: `ASG VMS — ${parts.join(" · ")}`,
+      subject: `ASG-PSP — ${parts.join(" · ")}`,
       html:    buildReportEmailHtml({ ...report, _type: emailType }),
     })
 

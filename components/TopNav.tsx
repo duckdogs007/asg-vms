@@ -329,7 +329,7 @@ export default function TopNav() {
                       >
                         Latest Developments ↗
                       </Link>
-                      <div className="text-xs text-gray-400">Recent updates to the VMS platform</div>
+                      <div className="text-xs text-gray-400">Recent updates to the ASG-PSP platform</div>
                     </div>
                     {changelog.length === 0 ? (
                       <div className="px-4 py-8 text-sm text-gray-400 text-center">No updates posted yet.</div>

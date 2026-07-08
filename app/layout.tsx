@@ -4,8 +4,8 @@ import TopNav from "@/components/TopNav"
 
 export const metadata: Metadata = {
   title: {
-    template: "%s — ASG VMS",
-    default:  "ASG VMS — Visitor Management",
+    template: "%s — ASG-PSP",
+    default:  "ASG-PSP — Property Solutions Platform",
   },
   description: "American Security Group — Property Solutions Platform",
 }

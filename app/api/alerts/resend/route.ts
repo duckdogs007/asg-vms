@@ -36,7 +36,7 @@ async function sendToTeams(
           ...(facts.length ? [{ type: "FactSet", facts, spacing: "Medium" }] : []),
           {
             type: "TextBlock",
-            text: `[Re-notify] ASG VMS · ${new Date().toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "medium", timeStyle: "short" })} ET`,
+            text: `[Re-notify] ASG-PSP · ${new Date().toLocaleString("en-US", { timeZone: "America/New_York", dateStyle: "medium", timeStyle: "short" })} ET`,
             size: "Small", isSubtle: true, spacing: "Medium",
           },
         ],
@@ -77,7 +77,7 @@ export async function POST(req: Request) {
     .filter((r: { email: string; communities?: string[] }) => !cid || !r.communities?.length || r.communities.includes(cid))
     .map((r: { email: string }) => r.email)
 
-  const subject  = `[Re-notify] ASG VMS Alert — ${alert.type.replace(/_/g, " ")}`
+  const subject  = `[Re-notify] ASG-PSP Alert — ${alert.type.replace(/_/g, " ")}`
   const severity = alert.severity
   const meta = {
     ...(alert.payload || {}),

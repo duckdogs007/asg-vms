@@ -75,7 +75,7 @@ async function sendToTeams(
               : []),
             {
               type: "TextBlock",
-              text: `ASG VMS · ${new Date().toLocaleString("en-US", {
+              text: `ASG-PSP · ${new Date().toLocaleString("en-US", {
                 timeZone: "America/New_York",
                 dateStyle: "medium",
                 timeStyle: "short",
@@ -128,7 +128,7 @@ export async function POST(req: Request) {
 
   // Teams webhook is broadcast to a channel — recipients table now informational
   // (lets us add per-community routing later).
-  const subject  = input.subject || `ASG VMS Alert — ${input.type.replace(/_/g, " ")}`
+  const subject  = input.subject || `ASG-PSP Alert — ${input.type.replace(/_/g, " ")}`
   const body     = input.body    || ""
   const severity = input.severity || "high"
   const meta     = {

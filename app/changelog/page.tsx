@@ -74,7 +74,7 @@ export default function ChangelogPage() {
             ← Back to Dashboard
           </Link>
           <h1 className="text-3xl font-bold text-gray-900 mt-2">📣 Latest Developments</h1>
-          <p className="text-gray-500 text-sm mt-1">All updates to the ASG VMS platform, newest first.</p>
+          <p className="text-gray-500 text-sm mt-1">All updates to the ASG-PSP platform, newest first.</p>
         </div>
 
         {loading ? (

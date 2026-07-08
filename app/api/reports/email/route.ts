@@ -20,7 +20,7 @@ export async function POST(req: NextRequest) {
     const parts = [typeLabel, report.date, report.officer_name || report.officer].filter(Boolean)
     const result = await sendEmail({
       to: recipients,
-      subject: `ASG VMS — ${parts.join(" · ")}`,
+      subject: `ASG-PSP — ${parts.join(" · ")}`,
       html: buildReportEmailHtml(report),
     })
     return NextResponse.json(result)

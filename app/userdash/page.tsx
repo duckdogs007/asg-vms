@@ -1260,7 +1260,7 @@ export default function UserDashboard() {
       `<div style="margin-bottom:12px;"><div style="font-size:10px;font-weight:700;color:#666;text-transform:uppercase;margin-bottom:4px;">${label}</div><div style="padding:10px 12px;border:1px solid #e5e7eb;border-radius:4px;font-size:13px;line-height:1.6;white-space:pre-wrap;">${esc(text)}</div></div>`
     ).join("")
     const photoCount = (Array.isArray(r.photo_urls) ? r.photo_urls.length : 0) + (r.photo_url ? 1 : 0)
-    const photoLine = photoCount > 0 ? `<p style="color:#166534;font-size:12px;">📷 ${photoCount} photo${photoCount>1?"s":""} attached — view in VMS</p>` : ""
+    const photoLine = photoCount > 0 ? `<p style="color:#166534;font-size:12px;">📷 ${photoCount} photo${photoCount>1?"s":""} attached — view in ASG-PSP</p>` : ""
     const followUp = (r.follow_up_required || r.follow_up) ? `<p style="color:#9a3412;font-weight:600;font-size:12px;">⚠ Follow-up action required</p>` : ""
     const printedAt = new Date().toLocaleString("en-US",{timeZone:"America/New_York",dateStyle:"medium",timeStyle:"short"})
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>${esc(typeLabel)}</title>
@@ -1273,7 +1273,7 @@ export default function UserDashboard() {
       </div>
       ${rows?`<table style="border-collapse:collapse;margin-bottom:14px;">${rows}</table>`:""}
       ${textBlocks}${photoLine}${followUp}
-      <div style="border-top:1px solid #e5e7eb;margin-top:20px;padding-top:8px;color:#9ca3af;font-size:10px;">ASG VMS · Printed ${esc(printedAt)} ET</div>
+      <div style="border-top:1px solid #e5e7eb;margin-top:20px;padding-top:8px;color:#9ca3af;font-size:10px;">ASG-PSP · Printed ${esc(printedAt)} ET</div>
     </body></html>`
     const w = window.open("", "_blank", "width=820,height=960")
     if (!w) return
@@ -1285,7 +1285,7 @@ export default function UserDashboard() {
   async function shareReport(r: any) {
     const typeLabel = r._type || "Report"
     const lines = [
-      `ASG VMS — ${typeLabel}`,
+      `ASG-PSP — ${typeLabel}`,
       r.date ? `Date: ${r.date}${r.time ? " " + r.time : ""}` : "",
       (r.officer_name || r.officer) ? `Officer: ${r.officer_name || r.officer}` : "",
       r.incident_type ? `Type: ${r.incident_type}` : "",
@@ -1296,7 +1296,7 @@ export default function UserDashboard() {
       r.action_taken ? `\nAction Taken: ${r.action_taken}` : "",
     ].filter(Boolean).join("\n")
     if (typeof navigator !== "undefined" && "share" in navigator) {
-      try { await navigator.share({ title: `ASG VMS — ${typeLabel}`, text: lines }); return } catch {}
+      try { await navigator.share({ title: `ASG-PSP — ${typeLabel}`, text: lines }); return } catch {}
     }
     await navigator.clipboard.writeText(lines)
     setShareCopied(true)

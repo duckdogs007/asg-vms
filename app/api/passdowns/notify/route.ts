@@ -55,7 +55,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, sent: 0, note: "no active recipients" })
   }
 
-  const subject = `📋 Passdown — ${communityName || "ASG VMS"} · ${pd.date || ""} · ${pd.shift || ""}`.trim()
+  const subject = `📋 Passdown — ${communityName || "ASG-PSP"} · ${pd.date || ""} · ${pd.shift || ""}`.trim()
   const html = buildPassdownEmailHtml({
     date:         pd.date,
     shift:        pd.shift,

@@ -22,8 +22,8 @@ export async function POST() {
     "@type":   "MessageCard",
     "@context":"http://schema.org/extensions",
     themeColor:"0078D4",
-    summary:   "ASG VMS — Webhook Test",
-    title:     "🧪 ASG VMS — Webhook Test",
+    summary:   "ASG-PSP — Webhook Test",
+    title:     "🧪 ASG-PSP — Webhook Test",
     text:      `Test triggered by **${user.email}** at ${new Date().toLocaleString("en-US")}.\n\nIf you can read this message in the channel, the Teams alerts integration is working.`,
   }
 
