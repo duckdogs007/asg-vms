@@ -71,8 +71,14 @@ If the report has no concerns or follow-up items, output exactly: No concerns or
 
 Output ONLY the bullets (or the single "no concerns" line) — no heading, no preamble, no extra commentary. Each bullet starts with "• ".`
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash"
+  // gemini-flash-latest is Google's rolling alias for the current Flash model —
+  // resilient to version deprecations. Override with GEMINI_MODEL if needed.
+  const model = process.env.GEMINI_MODEL || "gemini-flash-latest"
   const url   = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
+  const generationConfig: any = { temperature: 0.2, maxOutputTokens: 400 }
+  // Flash "thinking" models (2.5 / *-latest) spend the token budget on hidden
+  // reasoning; disable it so a short answer isn't truncated to empty.
+  if (/2\.5|latest/i.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 }
 
   try {
     const res = await fetch(url, {
@@ -80,7 +86,7 @@ Output ONLY the bullets (or the single "no concerns" line) — no heading, no pr
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.2, maxOutputTokens: 400 },
+        generationConfig,
       }),
     })
 

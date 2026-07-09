@@ -213,9 +213,10 @@ STYLE — write like an operations log, not a threat assessment:
 
 For EVERY concern, follow_up, and pattern, include a "sources" array listing the record reference tags (e.g. "R12") it is based on. Base everything ONLY on the records provided — never invent facts or reference tags not shown above. If a category has nothing, return an empty array.`
 
-  // gemini-2.0-flash was retired; use gemini-2.5-flash (billing enabled).
+  // gemini-flash-latest is Google's rolling alias for the current Flash model —
+  // resilient to version deprecations (2.0-flash and 2.5-flash were both retired).
   // GEMINI_SUMMARY_MODEL overrides this independently of the app-wide GEMINI_MODEL.
-  const model = process.env.GEMINI_SUMMARY_MODEL || "gemini-2.5-flash"
+  const model = process.env.GEMINI_SUMMARY_MODEL || "gemini-flash-latest"
   const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
 
   const generationConfig: any = {
@@ -224,7 +225,7 @@ For EVERY concern, follow_up, and pattern, include a "sources" array listing the
     responseMimeType: "application/json",
     responseSchema: RESPONSE_SCHEMA,
   }
-  if (model.includes("2.5")) generationConfig.thinkingConfig = { thinkingBudget: 0 }
+  if (/2\.5|latest/i.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 }
 
   try {
     const res = await fetch(apiUrl, {

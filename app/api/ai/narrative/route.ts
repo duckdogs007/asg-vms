@@ -8,7 +8,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server"
 //
 // Uses Google Gemini (free tier) via the REST API — no SDK dependency. Set
 // GEMINI_API_KEY in the environment (free key from https://aistudio.google.com).
-// GEMINI_MODEL optionally overrides the model (default gemini-2.5-flash).
+// GEMINI_MODEL optionally overrides the model (default gemini-flash-latest).
 // The model receives report PII (names, locations) — mind that when reviewing.
 export const runtime = "nodejs"
 
@@ -82,8 +82,11 @@ export async function POST(req: Request) {
     `Officer's notes / current draft:\n${notes}\n\n` +
     `Task: ${MODE_TASK[mode]}`
 
-  const model = process.env.GEMINI_MODEL || "gemini-2.5-flash"
+  // gemini-flash-latest is Google's rolling alias for the current Flash model.
+  const model = process.env.GEMINI_MODEL || "gemini-flash-latest"
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${encodeURIComponent(apiKey)}`
+  const generationConfig: any = { temperature: 0.4, maxOutputTokens: 1500 }
+  if (/2\.5|latest/i.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 }
 
   try {
     const res = await fetch(url, {
@@ -91,7 +94,7 @@ export async function POST(req: Request) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.4, maxOutputTokens: 1500 },
+        generationConfig,
       }),
     })
 
