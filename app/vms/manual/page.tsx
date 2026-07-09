@@ -191,7 +191,7 @@ export default function ManualEntry() {
       } else {
         const { data: created, error: visitorError } = await supabase
           .from("visitors")
-          .insert([{ first_name: firstName, last_name: lastName, dob: dob || null, oln: oln || null, plate: plate || null }])
+          .insert([{ first_name: firstName, last_name: lastName, dob: dob || null, oln: oln || null, plate: plate || null, community_id: community || null }])
           .select("id").single()
         if (visitorError || !created) { setError(visitorError?.message || "Failed to create visitor record."); return }
         visitorId = (created as { id: string }).id
@@ -206,6 +206,8 @@ export default function ManualEntry() {
         unit_number:   apartment || null,
         apartment:     apartment || null,
         resident_name: residentName || null,
+        entry_method:  "manual_page",
+        watchlist_hit: alertPerson !== null,
         created_at:    new Date().toISOString()
       }]).select("id").single()
 

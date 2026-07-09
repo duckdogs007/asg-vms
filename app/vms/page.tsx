@@ -288,7 +288,7 @@ export default function VMSPage() {
       } else {
         const { data: created, error: createErr } = await supabase
           .from("visitors")
-          .insert({ first_name: first, last_name: last })
+          .insert({ first_name: first, last_name: last, community_id: communityId || null })
           .select("id").single()
         if (createErr) { setSaveError("Failed to create visitor record."); return }
         visitorId = created.id
@@ -303,6 +303,8 @@ export default function VMSPage() {
         community_id:  communityId,
         unit_number:   unitNumber,
         resident_name: selectedResident?.name || null,
+        entry_method:  "checkin_manual",
+        watchlist_hit: matchStatus === "verify",
         created_at:    new Date().toISOString()
       }).select("id").single()
 

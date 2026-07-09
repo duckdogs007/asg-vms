@@ -138,10 +138,11 @@ export default function ScanID(){
         const { data: created, error: createErr } = await supabase
           .from("visitors")
           .insert({
-            first_name: p.first_name,
-            last_name:  p.last_name,
-            dob:        parseDOBToISO(p.dob),
-            oln:        p.oln || null,
+            first_name:   p.first_name,
+            last_name:    p.last_name,
+            dob:          parseDOBToISO(p.dob),
+            oln:          p.oln || null,
+            community_id: communityId || null,
           })
           .select("id").single()
         if (createErr) { setSaveError("Auto-log failed to create visitor: " + createErr.message); return }
@@ -156,6 +157,8 @@ export default function ScanID(){
         community_id:   communityId || null,
         unit_number:    unitId || null,
         resident_name:  null,
+        entry_method:   "scan",
+        watchlist_hit:  false,
         // DL scan fields — full AAMVA record
         dl_scanned:     true,
         dob:            parseDOBToISO(p.dob),
