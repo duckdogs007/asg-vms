@@ -216,11 +216,11 @@ export default function MaintenanceTicketsTab({
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
                     {t.is_sample && (
-                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300">SAMPLE TICKET</span>
+                      <span className="text-xs font-bold uppercase px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 border border-purple-300">SAMPLE TICKET</span>
                     )}
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${PRIORITY_BADGE[t.priority] || PRIORITY_BADGE.Medium}`}>{t.priority}</span>
-                    <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${STATUS_BADGE[t.status] || STATUS_BADGE.Open}`}>{t.status}</span>
-                    {t.category && <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">{t.category}</span>}
+                    <span className={`text-xs font-bold uppercase px-2.5 py-1 rounded-full ${PRIORITY_BADGE[t.priority] || PRIORITY_BADGE.Medium}`}>{t.priority}</span>
+                    <span className={`text-xs font-bold uppercase px-2.5 py-1 rounded-full ${STATUS_BADGE[t.status] || STATUS_BADGE.Open}`}>{t.status}</span>
+                    {t.category && <span className="text-xs font-semibold uppercase px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">{t.category}</span>}
                   </div>
                   <div className="text-sm font-bold text-gray-900">{t.title}</div>
                   {t.location && <div className="text-xs text-gray-500 mt-0.5">📍 {t.location}</div>}
