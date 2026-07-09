@@ -90,6 +90,7 @@ const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
     { key: "shift",        label: "Shift",       type: "text"     },
     { key: "shift_times",  label: "Shift Times", type: "text"     },
     { key: "narrative",    label: "Narrative",   type: "textarea" },
+    { key: "notes",        label: "Notes",       type: "textarea" },
   ],
   "maintenance": [
     { key: "date",         label: "Date",        type: "date"     },
