@@ -92,6 +92,7 @@ Output ONLY the bullets (or the single "no concerns" line) — no heading, no pr
 
     const data: any = await res.json().catch(() => null)
     if (!res.ok) {
+      console.error("[ai/summary] gemini error", { model, status: res.status, code: data?.error?.status, message: data?.error?.message })
       const isQuota = res.status === 429 || data?.error?.status === "RESOURCE_EXHAUSTED"
       if (isQuota) {
         const retryDelayStr: string | undefined = data?.error?.details?.find((d: any) => d["@type"]?.includes("RetryInfo"))?.retryDelay

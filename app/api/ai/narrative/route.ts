@@ -100,6 +100,7 @@ export async function POST(req: Request) {
 
     const data: any = await res.json().catch(() => null)
     if (!res.ok) {
+      console.error("[ai/narrative] gemini error", { model, status: res.status, code: data?.error?.status, message: data?.error?.message })
       const isQuota = res.status === 429 || data?.error?.status === "RESOURCE_EXHAUSTED"
       if (isQuota) {
         const retryDelayStr: string | undefined = data?.error?.details?.find((d: any) => d["@type"]?.includes("RetryInfo"))?.retryDelay
