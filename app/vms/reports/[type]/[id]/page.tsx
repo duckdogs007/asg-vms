@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
-import { SignedImage } from "@/components/SignedImage"
+import { SignedImage, SignedLink } from "@/components/SignedImage"
 import { checkCanApprove } from "@/lib/admin"
 
 const TYPE_CONFIG: Record<string, { table: string; label: string; color: string }> = {
@@ -810,14 +810,14 @@ export default function ReportDetailPage() {
         <Section title={`Photos (${photos.length})`}>
           <div className="flex flex-wrap gap-3">
             {photos.map((url, i) => (
-              <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="block">
+              <SignedLink key={i} href={url} bucket="contact-photos" className="block">
                 <SignedImage
                   src={url}
                   bucket="contact-photos"
                   alt={`Photo ${i + 1}`}
                   className="w-28 h-32 object-cover rounded-lg border border-gray-200 hover:border-blue-400 transition-colors"
                 />
-              </a>
+              </SignedLink>
             ))}
           </div>
         </Section>
@@ -852,7 +852,7 @@ export default function ReportDetailPage() {
                     value={editFields[f.key] ?? ""}
                     onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                    rows={5}
+                    rows={Math.max(10, ((editFields[f.key] ?? "").split("\n").length + 2))}
                   />
                 ) : (
                   <input
