@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import LeaseViolationForm from "@/components/LeaseViolationForm"
 import { SignedLink } from "@/components/SignedImage"
@@ -183,16 +184,18 @@ export default function LeaseViolationsTab({
                     {r.violation_type || "—"}{r.notice_level ? ` · ${r.notice_level}` : ""}
                   </div>
                   <div className="text-xs text-gray-500 truncate">{sub || "—"}</div>
-                  {(r.attachment_urls || []).length > 0 && (
-                    <div className="flex flex-wrap gap-2 mt-1.5">
-                      {(r.attachment_urls as string[]).map((u, idx) => (
-                        <SignedLink key={idx} href={u} bucket="community-docs"
-                          className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-md border border-blue-200">
-                          👁 View Document{(r.attachment_urls as string[]).length > 1 ? ` ${idx + 1}` : ""}
-                        </SignedLink>
-                      ))}
-                    </div>
-                  )}
+                  <div className="flex flex-wrap items-center gap-2 mt-1.5">
+                    <Link href={`/vms/reports/incident/${r.id}`}
+                      className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-md">
+                      🔍 View Report
+                    </Link>
+                    {(r.attachment_urls as string[] | null || []).map((u, idx) => (
+                      <SignedLink key={idx} href={u} bucket="community-docs"
+                        className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 text-xs font-semibold rounded-md border border-blue-200">
+                        📎 {(r.attachment_urls as string[]).length > 1 ? `Document ${idx + 1}` : "Document"}
+                      </SignedLink>
+                    ))}
+                  </div>
                 </div>
                 <div className="flex items-center gap-1.5 flex-shrink-0">
                   {ban && <span className="px-2 py-0.5 bg-red-100 text-red-700 text-xs font-bold rounded-full">⛔ Ban</span>}
