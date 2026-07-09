@@ -22,6 +22,7 @@ interface Ticket {
   resolution_notes: string | null
   created_at: string
   resolved_at: string | null
+  is_sample: boolean | null
 }
 
 const CATEGORIES = [
@@ -214,6 +215,9 @@ export default function MaintenanceTicketsTab({
               <div className="flex items-start justify-between gap-3 flex-wrap">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap mb-1">
+                    {t.is_sample && (
+                      <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-purple-100 text-purple-800 border border-purple-300">SAMPLE TICKET</span>
+                    )}
                     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${PRIORITY_BADGE[t.priority] || PRIORITY_BADGE.Medium}`}>{t.priority}</span>
                     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full ${STATUS_BADGE[t.status] || STATUS_BADGE.Open}`}>{t.status}</span>
                     {t.category && <span className="text-[10px] font-semibold uppercase px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">{t.category}</span>}
