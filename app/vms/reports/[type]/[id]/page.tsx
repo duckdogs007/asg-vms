@@ -782,6 +782,20 @@ export default function ReportDetailPage() {
         </Section>
       )}
 
+      {/* Additional officers on shift */}
+      {Array.isArray(r.additional_officers) && r.additional_officers.length > 0 && (
+        <Section title="Additional Officers on Shift">
+          <div className="flex flex-col gap-2">
+            {(r.additional_officers as { name: string; shift_times?: string }[]).map((o, idx) => (
+              <div key={idx} className="flex items-center gap-3 flex-wrap">
+                <span className="text-sm font-semibold text-gray-800">{o.name || "—"}</span>
+                {o.shift_times && <span className="text-xs text-gray-500">🕐 {o.shift_times}</span>}
+              </div>
+            ))}
+          </div>
+        </Section>
+      )}
+
       {/* Shift Verification (#52) */}
       {Array.isArray(r.shift_checklist) && r.shift_checklist.length > 0 && (
         <Section title="Shift Verification">

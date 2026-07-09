@@ -265,6 +265,10 @@ export function buildReportEmailHtml(r: any): string {
     ["Time",              r.time],
     ["Officer",           r.officer_name || r.officer],
     ["Shift",             r.shift],
+    ["Shift Times",       r.shift_times],
+    ["Additional Officers", Array.isArray(r.additional_officers) && r.additional_officers.length
+      ? r.additional_officers.map((o: any) => `${o.name}${o.shift_times ? ` (${o.shift_times})` : ""}`).join(", ")
+      : null],
     ["Weather",           r.weather],
     ["Incident Type",     r.incident_type],
     ["Location",          r.location],

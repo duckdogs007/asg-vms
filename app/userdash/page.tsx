@@ -178,6 +178,7 @@ export default function UserDashboard() {
   const [dailyNarrative, setDailyNarrative] = useState("")
   const [dailyNotes,     setDailyNotes]     = useState("")
   const [dailyPhotoFiles,  setDailyPhotoFiles]  = useState<File[]>([])
+  const [dailyAddlOfficers, setDailyAddlOfficers] = useState<{ name: string; start: string; end: string }[]>([])
   const [shiftTemplate,    setShiftTemplate]    = useState<{ id: string; question: string; bad_answer: string }[]>([])
   const [checklistAnswers, setChecklistAnswers] = useState<{ id: string; question: string; bad_answer: string; answer: string; explanation: string }[]>([])
 
@@ -664,6 +665,13 @@ export default function UserDashboard() {
 
   async function saveDailyLog() {
     if (!dailyNarrative) { setReportError("Patrol narrative is required."); return }
+    if (!dailyShiftStart || !dailyShiftEnd) { setReportError("Shift start and end times are required."); return }
+    // Additional officers: keep only rows with a name; require times where a name is given.
+    const namedAddl = dailyAddlOfficers.filter(o => o.name.trim())
+    if (namedAddl.some(o => !o.start || !o.end)) { setReportError("Each additional officer needs a shift start and end time."); return }
+    const addlOfficersPayload = namedAddl.length
+      ? namedAddl.map(o => ({ name: o.name.trim(), shift_times: `${o.start} - ${o.end}` }))
+      : null
     setReportSaving(true); setReportError(""); setReportMessage("")
     const photoUrls: string[] = []
     for (const f of dailyPhotoFiles) {
@@ -686,6 +694,7 @@ export default function UserDashboard() {
       narrative: dailyNarrative, notes: dailyNotes,
       photo_urls: photoUrls.length ? photoUrls : null,
       shift_checklist: shiftChecklistPayload,
+      additional_officers: addlOfficersPayload,
       created_at: new Date().toISOString()
     }).select("id").single()
     setReportSaving(false)
@@ -693,7 +702,7 @@ export default function UserDashboard() {
     if (ins?.id) enqueueReport("daily_log", ins.id, dailyCommunity, dailyOfficer || officerName, `Daily Log — ${dailyDate}`)
     setReportMessage("✅ Daily log submitted — pending supervisor review.")
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather(""); setDailyPhotoFiles([])
-    setDailyShiftStart(""); setDailyShiftEnd("")
+    setDailyShiftStart(""); setDailyShiftEnd(""); setDailyAddlOfficers([])
     setChecklistAnswers(prev => prev.map(a => ({ ...a, answer: "", explanation: "" })))
     logActivity("created", "Daily Log", "", `Daily log submitted — ${dailyDate}`)
   }
@@ -1242,7 +1251,11 @@ export default function UserDashboard() {
     const facts: Array<[string, any]> = [
       ["Date", r.date], ["Time", r.time],
       ["Officer", r.officer_name || r.officer],
-      ["Shift", r.shift], ["Weather", r.weather],
+      ["Shift", r.shift], ["Shift Times", r.shift_times],
+      ["Additional Officers", Array.isArray(r.additional_officers) && r.additional_officers.length
+        ? r.additional_officers.map((o: any) => `${o.name}${o.shift_times ? ` (${o.shift_times})` : ""}`).join(", ")
+        : null],
+      ["Weather", r.weather],
       ["Incident Type", r.incident_type],
       ["Location", r.location],
       ["Building / Apt", (r.building || r.apartment) ? [r.building, r.apartment].filter(Boolean).join(" / ") : null],
@@ -2053,6 +2066,54 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Weather Conditions</label>
                   <input value={dailyWeather} onChange={e => setDailyWeather(e.target.value)} placeholder="e.g. Clear, Rainy" className={inputCls} /></div>
               </div>
+
+              {/* Additional officers on shift */}
+              <div className="mb-5 border border-gray-200 rounded-xl bg-gray-50 p-4">
+                <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                  <label className={labelCls + " mb-0"}>Additional Officers on Shift</label>
+                  <button type="button"
+                    onClick={() => setDailyAddlOfficers(prev => [...prev, { name: "", start: "", end: "" }])}
+                    className="px-3 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-md hover:bg-blue-800 border-none cursor-pointer">
+                    + Add Officer
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mb-3">Other officers working this same shift, with their hours.</p>
+                {dailyAddlOfficers.length === 0 ? (
+                  <div className="text-xs text-gray-400 italic">No additional officers added.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {dailyAddlOfficers.map((o, i) => (
+                      <div key={i} className="flex flex-wrap items-end gap-2 bg-white border border-gray-200 rounded-lg p-2">
+                        <div className="flex flex-col gap-0.5 flex-1 min-w-[140px]">
+                          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Officer Name</span>
+                          <input value={o.name}
+                            onChange={e => setDailyAddlOfficers(prev => prev.map((x, j) => j === i ? { ...x, name: e.target.value } : x))}
+                            placeholder="Full name"
+                            className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                        </div>
+                        <div className="flex flex-col gap-0.5 w-[90px]">
+                          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Start</span>
+                          <input type="time" value={o.start}
+                            onChange={e => setDailyAddlOfficers(prev => prev.map((x, j) => j === i ? { ...x, start: e.target.value } : x))}
+                            className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                        </div>
+                        <span className="text-gray-400 font-bold pb-2">—</span>
+                        <div className="flex flex-col gap-0.5 w-[90px]">
+                          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">End</span>
+                          <input type="time" value={o.end}
+                            onChange={e => setDailyAddlOfficers(prev => prev.map((x, j) => j === i ? { ...x, end: e.target.value } : x))}
+                            className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                        </div>
+                        <button type="button"
+                          onClick={() => setDailyAddlOfficers(prev => prev.filter((_, j) => j !== i))}
+                          title="Remove"
+                          className="px-2 py-2 text-red-500 hover:text-red-700 bg-transparent border-none cursor-pointer text-sm">🗑</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               <div className="mb-4">
                 <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
                   <label className={labelCls + " mb-0"}>Patrol Narrative <span className="text-red-500">*</span></label>
