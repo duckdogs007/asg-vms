@@ -153,6 +153,7 @@ export default function ReportDetailPage() {
   }
 
   const [report,          setReport]          = useState<Record<string, any> | null>(null)
+  const [offenders,       setOffenders]       = useState<any[]>([])
   const [queue,           setQueue]           = useState<Record<string, any> | null>(null)
   const [communityName,   setCommunityName]   = useState("")
   const [loading,         setLoading]         = useState(true)
@@ -196,6 +197,11 @@ export default function ReportDetailPage() {
       if (!rec) { setNotFound(true); setLoading(false); return }
       setReport(rec)
       setQueue(q ?? null)
+      // Lease violations are incident_reports rows; load their offenders.
+      if (type === "incident" && rec.lvl_issued) {
+        supabase.from("violation_offenders").select("*").eq("report_id", id)
+          .then(({ data: offs }) => setOffenders(offs || []))
+      }
       if (rec.community_id) {
         supabase.from("communities").select("name").eq("id", rec.community_id).maybeSingle()
           .then(({ data: c }) => setCommunityName(c?.name ?? ""))
@@ -345,6 +351,7 @@ export default function ReportDetailPage() {
 
   const r      = report!
   const isGateChecklist = type === "gate-checklist"
+  const isLeaseViolation = type === "incident" && !!r.lvl_issued
   const photos: string[] = r.photo_urls ?? r.general_photo_urls ?? (r.photo_url ? [r.photo_url] : [])
 
   const qStatus = queue?.status as string | undefined
@@ -510,8 +517,8 @@ export default function ReportDetailPage() {
 
       {/* Type + status badges — visible in print */}
       <div className="flex flex-wrap items-center gap-2 mb-5">
-        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${TYPE_BADGE[config.color] ?? "bg-gray-100 text-gray-700 border-gray-200"}`}>
-          {config.label}
+        <span className={`text-xs font-bold px-2.5 py-1 rounded-full border ${isLeaseViolation ? "bg-amber-100 text-amber-800 border-amber-200" : (TYPE_BADGE[config.color] ?? "bg-gray-100 text-gray-700 border-gray-200")}`}>
+          {isLeaseViolation ? "⚖️ Lease Violation" : config.label}
         </span>
         {qBadge && (
           <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${qBadge.cls}`}>{qBadge.label}</span>
@@ -581,6 +588,40 @@ export default function ReportDetailPage() {
           </div>
         )}
       </Section>
+
+      {/* Lease Violation detail (incident_reports with lvl_issued) */}
+      {isLeaseViolation && (
+        <Section title="Lease Violation Detail">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+            <Field label="Notice Level"        value={r.notice_level} />
+            <Field label="Category"            value={r.violation_category === "lease_compliance" ? "Lease compliance" : r.violation_category ? "Security / community" : ""} />
+            <Field label="Violation Type"      value={r.violation_type} />
+            <Field label="Posted / Issued"     value={r.lvl_posted_date} />
+            <Field label="Issued By"           value={r.issued_by} />
+            <Field label="Distribution"        value={r.distribution_method} />
+            <Field label="Head of Household"   value={r.hoh_name} />
+            <Field label="HOH Acknowledged"    value={r.hoh_ack ? (r.hoh_ack_at ? `Yes · ${new Date(r.hoh_ack_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}` : "Yes") : (r.hoh_ack === false ? "No" : "")} />
+          </div>
+
+          {offenders.length > 0 && (
+            <div className="mt-4">
+              <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Named Offenders ({offenders.length})</div>
+              <div className="flex flex-col gap-2">
+                {offenders.map((o, i) => (
+                  <div key={o.id || i} className={`rounded-lg border px-3 py-2 ${o.ban_match ? "border-red-300 bg-red-50" : "border-gray-200 bg-gray-50"}`}>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-sm font-semibold text-gray-900">{o.name || "—"}</span>
+                      {o.relationship && <span className="text-xs text-gray-500">· {o.relationship}</span>}
+                      {o.ban_match && <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-full bg-red-700 text-white">⛔ Barred match</span>}
+                    </div>
+                    {o.description && <div className="text-xs text-gray-600 mt-0.5 whitespace-pre-wrap">{o.description}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Section>
+      )}
 
       {/* Gate-by-gate inspection (gate checklists) */}
       {isGateChecklist && Array.isArray(r.gates) && r.gates.length > 0 && (() => {
