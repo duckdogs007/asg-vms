@@ -48,7 +48,7 @@ export default function VMSPage() {
   const [idPhotos,       setIdPhotos]       = useState<File[]>([])
   const [livePhotos,     setLivePhotos]     = useState<File[]>([])
   const [loadError,      setLoadError]      = useState("")
-  const [confirmed,      setConfirmed]      = useState<string | null>(null)
+  const [confirmed,      setConfirmed]      = useState<{ name: string; wasVerify: boolean } | null>(null)
 
   const [todayStats, setTodayStats] = useState({ total: 0, visitors: 0, contractors: 0, deliveries: 0, employees: 0 })
   const [todayLogs,  setTodayLogs]  = useState<Array<{ first_name: string; last_name: string; person_type: string; unit_number: string | null; created_at: string }>>([])
@@ -166,8 +166,10 @@ export default function VMSPage() {
       const [last, first] = input.split(",").map(s => s.trim())
       return { first, last }
     }
-    const parts = input.split(" ")
-    return { first: parts[0] || "", last: parts[1] || "" }
+    const parts = input.split(" ").filter(Boolean)
+    // For 3+ word names (e.g. "John Michael Smith"), take first word as first
+    // and last word as last so the last name is never lost.
+    return { first: parts[0] || "", last: parts[parts.length - 1] || "" }
   }
 
   async function runWatchlistCheck(first: string, last: string): Promise<any[]> {
@@ -216,9 +218,10 @@ export default function VMSPage() {
     })
   }, [dob, oln]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function validateDOB(inputDOB?: string) {
-    if (!selectedPerson?.dob) return
-    const dbDOB   = String(selectedPerson.dob).slice(0, 10)
+  async function validateDOB(inputDOB?: string, personOverride?: any) {
+    const sp = personOverride ?? selectedPerson
+    if (!sp?.dob) return
+    const dbDOB   = String(sp.dob).slice(0, 10)
     const entered = inputDOB || enteredDOB
     if (entered === dbDOB) {
       setMatchStatus("confirmed")
@@ -236,17 +239,17 @@ export default function VMSPage() {
       //    the Teams alert is missed. Fire-and-forget.
       const { data: { user } } = await supabase.auth.getUser()
       supabase.from("denied_entries").insert({
-        watchlist_id:   selectedPerson.id || null,
-        first_name:     selectedPerson.first_name,
-        last_name:      selectedPerson.last_name,
+        watchlist_id:   sp.id || null,
+        first_name:     sp.first_name,
+        last_name:      sp.last_name,
         dob:            dbDOB,
-        oln:            selectedPerson.oln || null,
+        oln:            sp.oln || null,
         community_id:   communityId || null,
         community_name: communityName,
         unit_number:    unitId || null,
         resident_name:  selectedRes?.name || null,
         guard_email:    user?.email || null,
-        reason:         selectedPerson.reason || null,
+        reason:         sp.reason || null,
         alert_sent:     true,
       }).then(({ error }) => {
         if (error) console.error("[denied_entries] insert failed:", error)
@@ -262,13 +265,13 @@ export default function VMSPage() {
         payload: {
           Community:   communityName,
           Unit:        unitId || "—",
-          Visitor:     `${selectedPerson.first_name} ${selectedPerson.last_name}`,
+          Visitor:     `${sp.first_name} ${sp.last_name}`,
           DOB:         dbDOB,
-          OLN:         selectedPerson.oln || "",
-          Reason:      selectedPerson.reason || "",
-          Comments:    selectedPerson.comments || "",
-          BannedBy:    selectedPerson.banned_by || "",
-          BanDate:     selectedPerson.ban_date || "",
+          OLN:         sp.oln || "",
+          Reason:      sp.reason || "",
+          Comments:    sp.comments || "",
+          BannedBy:    sp.banned_by || "",
+          BanDate:     sp.ban_date || "",
           Time:        new Date().toLocaleString("en-US"),
         },
       })
@@ -350,11 +353,11 @@ export default function VMSPage() {
         community_id:  communityId,
         unit_number:   unitNumber,
         resident_name: selectedResident?.name || null,
-        entry_method:  "checkin_manual",
-        watchlist_hit: matchStatus === "verify",
-        dob:           dob || null,
-        oln:           oln || null,
-        plate:         plate || null,
+        entry_method:   "checkin_manual",
+        watchlist_hit:  matchStatus === "verify",
+        dob:            dob || null,
+        oln:            oln || null,
+        vehicle_plate:  plate || null,
         created_at:    new Date().toISOString()
       }).select("id").single()
 
@@ -371,7 +374,8 @@ export default function VMSPage() {
         })
       }
 
-      const displayName = `${first} ${last}`.trim()
+      const displayName  = `${first} ${last}`.trim()
+      const wasVerify    = matchStatus === "verify"
       supabase.auth.getUser().then(({ data: { user } }) => {
         supabase.from("audit_logs").insert({
           user_email: user?.email || "unknown",
@@ -380,7 +384,7 @@ export default function VMSPage() {
           created_at: new Date().toISOString(),
         })
       })
-      setConfirmed(displayName)
+      setConfirmed({ name: displayName, wasVerify })
       resetForm()
       loadTodayLogs(communityId)
     } finally {
@@ -568,17 +572,19 @@ export default function VMSPage() {
 
           {confirmed ? (
             /* Confirmation panel */
-            <div className="flex flex-col items-center justify-center gap-4 bg-green-900 border-2 border-green-500 rounded-xl px-6 py-10 text-white text-center">
+            <div className={`flex flex-col items-center justify-center gap-4 border-2 rounded-xl px-6 py-10 text-white text-center ${confirmed.wasVerify ? "bg-yellow-900 border-yellow-500" : "bg-green-900 border-green-500"}`}>
               <div className="text-3xl font-bold tracking-wide">✅ VISITOR LOGGED</div>
-              <div className="text-xl font-semibold">{confirmed}</div>
-              <div className="text-green-300 text-lg font-bold">🟢 CLEAR</div>
+              <div className="text-xl font-semibold">{confirmed.name}</div>
+              <div className={`text-lg font-bold ${confirmed.wasVerify ? "text-yellow-300" : "text-green-300"}`}>
+                {confirmed.wasVerify ? "⚠️ POSSIBLE MATCH — VERIFY IDENTITY" : "🟢 CLEAR"}
+              </div>
               <button
                 onClick={() => setConfirmed(null)}
-                className="mt-2 px-8 py-2 bg-green-600 hover:bg-green-500 text-white rounded-md font-semibold border-none cursor-pointer text-sm transition-colors"
+                className={`mt-2 px-8 py-2 text-white rounded-md font-semibold border-none cursor-pointer text-sm transition-colors ${confirmed.wasVerify ? "bg-yellow-700 hover:bg-yellow-600" : "bg-green-600 hover:bg-green-500"}`}
               >
                 ENTER — Continue
               </button>
-              <div className="text-green-400 text-xs">Press Enter or click to log next visitor</div>
+              <div className={`text-xs ${confirmed.wasVerify ? "text-yellow-400" : "text-green-400"}`}>Press Enter or click to log next visitor</div>
             </div>
           ) : (
             <>
@@ -623,8 +629,9 @@ export default function VMSPage() {
                           onClick={() => {
                             setSelectedPerson(p)
                             // If DOB was already entered in the identity section, pre-fill
-                            // the confirmation field and auto-validate.
-                            if (dob) { setEnteredDOB(dob); setTimeout(() => validateDOB(dob), 50) }
+                            // the confirmation field and auto-validate immediately.
+                            // Pass p directly to avoid the stale-closure issue with selectedPerson state.
+                            if (dob) { setEnteredDOB(dob); validateDOB(dob, p) }
                           }}
                           className="text-xs px-3 py-1 bg-blue-700 rounded hover:bg-blue-600 border-none cursor-pointer text-white shrink-0 ml-3"
                         >
@@ -641,7 +648,7 @@ export default function VMSPage() {
                             onChange={(e) => {
                               const v = e.target.value
                               setEnteredDOB(v)
-                              if (v.length === 10) setTimeout(() => validateDOB(v), 50)
+                              if (v.length === 10) validateDOB(v, p)
                             }}
                             className="px-2 py-1.5 rounded border border-gray-600 bg-gray-700 text-white text-sm focus:outline-none"
                           />
