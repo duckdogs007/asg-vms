@@ -9,6 +9,7 @@ import PostOrdersTab from "@/components/PostOrdersTab"
 import RentRollTab from "@/components/RentRollTab"
 import UnitActivityTab from "@/components/UnitActivityTab"
 import LeaseViolationsTab from "@/components/LeaseViolationsTab"
+import MaintenanceTicketsTab from "@/components/MaintenanceTicketsTab"
 import { SignedLink } from "@/components/SignedImage"
 
 interface Community {
@@ -26,7 +27,7 @@ interface Vehicle  {
   notes: string | null
 }
 
-type Tab = "post-orders" | "info" | "documents" | "vehicles" | "rentroll" | "history" | "violations"
+type Tab = "post-orders" | "info" | "documents" | "vehicles" | "rentroll" | "history" | "violations" | "maintenance"
 const DOC_TYPES = ["Lease", "House Rules", "Property Map", "Floor Plan", "Other"]
 
 const inputCls    = "w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
@@ -217,10 +218,11 @@ export default function PropertyHubPage() {
         <button className={tabCls("rentroll")}    onClick={() => setTab("rentroll")}>🏠 Rent Roll</button>
         <button className={tabCls("history")}     onClick={() => setTab("history")}>🗂️ Unit History</button>
         <button className={tabCls("violations")}  onClick={() => setTab("violations")}>⚖️ Lease Violations</button>
+        <button className={tabCls("maintenance")} onClick={() => setTab("maintenance")}>🔧 Maintenance Tickets</button>
       </div>
 
       {msg && <div className="mb-4 text-sm px-4 py-2 rounded-lg bg-gray-50 border border-gray-200 text-gray-700">{msg}</div>}
-      {!canEdit && tab !== "post-orders" && tab !== "history" && tab !== "violations" && (
+      {!canEdit && tab !== "post-orders" && tab !== "history" && tab !== "violations" && tab !== "maintenance" && (
         <div className="mb-4 text-xs text-gray-500">View-only — contact an admin or property manager to make changes.</div>
       )}
 
@@ -232,6 +234,9 @@ export default function PropertyHubPage() {
 
       {/* LEASE VIOLATIONS */}
       {tab === "violations" && <LeaseViolationsTab communityId={communityId} communityName={community?.name} isAdmin={canIssueViolation} canDelete={canDeleteViolation} />}
+
+      {/* MAINTENANCE TICKETS */}
+      {tab === "maintenance" && <MaintenanceTicketsTab communityId={communityId} communityName={community?.name} userEmail={userEmail} canDelete={canDeleteViolation} />}
 
       {/* RENT ROLL */}
       {tab === "rentroll" && <RentRollTab communityId={communityId} communityName={community?.name} isAdmin={canEdit} />}
