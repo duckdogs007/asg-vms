@@ -181,6 +181,11 @@ export default function UserDashboard() {
   const [shiftTemplate,    setShiftTemplate]    = useState<{ id: string; question: string; bad_answer: string }[]>([])
   const [checklistAnswers, setChecklistAnswers] = useState<{ id: string; question: string; bad_answer: string; answer: string; explanation: string }[]>([])
 
+  const INCIDENT_CHECKLIST_ITEMS = [
+    { id: "__incident_occurred__",     question: "Were there any incidents during your shift?", bad_answer: "" },
+    { id: "__incident_report_filed__", question: "If yes, did you complete an Incident Report?", bad_answer: "no" },
+  ]
+
   // Field contact
   const [ctFirstName,   setCtFirstName]   = useState("")
   const [ctLastName,    setCtLastName]    = useState("")
@@ -375,7 +380,11 @@ export default function UserDashboard() {
 
   // Load shift verification checklist template whenever the daily log community changes
   useEffect(() => {
-    if (!dailyCommunity) { setShiftTemplate([]); setChecklistAnswers([]); return }
+    if (!dailyCommunity) {
+      setShiftTemplate([])
+      setChecklistAnswers(INCIDENT_CHECKLIST_ITEMS.map(i => ({ ...i, answer: "", explanation: "" })))
+      return
+    }
     supabase.from("shift_checklist_templates")
       .select("id,question,bad_answer,item_order")
       .eq("community_id", dailyCommunity)
@@ -384,7 +393,10 @@ export default function UserDashboard() {
       .then(({ data }) => {
         const items = (data || []) as { id: string; question: string; bad_answer: string }[]
         setShiftTemplate(items)
-        setChecklistAnswers(items.map(i => ({ id: i.id, question: i.question, bad_answer: i.bad_answer, answer: "", explanation: "" })))
+        setChecklistAnswers([
+          ...items.map(i => ({ id: i.id, question: i.question, bad_answer: i.bad_answer, answer: "", explanation: "" })),
+          ...INCIDENT_CHECKLIST_ITEMS.map(i => ({ ...i, answer: "", explanation: "" })),
+        ])
       })
   }, [dailyCommunity]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2057,7 +2069,7 @@ export default function UserDashboard() {
                   className={textareaCls} />
               </div>
               {/* SHIFT VERIFICATION */}
-              {shiftTemplate.length > 0 && (
+              {checklistAnswers.length > 0 && (
                 <div className="mb-5 border border-blue-200 rounded-xl bg-blue-50 p-4">
                   <div className="text-sm font-bold text-blue-800 mb-3">Shift Verification</div>
                   <div className="space-y-4">
