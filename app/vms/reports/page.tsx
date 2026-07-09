@@ -1275,6 +1275,154 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
         </div>
       )}
 
+      {/* ── REPORT RUNNER ── */}
+      {activeTab === "reports" && communities.length > 0 && (
+        <Section label="Report Runner">
+          {communityName && (
+            <div className="text-xs text-gray-400 mb-4">
+              Showing results for <span className="font-semibold text-gray-700">{communityName}</span> · {dateFrom} to {dateTo}. Use the filter bar above to change community or date range.
+            </div>
+          )}
+
+          {/* Monthly Reports quick-links */}
+          <div className="flex flex-wrap gap-3 mb-4">
+            <Link href="/vms/reports/gate-checklist-report"
+              className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-slate-400 transition-all group">
+              <span className="text-xl">📋</span>
+              <div>
+                <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700">Gate Checklist Monthly Report</div>
+                <div className="text-xs text-gray-400">Full gate-by-gate detail by location · Print / PDF</div>
+              </div>
+            </Link>
+
+            <button
+              type="button"
+              onClick={() => {
+                if (!rptCommunity) return
+                setRunnerType("unithistory"); setUhSort("location")
+                setRunnerLoading(true); setRunnerRan(false); setRunnerRows([])
+                runUnitHistory("location")
+              }}
+              disabled={!rptCommunity}
+              className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-slate-400 transition-all group text-left cursor-pointer disabled:opacity-40 border-solid">
+              <span className="text-xl">🏢</span>
+              <div>
+                <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700">Unit History Report</div>
+                <div className="text-xs text-gray-400">Complete unit history by location · sortable · CSV / Print</div>
+              </div>
+            </button>
+
+            {canApprove && (
+              <button
+                type="button"
+                onClick={() => runAiSummary()}
+                disabled={!rptCommunity}
+                className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-indigo-400 transition-all group text-left cursor-pointer disabled:opacity-40 border-solid">
+                <span className="text-xl">🧠</span>
+                <div>
+                  <div className="text-sm font-semibold text-gray-900 group-hover:text-indigo-700">
+                    AI Summary <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full align-middle">Beta</span>
+                  </div>
+                  <div className="text-xs text-gray-400">AI review of all activity · concerns &amp; follow-ups · {dateFrom} to {dateTo}</div>
+                </div>
+              </button>
+            )}
+          </div>
+
+          {/* Controls */}
+          <div className="flex flex-wrap gap-3 items-end mb-4">
+            <div className="flex flex-col gap-1 w-52">
+              <label className="text-xs font-semibold text-gray-500">Report Type</label>
+              <select value={runnerType} onChange={e => { setRunnerType(e.target.value); setRunnerRan(false) }}
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+                <option value="all">All types</option>
+                {REPORT_TYPES.map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
+                <option value="watchlist">Watchlist (Barred Persons)</option>
+                <option value="unithistory">Unit History</option>
+              </select>
+            </div>
+            {runnerType === "unithistory" && runnerRan && runnerRows.length > 0 && (
+              <div className="flex flex-col gap-1 w-40">
+                <label className="text-xs font-semibold text-gray-500">Sort by</label>
+                <select value={uhSort} onChange={e => { const k = e.target.value as "location" | "date" | "type"; setUhSort(k); setRunnerRows(prev => sortUnitHistory(prev, k)) }}
+                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+                  <option value="location">Location</option>
+                  <option value="date">Date</option>
+                  <option value="type">Type</option>
+                </select>
+              </div>
+            )}
+            <button
+              onClick={runReport}
+              disabled={!rptCommunity || runnerLoading}
+              className="px-5 py-2 bg-blue-700 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer disabled:opacity-40"
+            >
+              {runnerLoading ? "Running…" : "▶ Run Report"}
+            </button>
+            {runnerRan && runnerRows.length > 0 && (
+              <>
+                <button onClick={exportRunnerCSV}
+                  className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 border-none cursor-pointer">
+                  ⬇ Export CSV
+                </button>
+                <button onClick={printRunnerReport}
+                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 cursor-pointer">
+                  🖨 Print
+                </button>
+              </>
+            )}
+          </div>
+
+          {/* Results */}
+          {runnerLoading && <div className="text-gray-400 text-sm animate-pulse py-6">Running report…</div>}
+
+          {runnerRan && !runnerLoading && (
+            runnerRows.length === 0 ? (
+              <div className="text-gray-400 text-sm py-8 text-center bg-white border border-gray-200 rounded-xl">
+                {runnerType === "watchlist"
+                  ? "No barred persons on file for this community."
+                  : runnerType === "unithistory"
+                  ? "No unit history on file for this community."
+                  : "No reports found for this community + date range."}
+              </div>
+            ) : (
+              <>
+                <div className="text-xs text-gray-500 mb-2 font-semibold">
+                  {runnerRows.length} {runnerType === "watchlist" ? `barred person${runnerRows.length !== 1 ? "s" : ""}` : runnerType === "unithistory" ? `unit-activity record${runnerRows.length !== 1 ? "s" : ""}` : `record${runnerRows.length !== 1 ? "s" : ""}`} ·&nbsp;
+                  {communities.find(c => c.id === rptCommunity)?.name}
+                  {runnerType !== "watchlist" && runnerType !== "unithistory" && <>&nbsp;· {dateFrom} to {dateTo}</>}
+                </div>
+                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                  {runnerRows.map((r, i) => {
+                    return (
+                      <div key={`${r.typeKey}:${r.id}`}
+                        className={`flex items-center gap-3 px-4 py-3 ${i < runnerRows.length - 1 ? "border-b border-gray-100" : ""}`}>
+                        <div className="text-xs text-gray-400 w-20 flex-shrink-0 font-mono">{r.date || "—"}</div>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${SUB_BADGE[RUNNER_BADGE_KEY[r.typeKey]] || "bg-gray-100 text-gray-700"}`}>
+                          {r.typeLabel}
+                        </span>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-sm text-gray-800 truncate">{r.summary}</div>
+                          <div className="text-xs text-gray-400 truncate">{r.officer}</div>
+                        </div>
+                        {(r.typeKey === "watchlist" || r.slug) ? (
+                          <Link href={r.typeKey === "watchlist" ? `/vms/intel/${r.id}` : `/vms/reports/${r.slug}/${r.id}`}
+                            className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium flex-shrink-0">
+                            View →
+                          </Link>
+                        ) : (
+                          <span className="text-xs text-gray-300 whitespace-nowrap flex-shrink-0">—</span>
+                        )}
+                      </div>
+                    )
+                  })}
+                </div>
+              </>
+            )
+          )}
+        </Section>
+      )}
+
       {/* ── REVIEW QUEUE (admin + supervisor) ── */}
       {activeTab === "reports" && canApprove && (
         <Section label={`Review Queue${queue.length > 0 ? ` (${queue.length} pending)` : ""}`}>
@@ -1746,154 +1894,6 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                     </div>
                   )
                 })()}
-              </>
-            )
-          )}
-        </Section>
-      )}
-
-      {/* ── REPORT RUNNER ── */}
-      {activeTab === "reports" && communities.length > 0 && (
-        <Section label="Report Runner">
-          {communityName && (
-            <div className="text-xs text-gray-400 mb-4">
-              Showing results for <span className="font-semibold text-gray-700">{communityName}</span> · {dateFrom} to {dateTo}. Use the filter bar above to change community or date range.
-            </div>
-          )}
-
-          {/* Monthly Reports quick-links */}
-          <div className="flex flex-wrap gap-3 mb-4">
-            <Link href="/vms/reports/gate-checklist-report"
-              className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-slate-400 transition-all group">
-              <span className="text-xl">📋</span>
-              <div>
-                <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700">Gate Checklist Monthly Report</div>
-                <div className="text-xs text-gray-400">Full gate-by-gate detail by location · Print / PDF</div>
-              </div>
-            </Link>
-
-            <button
-              type="button"
-              onClick={() => {
-                if (!rptCommunity) return
-                setRunnerType("unithistory"); setUhSort("location")
-                setRunnerLoading(true); setRunnerRan(false); setRunnerRows([])
-                runUnitHistory("location")
-              }}
-              disabled={!rptCommunity}
-              className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-slate-400 transition-all group text-left cursor-pointer disabled:opacity-40 border-solid">
-              <span className="text-xl">🏢</span>
-              <div>
-                <div className="text-sm font-semibold text-gray-900 group-hover:text-blue-700">Unit History Report</div>
-                <div className="text-xs text-gray-400">Complete unit history by location · sortable · CSV / Print</div>
-              </div>
-            </button>
-
-            {canApprove && (
-              <button
-                type="button"
-                onClick={() => runAiSummary()}
-                disabled={!rptCommunity}
-                className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl hover:shadow-sm hover:border-indigo-400 transition-all group text-left cursor-pointer disabled:opacity-40 border-solid">
-                <span className="text-xl">🧠</span>
-                <div>
-                  <div className="text-sm font-semibold text-gray-900 group-hover:text-indigo-700">
-                    AI Summary <span className="text-[9px] uppercase tracking-wide bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded-full align-middle">Beta</span>
-                  </div>
-                  <div className="text-xs text-gray-400">AI review of all activity · concerns &amp; follow-ups · {dateFrom} to {dateTo}</div>
-                </div>
-              </button>
-            )}
-          </div>
-
-          {/* Controls */}
-          <div className="flex flex-wrap gap-3 items-end mb-4">
-            <div className="flex flex-col gap-1 w-52">
-              <label className="text-xs font-semibold text-gray-500">Report Type</label>
-              <select value={runnerType} onChange={e => { setRunnerType(e.target.value); setRunnerRan(false) }}
-                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
-                <option value="all">All types</option>
-                {REPORT_TYPES.map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
-                <option value="watchlist">Watchlist (Barred Persons)</option>
-                <option value="unithistory">Unit History</option>
-              </select>
-            </div>
-            {runnerType === "unithistory" && runnerRan && runnerRows.length > 0 && (
-              <div className="flex flex-col gap-1 w-40">
-                <label className="text-xs font-semibold text-gray-500">Sort by</label>
-                <select value={uhSort} onChange={e => { const k = e.target.value as "location" | "date" | "type"; setUhSort(k); setRunnerRows(prev => sortUnitHistory(prev, k)) }}
-                  className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
-                  <option value="location">Location</option>
-                  <option value="date">Date</option>
-                  <option value="type">Type</option>
-                </select>
-              </div>
-            )}
-            <button
-              onClick={runReport}
-              disabled={!rptCommunity || runnerLoading}
-              className="px-5 py-2 bg-blue-700 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer disabled:opacity-40"
-            >
-              {runnerLoading ? "Running…" : "▶ Run Report"}
-            </button>
-            {runnerRan && runnerRows.length > 0 && (
-              <>
-                <button onClick={exportRunnerCSV}
-                  className="px-4 py-2 bg-gray-800 text-white text-sm rounded-lg hover:bg-gray-700 border-none cursor-pointer">
-                  ⬇ Export CSV
-                </button>
-                <button onClick={printRunnerReport}
-                  className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm rounded-lg hover:bg-gray-50 cursor-pointer">
-                  🖨 Print
-                </button>
-              </>
-            )}
-          </div>
-
-          {/* Results */}
-          {runnerLoading && <div className="text-gray-400 text-sm animate-pulse py-6">Running report…</div>}
-
-          {runnerRan && !runnerLoading && (
-            runnerRows.length === 0 ? (
-              <div className="text-gray-400 text-sm py-8 text-center bg-white border border-gray-200 rounded-xl">
-                {runnerType === "watchlist"
-                  ? "No barred persons on file for this community."
-                  : runnerType === "unithistory"
-                  ? "No unit history on file for this community."
-                  : "No reports found for this community + date range."}
-              </div>
-            ) : (
-              <>
-                <div className="text-xs text-gray-500 mb-2 font-semibold">
-                  {runnerRows.length} {runnerType === "watchlist" ? `barred person${runnerRows.length !== 1 ? "s" : ""}` : runnerType === "unithistory" ? `unit-activity record${runnerRows.length !== 1 ? "s" : ""}` : `record${runnerRows.length !== 1 ? "s" : ""}`} ·&nbsp;
-                  {communities.find(c => c.id === rptCommunity)?.name}
-                  {runnerType !== "watchlist" && runnerType !== "unithistory" && <>&nbsp;· {dateFrom} to {dateTo}</>}
-                </div>
-                <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-                  {runnerRows.map((r, i) => {
-                    return (
-                      <div key={`${r.typeKey}:${r.id}`}
-                        className={`flex items-center gap-3 px-4 py-3 ${i < runnerRows.length - 1 ? "border-b border-gray-100" : ""}`}>
-                        <div className="text-xs text-gray-400 w-20 flex-shrink-0 font-mono">{r.date || "—"}</div>
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${SUB_BADGE[RUNNER_BADGE_KEY[r.typeKey]] || "bg-gray-100 text-gray-700"}`}>
-                          {r.typeLabel}
-                        </span>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-sm text-gray-800 truncate">{r.summary}</div>
-                          <div className="text-xs text-gray-400 truncate">{r.officer}</div>
-                        </div>
-                        {(r.typeKey === "watchlist" || r.slug) ? (
-                          <Link href={r.typeKey === "watchlist" ? `/vms/intel/${r.id}` : `/vms/reports/${r.slug}/${r.id}`}
-                            className="text-xs text-blue-700 hover:underline whitespace-nowrap font-medium flex-shrink-0">
-                            View →
-                          </Link>
-                        ) : (
-                          <span className="text-xs text-gray-300 whitespace-nowrap flex-shrink-0">—</span>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
               </>
             )
           )}
