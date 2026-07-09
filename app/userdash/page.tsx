@@ -10,6 +10,7 @@ import { WatchlistEntry } from "@/lib/types"
 import Papa from "papaparse"
 import { fireAlert } from "@/lib/alerts"
 import { maskSSN } from "@/lib/format"
+import { createSignedUrlFor } from "@/lib/storage"
 import { checkIsAdmin, checkIsGuest, checkCanIssueLeaseViolation } from "@/lib/admin"
 import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/LocationField"
 import { buildHohSnapshot, EMPTY_SNAPSHOT } from "@/lib/hohSnapshot"
@@ -1288,9 +1289,12 @@ export default function UserDashboard() {
     }
     return urls
   }
-  async function urlToFile(url: string, idx: number): Promise<File | null> {
+  async function urlToFile(stored: string, idx: number): Promise<File | null> {
     try {
-      const res = await fetch(url); const blob = await res.blob()
+      // contact-photos is a private bucket — sign the stored locator before fetching.
+      const signed = await createSignedUrlFor(supabase, stored, "contact-photos")
+      if (!signed) return null
+      const res = await fetch(signed); const blob = await res.blob()
       const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg")
       return new File([blob], `draft-photo-${idx + 1}.${ext}`, { type: blob.type || "image/jpeg" })
     } catch { return null }
