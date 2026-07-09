@@ -7,12 +7,13 @@ const TABS = [
   { href: "/vms",        label: "Check-In",     icon: "🛂" },
   { href: "/vms/scan",   label: "Scan License", icon: "📷" },
   { href: "/vms/search", label: "Search",       icon: "🔎" },
+  { href: "/vms/log",    label: "Scan Log",     icon: "📜" },
 ]
 
 // Tab bar appears only on the check-in workflow pages. /vms/intel,
 // /vms/reports, /vms/post-orders are top-level concerns reached via
 // TopNav and are intentionally excluded.
-const SHOW_PATHS = new Set(["/vms", "/vms/scan", "/vms/search"])
+const SHOW_PATHS = new Set(["/vms", "/vms/scan", "/vms/search", "/vms/log"])
 
 export default function VmsTabBar() {
   const pathname = usePathname()
