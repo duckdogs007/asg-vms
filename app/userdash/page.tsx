@@ -93,7 +93,7 @@ interface OfficerOnDuty {
   off_duty_at:  string | null
   is_online:    boolean
 }
-type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "maintenance" | "view"
+type ReportTab = "daily" | "incident" | "contact" | "vfi" | "parking" | "maintenance" | "view" | "drafts"
 
 export default function UserDashboard() {
 
@@ -150,6 +150,10 @@ export default function UserDashboard() {
 
   // Officer reports
   const [reportTab,     setReportTab]     = useState<ReportTab>("daily")
+  const [drafts,        setDrafts]        = useState<any[]>([])
+  const [draftsLoading, setDraftsLoading] = useState(false)
+  const [activeDraftId, setActiveDraftId] = useState<string | null>(null)
+  useEffect(() => { loadDrafts() }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [reportSaving,  setReportSaving]  = useState(false)
   const [reportMessage, setReportMessage] = useState("")
   const [reportError,   setReportError]   = useState("")
@@ -701,6 +705,7 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); return }
     if (ins?.id) enqueueReport("daily_log", ins.id, dailyCommunity, dailyOfficer || officerName, `Daily Log — ${dailyDate}`)
     setReportMessage("✅ Daily log submitted — pending supervisor review.")
+    clearDraftAfterSubmit()
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather(""); setDailyPhotoFiles([])
     setDailyShiftStart(""); setDailyShiftEnd(""); setDailyAddlOfficers([])
     setChecklistAnswers(prev => prev.map(a => ({ ...a, answer: "", explanation: "" })))
@@ -774,6 +779,7 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); return }
     if (ins?.id) enqueueReport("incident", ins.id, incCommunity, incOfficer || officerName, incTypes.join(", ") || "Incident Report")
     setReportMessage("✅ Incident report submitted — pending supervisor review.")
+    clearDraftAfterSubmit()
     if (isHighPriorityIncident(incTypes.join(" "))) {
       const communityName = communities.find(c => c.id === incCommunity)?.name || "Unknown"
       const incTypeLabel = incTypes.join(" / ")
@@ -831,6 +837,7 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); return }
     if (ins?.id) enqueueReport("field_contact", ins.id, ctCommunity || null, ctOfficer || officerName, `${ctFirstName} ${ctLastName}`.trim() || "Field Contact")
     setReportMessage("✅ Field contact logged — pending supervisor review.")
+    clearDraftAfterSubmit()
     logActivity("created", "Field Contact", "", `Field contact logged — ${ctFirstName} ${ctLastName}`)
     setCtFirstName(""); setCtLastName(""); setCtLocation(""); setCtReason(""); setCtOfficer(""); setCtNotes("")
     setCtSex(""); setCtRace(""); setCtDob(""); setCtSsn(""); setCtOln(""); setCtAddress("")
@@ -909,6 +916,7 @@ export default function UserDashboard() {
     }
 
     setReportMessage("✅ Vehicle FI logged — pending supervisor review." + (boloMatch ? " ⚠ BOLO match — supervisor alerted." : ""))
+    clearDraftAfterSubmit()
     logActivity("created", "Vehicle FI", "", `Vehicle FI logged — ${vfiVehicle.plate || vfiVehicle.make} ${vfiDate}`)
     setVfiLoc(EMPTY_LOCATION); setVfiVehicle(EMPTY_VEHICLE); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
     setVfiFollowUp(false); setVfiViolation(false); setVfiViolationNum("")
@@ -1097,6 +1105,7 @@ export default function UserDashboard() {
       ? " ⚠ BOLO match — supervisor alerted."
       : pvTowRequested ? " 🚛 Tow requested — supervisor alerted." : ""
     setReportMessage("✅ Parking violation logged — pending supervisor review." + note)
+    clearDraftAfterSubmit()
     logActivity("created", "Parking Violation", "", `Parking violation — ${pvVehicle.plate} (${pvViolationType})`)
 
     setPvVehicle(EMPTY_VEHICLE); setPvLoc(EMPTY_LOCATION); setPvSpace(""); setPvNotes("")
@@ -1144,6 +1153,7 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); setReportSaving(false); return }
     if (ins?.id) enqueueReport("maintenance", ins.id, comm || null, mntOfficer || officerName, issueLabel)
     setReportMessage("✅ Maintenance report submitted — pending supervisor review.")
+    clearDraftAfterSubmit()
 
     logActivity("created", "Maintenance", "", `Maintenance report — ${issueLabel} (${mntDate})`)
     setMntDate(new Date().toISOString().split("T")[0])
@@ -1175,6 +1185,115 @@ export default function UserDashboard() {
       submitted_at: new Date().toISOString(),
     }).then(({ error: qe }) => { if (qe) console.warn("[queue]", qe.message) })
     logActivity("submitted", "Report Queue", id, `${type.replace(/_/g, " ")} submitted — ${summary}`)
+  }
+
+  // ── REPORT DRAFTS (private per-user save-for-later) ──
+  const DRAFT_LABEL: Record<string, string> = {
+    daily: "Daily Log", incident: "Incident Report", contact: "Field Contact",
+    vfi: "Vehicle FI", parking: "Parking Violation", maintenance: "Maintenance",
+  }
+  const DRAFT_ICON: Record<string, string> = {
+    daily: "📝", incident: "🚨", contact: "📋", vfi: "🚗", parking: "🅿️", maintenance: "🔧",
+  }
+
+  // Per-type date / time / officer / community used for the draft title.
+  function draftMeta(type: ReportTab): { date: string; time: string; officer: string; community: string | null } {
+    switch (type) {
+      case "daily":       return { date: dailyDate, time: dailyShiftStart || "", officer: dailyOfficer || officerName, community: dailyCommunity || null }
+      case "incident":    return { date: incDate,   time: incTime, officer: incOfficer || officerName, community: incCommunity || null }
+      case "contact":     return { date: ctDate,    time: ctTime,  officer: ctOfficer  || officerName, community: ctCommunity  || null }
+      case "vfi":         return { date: vfiDate,   time: vfiTime, officer: vfiOfficer || officerName, community: vfiCommunity || null }
+      case "parking":     return { date: pvDate,    time: pvTime,  officer: pvOfficer  || officerName, community: pvCommunity  || null }
+      case "maintenance": return { date: mntDate,   time: mntTime, officer: mntOfficer || officerName, community: mntCommunity || null }
+      default:            return { date: "", time: "", officer: officerName, community: null }
+    }
+  }
+
+  function serializeDraft(type: ReportTab): Record<string, any> {
+    switch (type) {
+      case "daily":       return { dailyDate, dailyShift, dailyShiftStart, dailyShiftEnd, dailyCommunity, dailyOfficer, dailyWeather, dailyNarrative, dailyNotes, dailyAddlOfficers }
+      case "incident":    return { incDate, incTime, incCommunity, incLoc, incTypes, incPersonList, incVehicleList, incDescription, incAction, incFollowUp, incOfficer, incReliantNo, incHpdNo, incAsgNo, incReliantNotified, incReliantNotifiedAt, incReliantNotReason }
+      case "contact":     return { ctFirstName, ctLastName, ctDate, ctTime, ctCommunity, ctLocation, ctReason, ctOfficer, ctNotes, ctSex, ctRace, ctDob, ctSsn, ctOln, ctAddress }
+      case "vfi":         return { vfiDate, vfiTime, vfiCommunity, vfiOfficer, vfiLoc, vfiVehicle, vfiDescriptors, vfiReason, vfiFollowUp, vfiViolation, vfiViolationNum, vfiNotes }
+      case "parking":     return { pvDate, pvTime, pvCommunity, pvOfficer, pvVehicle, pvLoc, pvSpace, pvViolationType, pvNotes, pvTowRequested, pvTowReason }
+      case "maintenance": return { mntDate, mntTime, mntCommunity, mntOfficer, mntLoc, mntIssueType, mntIssueOther, mntDesc }
+      default:            return {}
+    }
+  }
+
+  function hydrateDraft(type: ReportTab, p: Record<string, any>) {
+    const g = (v: any, d: any) => (v === undefined || v === null ? d : v)
+    switch (type) {
+      case "daily":
+        setDailyDate(g(p.dailyDate, dailyDate)); setDailyShift(g(p.dailyShift, "Day")); setDailyShiftStart(g(p.dailyShiftStart, "")); setDailyShiftEnd(g(p.dailyShiftEnd, "")); setDailyCommunity(g(p.dailyCommunity, "")); setDailyOfficer(g(p.dailyOfficer, "")); setDailyWeather(g(p.dailyWeather, "")); setDailyNarrative(g(p.dailyNarrative, "")); setDailyNotes(g(p.dailyNotes, "")); setDailyAddlOfficers(g(p.dailyAddlOfficers, [])); break
+      case "incident":
+        setIncDate(g(p.incDate, incDate)); setIncTime(g(p.incTime, "")); setIncCommunity(g(p.incCommunity, "")); setIncLoc(g(p.incLoc, EMPTY_LOCATION)); setIncTypes(g(p.incTypes, [])); setIncPersonList(g(p.incPersonList, [])); setIncVehicleList(g(p.incVehicleList, [])); setIncDescription(g(p.incDescription, "")); setIncAction(g(p.incAction, "")); setIncFollowUp(g(p.incFollowUp, false)); setIncOfficer(g(p.incOfficer, "")); setIncReliantNo(g(p.incReliantNo, "")); setIncHpdNo(g(p.incHpdNo, "")); setIncAsgNo(g(p.incAsgNo, "")); setIncReliantNotified(g(p.incReliantNotified, null)); setIncReliantNotifiedAt(g(p.incReliantNotifiedAt, "")); setIncReliantNotReason(g(p.incReliantNotReason, "")); break
+      case "contact":
+        setCtFirstName(g(p.ctFirstName, "")); setCtLastName(g(p.ctLastName, "")); setCtDate(g(p.ctDate, ctDate)); setCtTime(g(p.ctTime, "")); setCtCommunity(g(p.ctCommunity, "")); setCtLocation(g(p.ctLocation, "")); setCtReason(g(p.ctReason, "")); setCtOfficer(g(p.ctOfficer, "")); setCtNotes(g(p.ctNotes, "")); setCtSex(g(p.ctSex, "")); setCtRace(g(p.ctRace, "")); setCtDob(g(p.ctDob, "")); setCtSsn(g(p.ctSsn, "")); setCtOln(g(p.ctOln, "")); setCtAddress(g(p.ctAddress, "")); break
+      case "vfi":
+        setVfiDate(g(p.vfiDate, vfiDate)); setVfiTime(g(p.vfiTime, "")); setVfiCommunity(g(p.vfiCommunity, "")); setVfiOfficer(g(p.vfiOfficer, "")); setVfiLoc(g(p.vfiLoc, EMPTY_LOCATION)); setVfiVehicle(g(p.vfiVehicle, EMPTY_VEHICLE)); setVfiDescriptors(g(p.vfiDescriptors, "")); setVfiReason(g(p.vfiReason, "")); setVfiFollowUp(g(p.vfiFollowUp, false)); setVfiViolation(g(p.vfiViolation, false)); setVfiViolationNum(g(p.vfiViolationNum, "")); setVfiNotes(g(p.vfiNotes, "")); break
+      case "parking":
+        setPvDate(g(p.pvDate, pvDate)); setPvTime(g(p.pvTime, "")); setPvCommunity(g(p.pvCommunity, "")); setPvOfficer(g(p.pvOfficer, "")); setPvVehicle(g(p.pvVehicle, EMPTY_VEHICLE)); setPvLoc(g(p.pvLoc, EMPTY_LOCATION)); setPvSpace(g(p.pvSpace, "")); setPvViolationType(g(p.pvViolationType, PARKING_VIOLATION_TYPES[0])); setPvNotes(g(p.pvNotes, "")); setPvTowRequested(g(p.pvTowRequested, false)); setPvTowReason(g(p.pvTowReason, "")); break
+      case "maintenance":
+        setMntDate(g(p.mntDate, mntDate)); setMntTime(g(p.mntTime, "")); setMntCommunity(g(p.mntCommunity, "")); setMntOfficer(g(p.mntOfficer, "")); setMntLoc(g(p.mntLoc, EMPTY_LOCATION)); setMntIssueType(g(p.mntIssueType, "")); setMntIssueOther(g(p.mntIssueOther, "")); setMntDesc(g(p.mntDesc, "")); break
+    }
+  }
+
+  async function loadDrafts() {
+    setDraftsLoading(true)
+    const { data } = await supabase.from("report_drafts").select("*").order("updated_at", { ascending: false })
+    setDrafts(data || [])
+    setDraftsLoading(false)
+  }
+
+  async function saveDraft(type: ReportTab) {
+    const meta  = draftMeta(type)
+    const title = `${meta.date || "—"} ${meta.time || ""}`.trim() + ` · ${meta.officer || "Unknown officer"}`
+    const payload = serializeDraft(type)
+    setReportError("")
+    if (activeDraftId) {
+      const { error } = await supabase.from("report_drafts")
+        .update({ title, payload, community_id: meta.community, updated_at: new Date().toISOString() })
+        .eq("id", activeDraftId)
+      if (error) { setReportError("Draft save failed: " + error.message); return }
+    } else {
+      const { data, error } = await supabase.from("report_drafts")
+        .insert({ report_type: type, community_id: meta.community, user_email: userEmail || null, title, payload })
+        .select("id").single()
+      if (error) { setReportError("Draft save failed: " + error.message); return }
+      setActiveDraftId(data!.id)
+    }
+    setReportMessage("💾 Draft saved to My Drafts.")
+    logActivity("saved", "Report Draft", activeDraftId || "", `${DRAFT_LABEL[type] || type} draft saved — ${title}`)
+  }
+
+  function resumeDraft(d: any) {
+    hydrateDraft(d.report_type as ReportTab, d.payload || {})
+    setActiveDraftId(d.id)
+    setReportTab(d.report_type as ReportTab)
+    setReportError(""); setReportMessage(`Resumed draft — ${d.title || DRAFT_LABEL[d.report_type] || "report"}.`)
+  }
+
+  async function deleteDraft(id: string) {
+    if (!confirm("Delete this draft? This cannot be undone.")) return
+    await supabase.from("report_drafts").delete().eq("id", id)
+    if (activeDraftId === id) setActiveDraftId(null)
+    setDrafts(prev => prev.filter(d => d.id !== id))
+  }
+
+  // After a successful submit, remove the resumed draft (if any) from the folder.
+  async function clearDraftAfterSubmit() {
+    if (!activeDraftId) return
+    const id = activeDraftId
+    setActiveDraftId(null)
+    await supabase.from("report_drafts").delete().eq("id", id)
+  }
+
+  // Open a report sub-tab fresh (clears any active-draft context).
+  function openReportTab(t: ReportTab) {
+    setReportTab(t); setActiveDraftId(null); setReportError(""); setReportMessage("")
+    if (t === "drafts") loadDrafts()
+    if (t === "view") loadPastReports()
   }
 
   async function resubmitReport(queueId: string, comment: string) {
@@ -2016,13 +2135,14 @@ export default function UserDashboard() {
       {activeTab === "reports" && (
         <div>
           <div className="flex gap-2 mb-6 flex-wrap">
-            {!isGuest && <button className={rTabCls("daily")}       onClick={() => setReportTab("daily")}>📝 Daily Log</button>}
-            {!isGuest && <button className={rTabCls("incident")}    onClick={() => setReportTab("incident")}>🚨 Incident Report</button>}
-            {!isGuest && <button className={rTabCls("contact")}     onClick={() => setReportTab("contact")}>📋 Field Contact</button>}
-            {!isGuest && <button className={rTabCls("vfi")}         onClick={() => setReportTab("vfi")}>🚗 Vehicle FI</button>}
-            {!isGuest && <button className={rTabCls("parking")}     onClick={() => setReportTab("parking")}>🅿️ Parking Violation</button>}
-            {!isGuest && <button className={rTabCls("maintenance")} onClick={() => setReportTab("maintenance")}>🔧 Maintenance</button>}
-            <button className={rTabCls("view")} onClick={() => { setReportTab("view"); loadPastReports() }}>📂 View Reports</button>
+            {!isGuest && <button className={rTabCls("daily")}       onClick={() => openReportTab("daily")}>📝 Daily Log</button>}
+            {!isGuest && <button className={rTabCls("incident")}    onClick={() => openReportTab("incident")}>🚨 Incident Report</button>}
+            {!isGuest && <button className={rTabCls("contact")}     onClick={() => openReportTab("contact")}>📋 Field Contact</button>}
+            {!isGuest && <button className={rTabCls("vfi")}         onClick={() => openReportTab("vfi")}>🚗 Vehicle FI</button>}
+            {!isGuest && <button className={rTabCls("parking")}     onClick={() => openReportTab("parking")}>🅿️ Parking Violation</button>}
+            {!isGuest && <button className={rTabCls("maintenance")} onClick={() => openReportTab("maintenance")}>🔧 Maintenance</button>}
+            {!isGuest && <button className={rTabCls("drafts")}      onClick={() => openReportTab("drafts")}>🗂 My Drafts{drafts.length > 0 ? ` (${drafts.length})` : ""}</button>}
+            <button className={rTabCls("view")} onClick={() => openReportTab("view")}>📂 View Reports</button>
           </div>
 
           {reportError   && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mb-4 text-sm">{reportError}</div>}
@@ -2196,10 +2316,17 @@ export default function UserDashboard() {
                   </div>
                 )}
               </div>
-              <button onClick={saveDailyLog} disabled={reportSaving}
-                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
-                {reportSaving ? "Submitting..." : "Submit Daily Log"}
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => saveDraft("daily")} disabled={reportSaving}
+                  className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
+                  💾 Save Draft
+                </button>
+                <button onClick={saveDailyLog} disabled={reportSaving}
+                  className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                  {reportSaving ? "Submitting..." : "Submit Daily Log"}
+                </button>
+                {activeDraftId && <span className="text-xs text-gray-400">Editing a saved draft</span>}
+              </div>
             </div>
           )}
 
@@ -2476,10 +2603,17 @@ export default function UserDashboard() {
                 <input type="checkbox" id="followup" checked={incFollowUp} onChange={e => setIncFollowUp(e.target.checked)} className="w-4 h-4 accent-blue-700" />
                 <label htmlFor="followup" className="text-sm font-medium text-gray-700">Follow-up required</label>
               </div>
-              <button onClick={saveIncidentReport} disabled={reportSaving}
-                className="px-6 py-3 bg-red-700 text-white font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer disabled:opacity-50">
-                {reportSaving ? "Submitting..." : "Submit Incident Report"}
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => saveDraft("incident")} disabled={reportSaving}
+                  className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
+                  💾 Save Draft
+                </button>
+                <button onClick={saveIncidentReport} disabled={reportSaving}
+                  className="px-6 py-3 bg-red-700 text-white font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer disabled:opacity-50">
+                  {reportSaving ? "Submitting..." : "Submit Incident Report"}
+                </button>
+                {activeDraftId && <span className="text-xs text-gray-400">Editing a saved draft</span>}
+              </div>
             </div>
           )}
 
@@ -2561,10 +2695,17 @@ export default function UserDashboard() {
                   </div>
                 )}
               </div>
-              <button onClick={saveContactLog} disabled={reportSaving}
-                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
-                {reportSaving ? "Saving..." : "Log Field Contact"}
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => saveDraft("contact")} disabled={reportSaving}
+                  className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
+                  💾 Save Draft
+                </button>
+                <button onClick={saveContactLog} disabled={reportSaving}
+                  className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                  {reportSaving ? "Saving..." : "Log Field Contact"}
+                </button>
+                {activeDraftId && <span className="text-xs text-gray-400">Editing a saved draft</span>}
+              </div>
             </div>
           )}
 
@@ -2673,10 +2814,17 @@ export default function UserDashboard() {
                   </div>
                 )}
               </div>
-              <button onClick={saveVehicleFI} disabled={reportSaving}
-                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
-                {reportSaving ? "Saving..." : "Log Vehicle FI"}
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => saveDraft("vfi")} disabled={reportSaving}
+                  className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
+                  💾 Save Draft
+                </button>
+                <button onClick={saveVehicleFI} disabled={reportSaving}
+                  className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                  {reportSaving ? "Saving..." : "Log Vehicle FI"}
+                </button>
+                {activeDraftId && <span className="text-xs text-gray-400">Editing a saved draft</span>}
+              </div>
             </div>
           )}
 
@@ -2788,10 +2936,17 @@ export default function UserDashboard() {
                   </div>
                 )}
               </div>
-              <button onClick={saveParkingViolation} disabled={reportSaving}
-                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
-                {reportSaving ? "Submitting..." : "Submit Parking Violation"}
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => saveDraft("parking")} disabled={reportSaving}
+                  className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
+                  💾 Save Draft
+                </button>
+                <button onClick={saveParkingViolation} disabled={reportSaving}
+                  className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                  {reportSaving ? "Submitting..." : "Submit Parking Violation"}
+                </button>
+                {activeDraftId && <span className="text-xs text-gray-400">Editing a saved draft</span>}
+              </div>
             </div>
           )}
 
@@ -2871,10 +3026,59 @@ export default function UserDashboard() {
                 <strong>📧 Auto-remit:</strong> Maintenance reports are emailed directly to the property maintenance contact on file upon submission.
               </div>
 
-              <button onClick={saveMaintenance} disabled={reportSaving}
-                className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
-                {reportSaving ? "Submitting..." : "Submit Maintenance Report"}
-              </button>
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={() => saveDraft("maintenance")} disabled={reportSaving}
+                  className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
+                  💾 Save Draft
+                </button>
+                <button onClick={saveMaintenance} disabled={reportSaving}
+                  className="px-6 py-3 bg-blue-800 text-white font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                  {reportSaving ? "Submitting..." : "Submit Maintenance Report"}
+                </button>
+                {activeDraftId && <span className="text-xs text-gray-400">Editing a saved draft</span>}
+              </div>
+            </div>
+          )}
+
+          {/* MY DRAFTS */}
+          {reportTab === "drafts" && (
+            <div className="max-w-3xl">
+              <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                <h3 className="text-lg font-bold text-gray-800">My Drafts</h3>
+                <button onClick={loadDrafts} disabled={draftsLoading}
+                  className="px-3 py-1.5 bg-white border border-gray-300 text-gray-600 text-xs font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
+                  {draftsLoading ? "Loading…" : "↻ Refresh"}
+                </button>
+              </div>
+              <p className="text-xs text-gray-500 mb-4 flex items-center gap-1.5">🔒 Private to you — only you can open these. Resume to finish and submit.</p>
+              {draftsLoading ? (
+                <div className="text-gray-400 text-sm py-10 text-center">Loading…</div>
+              ) : drafts.length === 0 ? (
+                <div className="text-gray-400 text-sm py-10 text-center bg-white border border-gray-200 rounded-xl">
+                  No saved drafts. Start a report and choose 💾 Save Draft to keep it here.
+                </div>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {drafts.map(d => (
+                    <div key={d.id} className="bg-white border border-gray-200 rounded-xl px-4 py-3 flex items-center gap-3 flex-wrap">
+                      <span className="text-[11px] font-bold uppercase px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 whitespace-nowrap">
+                        {DRAFT_ICON[d.report_type] || "📄"} {DRAFT_LABEL[d.report_type] || d.report_type}
+                      </span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-sm font-semibold text-gray-900 truncate">{d.title || "Untitled draft"}</div>
+                        <div className="text-xs text-gray-400">edited {new Date(d.updated_at).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })}</div>
+                      </div>
+                      <button onClick={() => resumeDraft(d)}
+                        className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-lg border-none cursor-pointer whitespace-nowrap">
+                        ▶ Resume
+                      </button>
+                      <button onClick={() => deleteDraft(d.id)} title="Delete draft"
+                        className="px-2 py-1.5 bg-red-50 hover:bg-red-100 text-red-700 text-xs font-semibold rounded-lg border border-red-200 cursor-pointer">🗑</button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-[11px] text-gray-400 mt-4">Note: text fields are saved. Photo attachments aren&apos;t stored in a draft — re-attach them when you resume before submitting.</p>
             </div>
           )}
 
