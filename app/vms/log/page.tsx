@@ -60,8 +60,13 @@ export default function VmsScanLogPage() {
 
   const load = useCallback(async () => {
     setLoading(true)
+    // Only genuine check-ins: DL scans (entry_method "scan") and manual visitor
+    // entries (entry_method "checkin_manual"/"manual"). This excludes legacy
+    // rows with no entry_method that came from other flows (e.g. barred-person
+    // records), which are not visitor check-ins.
     let q = supabase.from("visitor_logs")
       .select("id, first_name, last_name, middle_name, person_type, visitor_type, community_id, unit_number, resident_name, dl_scanned, watchlist_hit, dob, oln, address, city, state_of_issue, zip, sex, created_at")
+      .in("entry_method", ["scan", "checkin_manual", "manual"])
       .order("created_at", { ascending: false })
       .limit(300)
     if (communityId)  q = q.eq("community_id", communityId)
@@ -89,7 +94,7 @@ export default function VmsScanLogPage() {
     <div className="p-4 sm:p-5 pb-16 max-w-5xl">
       <h1 className="text-2xl font-bold mb-1">Scan Log</h1>
       <p className="text-sm text-gray-500 mb-5">
-        Recent visitor check-ins, newest first. Driver-license scans are auto-logged; each line shows the captured details.
+        Visitors checked in by DL scan or manual entry, newest first. Each line shows the captured details.
       </p>
 
       {/* Filters */}
