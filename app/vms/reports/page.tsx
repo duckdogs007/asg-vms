@@ -317,6 +317,7 @@ export default function ReportsPage() {
   const [queueLoading, setQueueLoading] = useState(false)
   const [approved,        setApproved]        = useState<any[]>([])
   const [approvedLoading, setApprovedLoading] = useState(false)
+  const [approvedExpanded, setApprovedExpanded] = useState(false)
   const [approvingId,  setApprovingId]  = useState<string | null>(null)
   const [returnId,     setReturnId]     = useState<string | null>(null)
   const [returnNotes,  setReturnNotes]  = useState("")
@@ -1562,11 +1563,11 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
             </div>
           ) : (
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
-              {approved.map((q, i) => {
+              {(approvedExpanded ? approved : approved.slice(0, 3)).map((q, i, shown) => {
                 const badge = SUB_BADGE[q.report_type] || "bg-gray-100 text-gray-700"
                 const comm  = communities.find(c => c.id === q.community_id)?.name || "—"
                 return (
-                  <div key={q.id} className={`flex items-center gap-3 px-4 py-3 ${i < approved.length - 1 ? "border-b border-gray-100" : ""}`}>
+                  <div key={q.id} className={`flex items-center gap-3 px-4 py-3 ${i < shown.length - 1 ? "border-b border-gray-100" : ""}`}>
                     <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full flex-shrink-0 whitespace-nowrap ${badge}`}>
                       {q.report_type.replace(/_/g, " ")}
                     </span>
@@ -1597,6 +1598,14 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                   </div>
                 )
               })}
+              {approved.length > 3 && (
+                <button
+                  onClick={() => setApprovedExpanded(v => !v)}
+                  className="w-full px-4 py-2.5 text-xs font-semibold text-blue-700 hover:bg-gray-50 bg-white border-0 border-t border-gray-100 cursor-pointer text-center"
+                >
+                  {approvedExpanded ? "▲ Show less" : `▼ Show all ${approved.length}`}
+                </button>
+              )}
             </div>
           )}
         </Section>
