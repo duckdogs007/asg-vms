@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import { checkIsAdmin } from "@/lib/admin"
 import { Community } from "@/lib/types"
 
 // One visitor-log line item. Columns come from public.visitor_logs.
@@ -15,6 +16,7 @@ interface LogRow {
   visitor_type:   string | null
   community_id:   string | null
   unit_number:    string | null
+  apartment:      string | null
   resident_name:  string | null
   dl_scanned:     boolean | null
   watchlist_hit:  boolean | null
@@ -51,11 +53,14 @@ export default function VmsScanLogPage() {
   const [scannedOnly, setScannedOnly] = useState(false)
   const [rows,        setRows]        = useState<LogRow[]>([])
   const [loading,     setLoading]     = useState(true)
+  const [isAdmin,     setIsAdmin]     = useState(false)
+  const [deletingId,  setDeletingId]  = useState("")
 
   useEffect(() => {
     supabase.from("communities").select("id,name").order("name").then(({ data }) => {
       if (data) setCommunities(data as Community[])
     })
+    checkIsAdmin().then(setIsAdmin)
   }, [])
 
   const load = useCallback(async () => {
@@ -65,7 +70,7 @@ export default function VmsScanLogPage() {
     // rows with no entry_method that came from other flows (e.g. barred-person
     // records), which are not visitor check-ins.
     let q = supabase.from("visitor_logs")
-      .select("id, first_name, last_name, middle_name, person_type, visitor_type, community_id, unit_number, resident_name, dl_scanned, watchlist_hit, dob, oln, address, city, state_of_issue, zip, sex, created_at")
+      .select("id, first_name, last_name, middle_name, person_type, visitor_type, community_id, unit_number, apartment, resident_name, dl_scanned, watchlist_hit, dob, oln, address, city, state_of_issue, zip, sex, created_at")
       .in("entry_method", ["scan", "checkin_manual", "manual"])
       .order("created_at", { ascending: false })
       .limit(300)
@@ -77,6 +82,24 @@ export default function VmsScanLogPage() {
   }, [communityId, scannedOnly])
 
   useEffect(() => { load() }, [load])
+
+  async function deleteRow(r: LogRow) {
+    const name = [r.first_name, r.last_name].filter(Boolean).join(" ").trim() || "this entry"
+    if (!confirm(`Delete scan-log entry for ${name}? This removes the visitor-log record permanently.`)) return
+    setDeletingId(r.id)
+    const { error } = await supabase.from("visitor_logs").delete().eq("id", r.id)
+    if (error) { setDeletingId(""); alert("Delete failed: " + error.message); return }
+    setRows(prev => prev.filter(x => x.id !== r.id))
+    setDeletingId("")
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      supabase.from("audit_logs").insert({
+        user_email: user?.email || "unknown",
+        action: "deleted", resource_type: "Visitor Log", resource_id: r.id,
+        detail: `Deleted scan-log entry — ${name}`,
+        created_at: new Date().toISOString(),
+      })
+    })
+  }
 
   const communityName = (id: string | null) =>
     id ? (communities.find(c => c.id === id)?.name || "—") : "—"
@@ -136,9 +159,12 @@ export default function VmsScanLogPage() {
               const name = [r.first_name, r.middle_name, r.last_name].filter(Boolean).join(" ").trim() || "Unknown"
               const type = r.person_type || r.visitor_type || "Visitor"
               const addr = [r.address, r.city, [r.state_of_issue, r.zip].filter(Boolean).join(" ")].filter(Boolean).join(", ")
-              const meta = [
-                r.unit_number ? `Unit ${r.unit_number}` : null,
+              const unit = r.unit_number || r.apartment || ""
+              const destination = [
+                unit ? `Unit ${unit}` : null,
                 r.resident_name ? `visiting ${r.resident_name}` : null,
+              ].filter(Boolean).join(" · ")
+              const meta = [
                 r.dob ? `DOB ${fmtDOB(r.dob)}` : null,
                 r.oln ? `OLN ${r.oln}` : null,
                 r.sex || null,
@@ -161,11 +187,29 @@ export default function VmsScanLogPage() {
                         )}
                         <span className="font-bold text-gray-900 capitalize truncate">{name}</span>
                       </div>
-                      {meta && <div className="text-sm text-gray-600 mt-1">{meta}</div>}
+                      <div className="text-sm mt-1">
+                        <span className="text-gray-400">➡ Destination: </span>
+                        {destination
+                          ? <span className="font-semibold text-gray-800">{destination}</span>
+                          : <span className="text-gray-400 italic">not specified</span>}
+                      </div>
+                      {meta && <div className="text-xs text-gray-500 mt-0.5">{meta}</div>}
                       {addr && <div className="text-xs text-gray-400 mt-0.5 truncate">{addr}</div>}
                     </div>
-                    <div className="text-right text-xs text-gray-500 shrink-0">
-                      <div className="font-semibold text-gray-700">📍 {communityName(r.community_id)}</div>
+                    <div className="flex flex-col items-end gap-1.5 shrink-0">
+                      <div className="text-right text-xs text-gray-500">
+                        <div className="font-semibold text-gray-700">📍 {communityName(r.community_id)}</div>
+                      </div>
+                      {isAdmin && (
+                        <button
+                          onClick={() => deleteRow(r)}
+                          disabled={deletingId === r.id}
+                          title="Delete this entry (admin)"
+                          className="px-2 py-1 bg-red-50 hover:bg-red-100 text-red-700 text-[11px] font-semibold rounded border border-red-200 cursor-pointer disabled:opacity-50"
+                        >
+                          {deletingId === r.id ? "Deleting…" : "🗑 Delete"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 </div>
