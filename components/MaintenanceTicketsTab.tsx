@@ -21,6 +21,7 @@ interface Ticket {
   assigned_to: string | null
   resolution_notes: string | null
   created_at: string
+  updated_at: string | null
   resolved_at: string | null
   is_sample: boolean | null
 }
@@ -56,6 +57,10 @@ function fmtDate(ts: string | null): string {
   if (!ts) return "—"
   return new Date(ts).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
 }
+function fmtDateTime(ts: string | null): string {
+  if (!ts) return "—"
+  return new Date(ts).toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" })
+}
 
 const BLANK = { title: "", category: CATEGORIES[0], priority: "Medium", location: "", reporter_role: ROLES[0], description: "" }
 
@@ -75,6 +80,7 @@ export default function MaintenanceTicketsTab({
   const [saving,    setSaving]    = useState(false)
   const [msg,       setMsg]       = useState("")
   const [busyId,    setBusyId]    = useState("")
+  const [viewing,   setViewing]   = useState<Ticket | null>(null)
 
   const load = useCallback(async () => {
     if (!communityId) { setTickets([]); return }
@@ -140,6 +146,61 @@ export default function MaintenanceTicketsTab({
   const openCount = counts["Open"] + counts["In Progress"]
 
   const visible = statusFilter === "All" ? tickets : tickets.filter(t => t.status === statusFilter)
+
+  // Full field list for the detail view / print / export.
+  function ticketRows(t: Ticket): [string, string][] {
+    return [
+      ["Title",              t.title || ""],
+      ["Status",             t.status || ""],
+      ["Priority",           t.priority || ""],
+      ["Category",           t.category || ""],
+      ["Location",           t.location || ""],
+      ["Community",          communityName || ""],
+      ["Reported by (role)", t.reporter_role || ""],
+      ["Reported by",        t.reported_by || ""],
+      ["Assigned to",        t.assigned_to || ""],
+      ["Opened",             fmtDateTime(t.created_at)],
+      ["Last updated",       fmtDateTime(t.updated_at)],
+      ["Resolved",           t.resolved_at ? fmtDateTime(t.resolved_at) : ""],
+      ["Description",        t.description || ""],
+      ["Resolution notes",   t.resolution_notes || ""],
+    ]
+  }
+
+  function exportTicketCSV(t: Ticket) {
+    const esc = (v: any) => `"${String(v ?? "").replace(/"/g, '""')}"`
+    const lines = ["Field,Value", ...ticketRows(t).map(([k, v]) => `${esc(k)},${esc(v)}`)]
+    const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a")
+    a.href = url
+    a.download = `maintenance-ticket-${(t.title || "ticket").replace(/[^a-z0-9]+/gi, "-").toLowerCase().slice(0, 40)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
+  function printTicket(t: Ticket) {
+    const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    const body = ticketRows(t).filter(([, v]) => v).map(([k, v]) =>
+      `<tr><th>${esc(k)}</th><td>${esc(v).replace(/\n/g, "<br>")}</td></tr>`).join("")
+    const html = `<!doctype html><html><head><meta charset="utf-8"><title>Maintenance Ticket — ${esc(t.title)}</title>
+      <style>
+        body{font-family:Arial,Helvetica,sans-serif;color:#111;margin:24px;}
+        h1{font-size:18px;margin:0 0 2px;} .sub{color:#666;font-size:12px;margin-bottom:16px;}
+        table{width:100%;border-collapse:collapse;font-size:13px;}
+        th,td{border:1px solid #d1d5db;padding:7px 10px;text-align:left;vertical-align:top;}
+        th{background:#f3f4f6;width:180px;font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:#374151;}
+        @media print{@page{margin:14mm;}}
+      </style></head><body>
+      <h1>Maintenance Ticket — ${esc(t.title)}</h1>
+      <div class="sub">${esc(communityName || "")} · ${t.priority} priority · ${t.status} · Printed ${new Date().toLocaleString("en-US")}</div>
+      <table><tbody>${body}</tbody></table>
+      </body></html>`
+    const w = window.open("", "_blank", "width=900,height=720")
+    if (!w) { alert("Please allow pop-ups to print."); return }
+    w.document.write(html); w.document.close(); w.focus()
+    setTimeout(() => w.print(), 250)
+  }
 
   return (
     <div>
@@ -238,6 +299,10 @@ export default function MaintenanceTicketsTab({
                   </div>
                 </div>
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
+                  <button onClick={() => setViewing(t)}
+                    className="px-3 py-1.5 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded-md border-none cursor-pointer whitespace-nowrap">
+                    🔍 View
+                  </button>
                   <select
                     value={t.status}
                     disabled={busyId === t.id}
@@ -257,6 +322,63 @@ export default function MaintenanceTicketsTab({
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Detail modal */}
+      {viewing && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setViewing(null)}>
+          <div className="bg-white rounded-xl w-full max-w-2xl my-4 shadow-2xl" onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div className="flex items-start justify-between gap-3 p-5 border-b border-gray-200">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap mb-1">
+                  {viewing.is_sample && <span className="text-xs font-bold uppercase px-2.5 py-1 rounded-full bg-purple-100 text-purple-800 border border-purple-300">SAMPLE TICKET</span>}
+                  <span className={`text-xs font-bold uppercase px-2.5 py-1 rounded-full ${PRIORITY_BADGE[viewing.priority] || PRIORITY_BADGE.Medium}`}>{viewing.priority}</span>
+                  <span className={`text-xs font-bold uppercase px-2.5 py-1 rounded-full ${STATUS_BADGE[viewing.status] || STATUS_BADGE.Open}`}>{viewing.status}</span>
+                  {viewing.category && <span className="text-xs font-semibold uppercase px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">{viewing.category}</span>}
+                </div>
+                <h2 className="text-lg font-bold text-gray-900">{viewing.title}</h2>
+              </div>
+              <button onClick={() => setViewing(null)} className="text-gray-400 hover:text-gray-700 bg-transparent border-none cursor-pointer text-xl leading-none">✕</button>
+            </div>
+
+            {/* Body — full detail */}
+            <div className="p-5">
+              <dl className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
+                {ticketRows(viewing)
+                  .filter(([k]) => k !== "Title" && k !== "Description" && k !== "Resolution notes")
+                  .map(([k, v]) => (
+                    <div key={k}>
+                      <dt className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">{k}</dt>
+                      <dd className="text-sm text-gray-800">{v || "—"}</dd>
+                    </div>
+                  ))}
+              </dl>
+              {viewing.description && (
+                <div className="mt-4">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Description</div>
+                  <div className="text-sm text-gray-800 whitespace-pre-wrap leading-relaxed">{viewing.description}</div>
+                </div>
+              )}
+              {viewing.resolution_notes && (
+                <div className="mt-4">
+                  <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Resolution Notes</div>
+                  <div className="text-sm text-green-800 bg-green-50 border border-green-200 rounded-md px-3 py-2 whitespace-pre-wrap">{viewing.resolution_notes}</div>
+                </div>
+              )}
+            </div>
+
+            {/* Footer actions */}
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-200 flex-wrap">
+              <button onClick={() => exportTicketCSV(viewing)}
+                className="px-4 py-2 bg-gray-800 text-white text-sm font-semibold rounded-md hover:bg-gray-700 border-none cursor-pointer">⬇ Export CSV</button>
+              <button onClick={() => printTicket(viewing)}
+                className="px-4 py-2 bg-white border border-gray-300 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-50 cursor-pointer">🖨 Print</button>
+              <button onClick={() => setViewing(null)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-200 border-none cursor-pointer">Close</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
