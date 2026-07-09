@@ -103,6 +103,9 @@ export default function UnitActivityTab() {
       .from("unit_activity")
       .select("*")
       .eq("community_id", id)
+      // Only events tied to a specific unit/location — a building or apartment
+      // must be present. Excludes community-wide records with no location.
+      .or("building.not.is.null,apartment.not.is.null")
 
     if (building.trim())  query = query.eq("building", building.trim())
     if (apartment.trim()) query = query.eq("apartment", apartment.trim())
@@ -113,7 +116,12 @@ export default function UnitActivityTab() {
     query = query.order("event_at", { ascending: false }).limit(500)
 
     const { data } = await query
-    setRows(data || [])
+    // Belt-and-suspenders: also drop rows whose building/apartment are blank
+    // strings (not caught by the NULL filter above).
+    const located = (data || []).filter((r: any) =>
+      (r.building && String(r.building).trim()) || (r.apartment && String(r.apartment).trim())
+    )
+    setRows(located)
     setLoading(false)
     setLoadedOnce(true)
   }
