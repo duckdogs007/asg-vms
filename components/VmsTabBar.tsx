@@ -6,14 +6,13 @@ import { usePathname } from "next/navigation"
 const TABS = [
   { href: "/vms",        label: "Check-In",     icon: "🛂" },
   { href: "/vms/scan",   label: "Scan License", icon: "📷" },
-  { href: "/vms/manual", label: "Manual Entry", icon: "📝" },
   { href: "/vms/search", label: "Search",       icon: "🔎" },
 ]
 
 // Tab bar appears only on the check-in workflow pages. /vms/intel,
 // /vms/reports, /vms/post-orders are top-level concerns reached via
 // TopNav and are intentionally excluded.
-const SHOW_PATHS = new Set(["/vms", "/vms/scan", "/vms/manual", "/vms/search"])
+const SHOW_PATHS = new Set(["/vms", "/vms/scan", "/vms/search"])
 
 export default function VmsTabBar() {
   const pathname = usePathname()

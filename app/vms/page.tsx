@@ -37,6 +37,11 @@ export default function VMSPage() {
   const [alertMode,      setAlertMode]      = useState(false)
   const [statusMessage,  setStatusMessage]  = useState("")
 
+  const [dob,            setDob]            = useState("")
+  const [oln,            setOln]            = useState("")
+  const [plate,          setPlate]          = useState("")
+  const [showExtra,      setShowExtra]      = useState(false)
+
   const [isGuest,        setIsGuest]        = useState(false)
   const [saving,         setSaving]         = useState(false)
   const [saveError,      setSaveError]      = useState("")
@@ -61,6 +66,11 @@ export default function VMSPage() {
     const params = new URLSearchParams(window.location.search)
     const returned = params.get("return")
     if (returned) handleNameInput(returned)
+    // Accept ?first=&last=&dob=&oln= from redirects (e.g. old /vms/manual links)
+    const pFirst = params.get("first"), pLast = params.get("last")
+    if (pFirst || pLast) handleNameInput(`${pFirst || ""} ${pLast || ""}`.trim())
+    if (params.get("dob")) { setDob(params.get("dob")!); setShowExtra(true) }
+    if (params.get("oln")) { setOln(params.get("oln")!); setShowExtra(true) }
   }, [])
 
   useEffect(() => {
@@ -160,16 +170,51 @@ export default function VMSPage() {
     return { first: parts[0] || "", last: parts[1] || "" }
   }
 
-  async function checkWatchlist(first: string, last: string) {
+  async function runWatchlistCheck(first: string, last: string): Promise<any[]> {
+    // OLN is most specific — check it first when the officer has the license
+    if (oln.trim()) {
+      const { data } = await supabase.from("watchlist").select("*").ilike("oln", oln.trim())
+      if (data?.length) return data
+    }
     if (!last) return []
-    const { data } = await supabase
-      .from("watchlist").select("*").ilike("last_name", last)
+    // Name + DOB — catches suffix mismatches the DB trigger also handles
+    if (dob) {
+      const { data } = await supabase.from("watchlist").select("*").ilike("last_name", last)
+      const hits = (data || []).filter(p =>
+        p.last_name?.toLowerCase() === last.toLowerCase() &&
+        (!first || p.first_name?.toLowerCase().startsWith(first.toLowerCase())) &&
+        p.dob === dob
+      )
+      if (hits.length) return hits
+    }
+    // Name only (original fallback)
+    const { data } = await supabase.from("watchlist").select("*").ilike("last_name", last)
     if (!data) return []
     return data.filter(p =>
       p.last_name.toLowerCase() === last &&
       (!first || p.first_name.toLowerCase().startsWith(first))
     )
   }
+
+  // Re-run check when DOB or OLN changes (name already typed)
+  useEffect(() => {
+    if (!visitorName) return
+    const { first, last } = parseName(visitorName)
+    runWatchlistCheck(first, last).then(matches => {
+      if (matches.length === 0) {
+        setResolvedName(`${first} ${last}`)
+        setMatchStatus("cleared")
+        setAlertMode(false)
+        setStatusMessage("🟢 Visitor Cleared")
+        setPossibleMatches([])
+      } else {
+        setPossibleMatches(matches)
+        setMatchStatus("verify")
+        setAlertMode(true)
+        setStatusMessage("⚠️ Possible Watchlist Match")
+      }
+    })
+  }, [dob, oln]) // eslint-disable-line react-hooks/exhaustive-deps
 
   async function validateDOB(inputDOB?: string) {
     if (!selectedPerson?.dob) return
@@ -249,13 +294,15 @@ export default function VMSPage() {
     setEnteredDOB("")
     setSaveError("")
     setIdPhotos([]); setLivePhotos([])
+    setDob(""); setOln(""); setPlate("")
+    setShowExtra(false)
   }
 
   async function handleNameInput(input: string) {
     setVisitorName(input)
     const { first, last } = parseName(input)
     if (!last) return
-    const matches = await checkWatchlist(first, last)
+    const matches = await runWatchlistCheck(first, last)
     if (matches.length === 0) {
       setResolvedName(`${first} ${last}`)
       setMatchStatus("cleared")
@@ -288,7 +335,7 @@ export default function VMSPage() {
       } else {
         const { data: created, error: createErr } = await supabase
           .from("visitors")
-          .insert({ first_name: first, last_name: last, community_id: communityId || null })
+          .insert({ first_name: first, last_name: last, community_id: communityId || null, dob: dob || null, oln: oln || null })
           .select("id").single()
         if (createErr) { setSaveError("Failed to create visitor record."); return }
         visitorId = created.id
@@ -305,6 +352,9 @@ export default function VMSPage() {
         resident_name: selectedResident?.name || null,
         entry_method:  "checkin_manual",
         watchlist_hit: matchStatus === "verify",
+        dob:           dob || null,
+        oln:           oln || null,
+        plate:         plate || null,
         created_at:    new Date().toISOString()
       }).select("id").single()
 
@@ -410,6 +460,32 @@ export default function VMSPage() {
                   autoComplete="off"
                 />
               </div>
+
+              {/* No-ID expansion: DOB, license, plate for visitors without a scannable ID */}
+              <button
+                type="button"
+                onClick={() => setShowExtra(v => !v)}
+                className="text-xs text-blue-700 hover:text-blue-900 font-semibold text-left border-none bg-transparent cursor-pointer p-0 leading-none"
+              >
+                {showExtra ? "▾ Hide ID fields" : "▸ No ID to scan? Add DOB / License / Plate"}
+              </button>
+              {showExtra && (
+                <div className="flex flex-col gap-2 border-t border-gray-100 pt-2">
+                  <div>
+                    <label className={labelCls}>Date of Birth</label>
+                    <input type="date" value={dob} onChange={e => setDob(e.target.value)} className={inputCls} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Driver License #</label>
+                    <input value={oln} onChange={e => setOln(e.target.value)} placeholder="OLN / License #" className={inputCls} autoComplete="off" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Vehicle Plate</label>
+                    <input value={plate} onChange={e => setPlate(e.target.value)} placeholder="Plate number" className={inputCls} autoComplete="off" />
+                  </div>
+                </div>
+              )}
+
               <button
                 onClick={() => router.push("/vms/scan")}
                 className="w-full py-2 bg-gray-800 text-white rounded-md text-sm font-medium hover:bg-gray-900 transition-colors border-none cursor-pointer"
@@ -544,7 +620,12 @@ export default function VMSPage() {
                           )}
                         </div>
                         <button
-                          onClick={() => setSelectedPerson(p)}
+                          onClick={() => {
+                            setSelectedPerson(p)
+                            // If DOB was already entered in the identity section, pre-fill
+                            // the confirmation field and auto-validate.
+                            if (dob) { setEnteredDOB(dob); setTimeout(() => validateDOB(dob), 50) }
+                          }}
                           className="text-xs px-3 py-1 bg-blue-700 rounded hover:bg-blue-600 border-none cursor-pointer text-white shrink-0 ml-3"
                         >
                           Select
