@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
 import { maskSSN } from "@/lib/format"
-import { SignedImage } from "@/components/SignedImage"
+import { SignedImage, SignedLink } from "@/components/SignedImage"
 
 function fmtDate(ts: string) {
   const s = ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z"
@@ -705,11 +705,11 @@ export default function IntelPage() {
                   <div className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1.5">Photos on File ({visitPhotos.length})</div>
                   <div className="flex flex-wrap gap-2">
                     {visitPhotos.slice(0, 12).map((p) => (
-                      <a key={p.id} href={p.url} target="_blank" rel="noopener noreferrer"
+                      <SignedLink key={p.id} href={p.url} bucket="photos"
                         title={`${p.photo_type === "id" ? "ID" : "Live"}${p.captured_at ? " · " + fmtDate(p.captured_at) : ""}`}>
                         <SignedImage src={p.url} bucket="photos" alt={p.photo_type}
                           className="w-16 h-20 object-cover rounded border border-gray-200 hover:border-blue-400 transition-colors" />
-                      </a>
+                      </SignedLink>
                     ))}
                   </div>
                 </div>

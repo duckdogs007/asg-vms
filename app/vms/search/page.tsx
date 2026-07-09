@@ -213,7 +213,7 @@ export default function VmsSearchPage() {
           detail:   [v.reason, v.hoh_name ? `HOH: ${v.hoh_name}` : null].filter(Boolean).join(" · ") || "—",
           location: locationName(v.community_id),
           date:     v.date,
-          link:     `/vms/reports/vehicle_fi/${v.id}`,
+          link:     `/vms/reports/vehicle-fi/${v.id}`,
         })
       })
     }
