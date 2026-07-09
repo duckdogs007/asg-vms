@@ -2,7 +2,7 @@
 
 export const dynamic = "force-dynamic"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
@@ -153,7 +153,15 @@ export default function UserDashboard() {
   const [drafts,        setDrafts]        = useState<any[]>([])
   const [draftsLoading, setDraftsLoading] = useState(false)
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null)
+  const lastSavedRef = useRef<string>("")   // snapshot of the form at last save/resume
+  const dirtyRef     = useRef<boolean>(false) // read by the beforeunload guard
   useEffect(() => { loadDrafts() }, []) // eslint-disable-line react-hooks/exhaustive-deps
+  // Warn before closing/refreshing the tab if the open report form has unsaved edits.
+  useEffect(() => {
+    const h = (e: BeforeUnloadEvent) => { if (dirtyRef.current) { e.preventDefault(); e.returnValue = "" } }
+    window.addEventListener("beforeunload", h)
+    return () => window.removeEventListener("beforeunload", h)
+  }, [])
   const [reportSaving,  setReportSaving]  = useState(false)
   const [reportMessage, setReportMessage] = useState("")
   const [reportError,   setReportError]   = useState("")
@@ -1246,32 +1254,105 @@ export default function UserDashboard() {
     setDraftsLoading(false)
   }
 
+  const FORM_TABS: ReportTab[] = ["daily", "incident", "contact", "vfi", "parking", "maintenance"]
+
+  // Per-type photo File[] accessors (all forms use the contact-photos bucket).
+  function getPhotos(type: ReportTab): File[] {
+    switch (type) {
+      case "daily": return dailyPhotoFiles
+      case "incident": return incPhotoFiles
+      case "contact": return ctPhotoFiles
+      case "vfi": return vfiPhotoFiles
+      case "parking": return pvPhotoFiles
+      case "maintenance": return mntPhotoFiles
+      default: return []
+    }
+  }
+  function setPhotos(type: ReportTab, files: File[]) {
+    switch (type) {
+      case "daily": setDailyPhotoFiles(files); break
+      case "incident": setIncPhotoFiles(files); break
+      case "contact": setCtPhotoFiles(files); break
+      case "vfi": setVfiPhotoFiles(files); break
+      case "parking": setPvPhotoFiles(files); break
+      case "maintenance": setMntPhotoFiles(files); break
+    }
+  }
+  async function uploadDraftPhotos(files: File[]): Promise<string[]> {
+    const urls: string[] = []
+    for (const f of files) {
+      const ext = f.name.split(".").pop() || "jpg"
+      const path = `draft_${Date.now()}_${urls.length}.${ext}`
+      const { data: up } = await supabase.storage.from("contact-photos").upload(path, f, { upsert: false })
+      if (up) { const { data: { publicUrl } } = supabase.storage.from("contact-photos").getPublicUrl(up.path); urls.push(publicUrl) }
+    }
+    return urls
+  }
+  async function urlToFile(url: string, idx: number): Promise<File | null> {
+    try {
+      const res = await fetch(url); const blob = await res.blob()
+      const ext = (blob.type.split("/")[1] || "jpg").replace("jpeg", "jpg")
+      return new File([blob], `draft-photo-${idx + 1}.${ext}`, { type: blob.type || "image/jpeg" })
+    } catch { return null }
+  }
+
+  // Is the form for `type` worth warning about on leave? (has meaningful content)
+  function formHasContent(type: ReportTab): boolean {
+    switch (type) {
+      case "daily": return !!dailyNarrative || !!dailyNotes || dailyPhotoFiles.length > 0
+      case "incident": return !!incDescription || !!incAction || incTypes.length > 0 || incPhotoFiles.length > 0
+      case "contact": return !!ctFirstName || !!ctLastName || !!ctNotes || ctPhotoFiles.length > 0
+      case "vfi": return !!vfiVehicle.plate || !!vfiReason || !!vfiNotes || vfiPhotoFiles.length > 0
+      case "parking": return !!pvVehicle.plate || !!pvNotes || pvPhotoFiles.length > 0
+      case "maintenance": return !!mntIssueType || !!mntDesc || mntPhotoFiles.length > 0
+      default: return false
+    }
+  }
+  function formDirty(type: ReportTab): boolean {
+    return formHasContent(type) && JSON.stringify(serializeDraft(type)) !== lastSavedRef.current
+  }
+
   async function saveDraft(type: ReportTab) {
     const meta  = draftMeta(type)
     const title = `${meta.date || "—"} ${meta.time || ""}`.trim() + ` · ${meta.officer || "Unknown officer"}`
-    const payload = serializeDraft(type)
-    setReportError("")
+    const fields = serializeDraft(type)
+    setReportError(""); setReportMessage("Saving draft…")
+    const photoUrls = await uploadDraftPhotos(getPhotos(type))
+    const payload = { ...fields, _photoUrls: photoUrls }
     if (activeDraftId) {
       const { error } = await supabase.from("report_drafts")
         .update({ title, payload, community_id: meta.community, updated_at: new Date().toISOString() })
         .eq("id", activeDraftId)
-      if (error) { setReportError("Draft save failed: " + error.message); return }
+      if (error) { setReportError("Draft save failed: " + error.message); setReportMessage(""); return }
     } else {
       const { data, error } = await supabase.from("report_drafts")
         .insert({ report_type: type, community_id: meta.community, user_email: userEmail || null, title, payload })
         .select("id").single()
-      if (error) { setReportError("Draft save failed: " + error.message); return }
+      if (error) { setReportError("Draft save failed: " + error.message); setReportMessage(""); return }
       setActiveDraftId(data!.id)
     }
+    lastSavedRef.current = JSON.stringify(fields)
     setReportMessage("💾 Draft saved to My Drafts.")
+    loadDrafts()
     logActivity("saved", "Report Draft", activeDraftId || "", `${DRAFT_LABEL[type] || type} draft saved — ${title}`)
   }
 
-  function resumeDraft(d: any) {
-    hydrateDraft(d.report_type as ReportTab, d.payload || {})
+  async function resumeDraft(d: any) {
+    const type = d.report_type as ReportTab
+    const { _photoUrls, ...fields } = (d.payload || {}) as Record<string, any>
+    hydrateDraft(type, fields)
+    lastSavedRef.current = JSON.stringify(fields)
     setActiveDraftId(d.id)
-    setReportTab(d.report_type as ReportTab)
-    setReportError(""); setReportMessage(`Resumed draft — ${d.title || DRAFT_LABEL[d.report_type] || "report"}.`)
+    setReportTab(type)
+    setReportError("")
+    if (Array.isArray(_photoUrls) && _photoUrls.length) {
+      setReportMessage(`Resumed draft — restoring ${_photoUrls.length} photo(s)…`)
+      const files = (await Promise.all(_photoUrls.map((u: string, i: number) => urlToFile(u, i)))).filter(Boolean) as File[]
+      setPhotos(type, files)
+      setReportMessage(`Resumed draft — ${d.title || DRAFT_LABEL[type] || "report"}.`)
+    } else {
+      setReportMessage(`Resumed draft — ${d.title || DRAFT_LABEL[type] || "report"}.`)
+    }
   }
 
   async function deleteDraft(id: string) {
@@ -1289,12 +1370,22 @@ export default function UserDashboard() {
     await supabase.from("report_drafts").delete().eq("id", id)
   }
 
-  // Open a report sub-tab fresh (clears any active-draft context).
-  function openReportTab(t: ReportTab) {
-    setReportTab(t); setActiveDraftId(null); setReportError(""); setReportMessage("")
+  // Open a report sub-tab fresh. If leaving a form with unsaved edits, offer to
+  // save it as a draft first.
+  async function openReportTab(t: ReportTab) {
+    const cur = reportTab
+    if (FORM_TABS.includes(cur) && formDirty(cur)) {
+      if (confirm("You have unsaved changes on this report. Save them as a draft before leaving?")) {
+        await saveDraft(cur)
+      }
+    }
+    setReportTab(t); setActiveDraftId(null); setReportError(""); setReportMessage(""); lastSavedRef.current = ""
     if (t === "drafts") loadDrafts()
     if (t === "view") loadPastReports()
   }
+
+  // Keep the beforeunload guard's ref in sync each render.
+  dirtyRef.current = activeTab === "reports" && FORM_TABS.includes(reportTab) && formDirty(reportTab)
 
   async function resubmitReport(queueId: string, comment: string) {
     setRevisionSaving(queueId)
@@ -3078,7 +3169,7 @@ export default function UserDashboard() {
                   ))}
                 </div>
               )}
-              <p className="text-[11px] text-gray-400 mt-4">Note: text fields are saved. Photo attachments aren&apos;t stored in a draft — re-attach them when you resume before submitting.</p>
+              <p className="text-[11px] text-gray-400 mt-4">Drafts save your text fields and any attached photos. Resume to finish and submit.</p>
             </div>
           )}
 
