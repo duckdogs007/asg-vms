@@ -850,9 +850,15 @@ export default function ReportDetailPage() {
                 {f.type === "textarea" ? (
                   <textarea
                     value={editFields[f.key] ?? ""}
-                    onChange={e => setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                    rows={Math.max(10, ((editFields[f.key] ?? "").split("\n").length + 2))}
+                    ref={(el) => {
+                      if (el) { el.style.height = "auto"; el.style.height = `${el.scrollHeight}px` }
+                    }}
+                    onChange={e => {
+                      setEditFields(prev => ({ ...prev, [f.key]: e.target.value }))
+                      const el = e.target; el.style.height = "auto"; el.style.height = `${el.scrollHeight}px`
+                    }}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white overflow-hidden"
+                    style={{ minHeight: "10rem" }}
                   />
                 ) : (
                   <input
