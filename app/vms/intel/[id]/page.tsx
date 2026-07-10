@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
@@ -72,6 +72,7 @@ export default function ProfilePage() {
   // them synchronously yields undefined (→ id="undefined" → uuid cast error).
   // useParams() unwraps them safely in this client component.
   const routeParams = useParams()
+  const router = useRouter()
   const id = (Array.isArray(routeParams?.id) ? routeParams.id[0] : routeParams?.id) as string | undefined
 
   const [person,    setPerson]    = useState<PersonRow | null>(null)
@@ -89,6 +90,10 @@ export default function ProfilePage() {
   // Flag
   const [flagging,   setFlagging]   = useState(false)
   const [flagError,  setFlagError]  = useState("")
+
+  // Add to BOLO
+  const [boloBusy,   setBoloBusy]   = useState(false)
+  const [boloError,  setBoloError]  = useState("")
 
   // Add note
   const [noteOfficer,  setNoteOfficer]  = useState("")
@@ -186,6 +191,51 @@ export default function ProfilePage() {
     setFlagging(false)
     if (err) { setFlagError(err.message); return }
     await loadAll()
+  }
+
+  // Create a BOLO pre-filled from this barred person's record, then open it.
+  async function addToBolo() {
+    if (!person) return
+    const name = [person.first_name, person.middle_name, person.last_name].filter(Boolean).join(" ").trim() || "Unknown"
+    if (!confirm(`Create a BOLO for ${name}? It will appear on the BOLO page for all staff.`)) return
+    setBoloBusy(true); setBoloError("")
+
+    // Duplicate guard — reuse an existing active BOLO for the same OLN (or name).
+    let dupQ = supabase.from("bolos").select("id").eq("active", true)
+    dupQ = person.oln ? dupQ.eq("oln", person.oln) : dupQ.ilike("name", name)
+    const { data: dup } = await dupQ.limit(1).maybeSingle()
+    if (dup) {
+      setBoloBusy(false)
+      if (confirm("An active BOLO already exists for this person. Open it?")) router.push(`/vms/intel/bolo/${(dup as any).id}`)
+      return
+    }
+
+    const { data: { user } } = await supabase.auth.getUser()
+    const { data: created, error: err } = await supabase.from("bolos").insert({
+      name,
+      reason:       person.reason || null,
+      description:  person.comments || person.notes || null,
+      community_id: person.community_id || null,
+      dob:          person.dob || null,
+      oln:          person.oln || null,
+      ssn:          person.ssn || null,
+      sex:          person.sex || null,
+      race:         person.race || null,
+      firearm_flag: !!person.firearm_flag,
+      photo_url:    person.photo_url || null,
+      added_by:     user?.email || null,
+      active:       true,
+      created_at:   new Date().toISOString(),
+    }).select("id").single()
+    setBoloBusy(false)
+    if (err) { setBoloError(err.message); return }
+    supabase.from("audit_logs").insert({
+      user_email: user?.email || "unknown",
+      action: "created", resource_type: "BOLO", resource_id: created!.id,
+      detail: `BOLO created from watchlist record — ${name}`,
+      created_at: new Date().toISOString(),
+    })
+    router.push(`/vms/intel/bolo/${created!.id}`)
   }
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -371,6 +421,15 @@ export default function ProfilePage() {
             >
               {flagging ? "Flagging…" : "🚩 Flag Person"}
             </button>
+            <button
+              onClick={addToBolo}
+              disabled={boloBusy}
+              title="Create a BOLO from this barred person's record"
+              className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-md border-none cursor-pointer disabled:opacity-50"
+            >
+              {boloBusy ? "Adding…" : "📢 Add to BOLO"}
+            </button>
+            {boloError && <span className="text-red-600 text-xs self-center">{boloError}</span>}
             {isAdmin && !editMode && (
               <button
                 onClick={openEdit}
