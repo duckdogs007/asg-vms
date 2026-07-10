@@ -193,22 +193,19 @@ export default function ProfilePage() {
     await loadAll()
   }
 
-  // Create a BOLO pre-filled from this barred person's record, then open it.
-  async function addToBolo() {
-    if (!person) return
-    const name = [person.first_name, person.middle_name, person.last_name].filter(Boolean).join(" ").trim() || "Unknown"
-    if (!confirm(`Create a BOLO for ${name}? It will appear on the BOLO page for all staff.`)) return
-    setBoloBusy(true); setBoloError("")
+  function personName() {
+    return [person?.first_name, person?.middle_name, person?.last_name].filter(Boolean).join(" ").trim() || "Unknown"
+  }
 
-    // Duplicate guard — reuse an existing active BOLO for the same OLN (or name).
+  // Create a BOLO pre-filled from this record, reusing an existing active BOLO
+  // for the same OLN/name. Returns the BOLO id, or null on error.
+  async function createBoloFromPerson(): Promise<string | null> {
+    if (!person) return null
+    const name = personName()
     let dupQ = supabase.from("bolos").select("id").eq("active", true)
     dupQ = person.oln ? dupQ.eq("oln", person.oln) : dupQ.ilike("name", name)
     const { data: dup } = await dupQ.limit(1).maybeSingle()
-    if (dup) {
-      setBoloBusy(false)
-      if (confirm("An active BOLO already exists for this person. Open it?")) router.push(`/vms/intel/bolo/${(dup as any).id}`)
-      return
-    }
+    if (dup) return (dup as any).id as string
 
     const { data: { user } } = await supabase.auth.getUser()
     const { data: created, error: err } = await supabase.from("bolos").insert({
@@ -227,15 +224,52 @@ export default function ProfilePage() {
       active:       true,
       created_at:   new Date().toISOString(),
     }).select("id").single()
-    setBoloBusy(false)
-    if (err) { setBoloError(err.message); return }
+    if (err) { setBoloError(err.message); return null }
     supabase.from("audit_logs").insert({
       user_email: user?.email || "unknown",
       action: "created", resource_type: "BOLO", resource_id: created!.id,
       detail: `BOLO created from watchlist record — ${name}`,
       created_at: new Date().toISOString(),
     })
-    router.push(`/vms/intel/bolo/${created!.id}`)
+    return created!.id as string
+  }
+
+  // Add to BOLO — keeps the person on the barred Watchlist as well.
+  async function addToBolo() {
+    if (!person) return
+    if (!confirm(`Create a BOLO for ${personName()}? It will appear on the BOLO page for all staff.`)) return
+    setBoloBusy(true); setBoloError("")
+    const boloId = await createBoloFromPerson()
+    setBoloBusy(false)
+    if (boloId) router.push(`/vms/intel/bolo/${boloId}`)
+  }
+
+  // Move to BOLO — for someone entered as barred by mistake: create the BOLO and
+  // REMOVE them from the barred Watchlist. Delete is admin-only (RLS).
+  async function moveToBolo() {
+    if (!person) return
+    const name = personName()
+    if (!confirm(`Move ${name} to BOLO?\n\nThis creates a BOLO and removes them from the Barred Watchlist (including this profile's notes/flags). Use this when the person was entered as barred by mistake.`)) return
+    setBoloBusy(true); setBoloError("")
+    const boloId = await createBoloFromPerson()
+    if (!boloId) { setBoloBusy(false); return }
+    const { error: delErr } = await supabase.from("watchlist").delete().eq("id", id)
+    setBoloBusy(false)
+    if (delErr) {
+      // FK history (ban/denied/violation) can block removal — BOLO still created.
+      setBoloError("BOLO created, but this person couldn't be removed from the barred list (they have ban/denied/violation history). They remain on the Watchlist.")
+      router.push(`/vms/intel/bolo/${boloId}`)
+      return
+    }
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      supabase.from("audit_logs").insert({
+        user_email: user?.email || "unknown",
+        action: "deleted", resource_type: "Watchlist", resource_id: id,
+        detail: `Moved to BOLO — removed from barred list — ${name}`,
+        created_at: new Date().toISOString(),
+      })
+    })
+    router.push(`/vms/intel/bolo/${boloId}`)
   }
 
   async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -424,11 +458,21 @@ export default function ProfilePage() {
             <button
               onClick={addToBolo}
               disabled={boloBusy}
-              title="Create a BOLO from this barred person's record"
+              title="Create a BOLO from this record (keeps them on the barred Watchlist)"
               className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white text-sm font-semibold rounded-md border-none cursor-pointer disabled:opacity-50"
             >
-              {boloBusy ? "Adding…" : "📢 Add to BOLO"}
+              {boloBusy ? "Working…" : "📢 Add to BOLO"}
             </button>
+            {isAdmin && (
+              <button
+                onClick={moveToBolo}
+                disabled={boloBusy}
+                title="Not actually barred? Create a BOLO and remove them from the barred Watchlist (admin only)"
+                className="px-3 py-1.5 bg-white border border-amber-500 text-amber-700 hover:bg-amber-50 text-sm font-semibold rounded-md cursor-pointer disabled:opacity-50"
+              >
+                {boloBusy ? "Working…" : "➡️ Move to BOLO"}
+              </button>
+            )}
             {boloError && <span className="text-red-600 text-xs self-center">{boloError}</span>}
             {isAdmin && !editMode && (
               <button
