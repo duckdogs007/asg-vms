@@ -34,6 +34,7 @@ export default function ScanID(){
 
   const [person,     setPerson]      = useState<any>(null)
   const [alertPerson,setAlertPerson] = useState<any>(null)
+  const [boloHit,    setBoloHit]     = useState<any>(null)  // active BOLO match (non-blocking)
   const [status,     setStatus]      = useState<Status>("idle")
 
   // Inline visitor-entry form (shown after a CLEAR scan)
@@ -54,6 +55,7 @@ export default function ScanID(){
   const lastResultRef     = useRef<number>(0)
   const scanTimerRef      = useRef<ReturnType<typeof setTimeout> | null>(null)
   const barredFiredRef    = useRef<boolean>(false) // dedupe BARRED audit/alert
+  const boloFiredRef      = useRef<boolean>(false) // dedupe BOLO alert
   const lastProcessedRef  = useRef<string>("")   // exact text passed to processScan last
   const RESET_GRACE_MS    = 250                  // ignore input this long after result appears
   const SCAN_END_MS       = 200                  // pause this long => scan finished, process
@@ -294,6 +296,23 @@ export default function ScanID(){
     return null
   }
 
+  // Active BOLO match (non-blocking). BOLO stores a single full-name field.
+  async function findBoloHit(first: string, last: string, oln: string) {
+    if (oln) {
+      const { data } = await supabase.from("bolos").select("*").eq("active", true).ilike("oln", oln)
+      if (data && data.length > 0) return data[0]
+    }
+    if (last) {
+      const { data } = await supabase.from("bolos").select("*").eq("active", true).ilike("name", `%${last}%`)
+      const hits = (data || []).filter((b: any) => {
+        const n = (b.name || "").toLowerCase()
+        return n.includes(last.toLowerCase()) && (!first || n.includes(first.toLowerCase()))
+      })
+      if (hits.length > 0) return hits[0]
+    }
+    return null
+  }
+
   async function processScan(scan: string) {
     const trimmed = scan.replace(/[\r\n\t]+$/g, "")
     if (!trimmed.trim()) return
@@ -301,7 +320,33 @@ export default function ScanID(){
     setStatus("checking")
     const parsed = parseLicense(trimmed)
     setPerson(parsed)
-    const hit = await findWatchlistHit(parsed.first_name, parsed.last_name, parsed.oln)
+    const [hit, bolo] = await Promise.all([
+      findWatchlistHit(parsed.first_name, parsed.last_name, parsed.oln),
+      findBoloHit(parsed.first_name, parsed.last_name, parsed.oln),
+    ])
+    setBoloHit(bolo || null)
+    // Non-blocking BOLO alert (once per scan). Does not deny entry.
+    if (bolo && !boloFiredRef.current) {
+      boloFiredRef.current = true
+      const communityName = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-name")) || "Unknown"
+      const communityId   = (typeof window !== "undefined" && localStorage.getItem("asg-current-community-id")) || null
+      fireAlert({
+        type:         "bolo_hit",
+        severity:     "high",
+        community_id: communityId,
+        subject:      `⚠ BOLO MATCH — ${communityName}`,
+        body:         `A person matching an active BOLO was scanned at ${communityName}. Entry is not automatically blocked — stay alert.`,
+        payload: {
+          Community: communityName,
+          Source:    "License scan",
+          Person:    `${parsed.first_name} ${parsed.last_name}`.trim(),
+          "BOLO":    bolo.name || "",
+          Reason:    bolo.reason || bolo.description || "",
+          OLN:       parsed.oln || "",
+          Time:      new Date().toLocaleString("en-US"),
+        },
+      })
+    }
     if (hit) {
       setAlertPerson(hit)
       setStatus("barred")
@@ -362,11 +407,13 @@ export default function ScanID(){
 
   function reset() {
     barredFiredRef.current = false
+    boloFiredRef.current = false
     autoSavedRef.current = false
     lastProcessedRef.current = ""
     if (textareaRef.current) textareaRef.current.value = ""
     setPerson(null)
     setAlertPerson(null)
+    setBoloHit(null)
     setStatus("idle")
     setUnitId("")
     setResidents([])
@@ -405,10 +452,12 @@ export default function ScanID(){
       const newPart = oldScan && v.startsWith(oldScan) ? v.slice(oldScan.length) : v
       if (textareaRef.current) textareaRef.current.value = newPart
       barredFiredRef.current = false
+      boloFiredRef.current = false
       autoSavedRef.current = false
       lastProcessedRef.current = ""
       setPerson(null)
       setAlertPerson(null)
+      setBoloHit(null)
       setStatus("idle")
       setUnitId("")
       setResidents([])
@@ -487,6 +536,21 @@ export default function ScanID(){
           >
             ✓ Acknowledge & Clear — Next Visitor
           </button>
+        </div>
+      )}
+
+      {/* BOLO — non-blocking. Shown alongside a CLEAR or BARRED result. */}
+      {boloHit && (status === "clear" || status === "barred") && (
+        <div className="mt-4 px-5 py-4 rounded-xl bg-amber-500 border-2 border-amber-600 text-white">
+          <div className="text-2xl font-bold">⚠ BOLO — Be On the Lookout</div>
+          {boloHit.name && <div className="text-lg mt-1 font-semibold">{boloHit.name}</div>}
+          {(boloHit.reason || boloHit.description) && (
+            <div className="text-amber-50 text-sm mt-1">{boloHit.reason || boloHit.description}</div>
+          )}
+          {boloHit.firearm_flag && <div className="mt-2 inline-block px-2 py-0.5 bg-red-700 rounded text-xs font-bold">🔫 Firearm</div>}
+          <div className="text-amber-100 text-xs mt-2">
+            {status === "barred" ? "This person is also barred — entry denied above." : "Not barred — entry is allowed. Notify a supervisor and stay alert."}
+          </div>
         </div>
       )}
 

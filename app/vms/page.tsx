@@ -29,6 +29,7 @@ export default function VMSPage() {
   const [personType,     setPersonType]     = useState("Visitor")
 
   const [matchStatus,    setMatchStatus]    = useState<MatchStatus>("none")
+  const [boloHit,        setBoloHit]        = useState<any>(null)  // active BOLO match (non-blocking)
   const [possibleMatches,setPossibleMatches]= useState<any[]>([])
   const [selectedPerson, setSelectedPerson] = useState<any>(null)
   const [enteredDOB,     setEnteredDOB]     = useState("")
@@ -198,10 +199,26 @@ export default function VMSPage() {
     )
   }
 
+  // Non-blocking BOLO check (BOLO stores a single full-name field).
+  async function runBoloCheck(first: string, last: string): Promise<any | null> {
+    if (oln.trim()) {
+      const { data } = await supabase.from("bolos").select("*").eq("active", true).ilike("oln", oln.trim())
+      if (data?.length) return data[0]
+    }
+    if (!last) return null
+    const { data } = await supabase.from("bolos").select("*").eq("active", true).ilike("name", `%${last}%`)
+    const hits = (data || []).filter((b: any) => {
+      const n = (b.name || "").toLowerCase()
+      return n.includes(last.toLowerCase()) && (!first || n.includes(first.toLowerCase()))
+    })
+    return hits[0] || null
+  }
+
   // Re-run check when DOB or OLN changes (name already typed)
   useEffect(() => {
     if (!visitorName) return
     const { first, last } = parseName(visitorName)
+    runBoloCheck(first, last).then(setBoloHit)
     runWatchlistCheck(first, last).then(matches => {
       if (matches.length === 0) {
         setResolvedName(`${first} ${last}`)
@@ -289,6 +306,7 @@ export default function VMSPage() {
     setResidents([])
     setPersonType("Visitor")
     setMatchStatus("none")
+    setBoloHit(null)
     setResolvedName("")
     setStatusMessage("")
     setAlertMode(false)
@@ -304,7 +322,8 @@ export default function VMSPage() {
   async function handleNameInput(input: string) {
     setVisitorName(input)
     const { first, last } = parseName(input)
-    if (!last) return
+    if (!last) { setBoloHit(null); return }
+    runBoloCheck(first, last).then(setBoloHit)
     const matches = await runWatchlistCheck(first, last)
     if (matches.length === 0) {
       setResolvedName(`${first} ${last}`)
@@ -599,6 +618,19 @@ export default function VMSPage() {
                 <div className="text-lg font-semibold">{resolvedName || visitorName || "Awaiting visitor name…"}</div>
                 {statusMessage && <div className="text-sm mt-1 font-medium">{statusMessage}</div>}
               </div>
+
+              {/* BOLO — non-blocking; shown alongside cleared/verify status */}
+              {boloHit && (
+                <div className="px-4 py-3 rounded-xl bg-amber-500 border-2 border-amber-600 text-white">
+                  <div className="text-base font-bold">⚠ BOLO — Be On the Lookout</div>
+                  {boloHit.name && <div className="text-sm mt-0.5 font-semibold">{boloHit.name}</div>}
+                  {(boloHit.reason || boloHit.description) && (
+                    <div className="text-amber-50 text-xs mt-1">{boloHit.reason || boloHit.description}</div>
+                  )}
+                  {boloHit.firearm_flag && <div className="mt-1.5 inline-block px-2 py-0.5 bg-red-700 rounded text-xs font-bold">🔫 Firearm</div>}
+                  <div className="text-amber-100 text-xs mt-1.5">Not barred — entry allowed. Notify a supervisor and stay alert.</div>
+                </div>
+              )}
 
               {/* Watchlist match panel */}
               {matchStatus === "verify" && (

@@ -3,6 +3,7 @@
 
 export type AlertType =
   | "watchlist_hit"
+  | "bolo_hit"
   | "incident_high_priority"
   | "panic_sos"
   | "parking_bolo_hit"

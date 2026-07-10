@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import { createSupabaseServerClient } from "@/lib/supabase/server"
 import { sendEmail, buildAlertEmailHtml, logEmailDelivery } from "@/lib/email"
 
-type AlertType = "watchlist_hit" | "incident_high_priority" | "panic_sos"
+type AlertType = "watchlist_hit" | "bolo_hit" | "incident_high_priority" | "panic_sos"
 
 interface AlertPayload {
   type:         AlertType
