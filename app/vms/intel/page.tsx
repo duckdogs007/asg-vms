@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
 import { maskSSN } from "@/lib/format"
+import { sanitizeFilterTerm } from "@/lib/searchSanitize"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
 
 function fmtDate(ts: string) {
@@ -231,10 +232,10 @@ export default function IntelPage() {
     const s = input.toLowerCase().trim()
     if (s.includes(",")) {
       const [last, first] = s.split(",").map(p => p.trim())
-      return { first, last }
+      return { first: sanitizeFilterTerm(first), last: sanitizeFilterTerm(last) }
     }
     const parts = s.split(" ")
-    return { first: parts[0] || "", last: parts[parts.length - 1] || "" }
+    return { first: sanitizeFilterTerm(parts[0] || ""), last: sanitizeFilterTerm(parts[parts.length - 1] || "") }
   }
 
   async function handleSearch(term?: string) {

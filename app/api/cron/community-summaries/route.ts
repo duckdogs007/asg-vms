@@ -9,12 +9,13 @@ import { generateLocationSummary } from "@/lib/locationSummary"
 export const runtime = "nodejs"
 
 export async function GET(req: Request) {
-  // Vercel Cron sends "Authorization: Bearer ${CRON_SECRET}" when CRON_SECRET is set.
+  // Fail closed: this endpoint runs as service-role and spends AI budget, so it
+  // must be secret-gated. Vercel Cron sends "Authorization: Bearer ${CRON_SECRET}".
+  // If CRON_SECRET isn't configured, refuse rather than run unauthenticated.
   const secret = process.env.CRON_SECRET
-  if (secret) {
-    const auth = req.headers.get("authorization") || ""
-    if (auth !== `Bearer ${secret}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
-  }
+  if (!secret) return NextResponse.json({ error: "CRON_SECRET not configured" }, { status: 503 })
+  const auth = req.headers.get("authorization") || ""
+  if (auth !== `Bearer ${secret}`) return NextResponse.json({ error: "unauthorized" }, { status: 401 })
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY

@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
+import { sanitizeFilterTerm } from "@/lib/searchSanitize"
 import { Community } from "@/lib/types"
 
 type ResultType = "Visitor" | "Resident" | "Watchlist" | "Vehicle Alert" | "BOLO" | "Parking" | "Vehicle FI" | "Denied Entry"
@@ -65,7 +66,7 @@ export default function VmsSearchPage() {
   }
 
   async function runSearch() {
-    const q = query.trim()
+    const q = sanitizeFilterTerm(query)
     if (!q) return
     setLoading(true)
     setHasSearched(true)
