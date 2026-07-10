@@ -89,26 +89,35 @@ export async function POST(req: Request) {
   if (/2\.5|latest/i.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 }
 
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        contents: [{ role: "user", parts: [{ text: prompt }] }],
-        generationConfig,
-      }),
-    })
+    // Retry transient "model overloaded / high demand" (503 UNAVAILABLE) with backoff.
+    let res!: Response, data: any = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contents: [{ role: "user", parts: [{ text: prompt }] }],
+          generationConfig,
+        }),
+      })
+      data = await res.json().catch(() => null)
+      const overloaded = res.status === 503 || data?.error?.status === "UNAVAILABLE" || /overloaded|high demand/i.test(data?.error?.message || "")
+      if (!overloaded || attempt === 2) break
+      await new Promise(r => setTimeout(r, 900 * (attempt + 1)))
+    }
 
-    const data: any = await res.json().catch(() => null)
     if (!res.ok) {
       console.error("[ai/narrative] gemini error", { model, status: res.status, code: data?.error?.status, message: data?.error?.message })
       const isQuota = res.status === 429 || data?.error?.status === "RESOURCE_EXHAUSTED"
-      if (isQuota) {
+      const isOverloaded = res.status === 503 || data?.error?.status === "UNAVAILABLE" || /overloaded|high demand/i.test(data?.error?.message || "")
+      if (isQuota || isOverloaded) {
         const retryDelayStr: string | undefined = data?.error?.details?.find((d: any) => d["@type"]?.includes("RetryInfo"))?.retryDelay
         const retryMatch = (data?.error?.message as string | undefined)?.match(/retry in ([\d.]+)/i)
         const retrySeconds = retryDelayStr ? Math.ceil(parseFloat(retryDelayStr))
           : retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : null
         const retryMsg = retrySeconds ? ` Try again in ~${retrySeconds}s.` : " Try again in a moment."
-        return NextResponse.json({ error: `AI assist is temporarily unavailable (quota exceeded).${retryMsg}` }, { status: 429 })
+        const reason = isOverloaded ? "is busy right now (high demand)" : "is temporarily unavailable (quota exceeded)"
+        return NextResponse.json({ error: `AI assist ${reason}.${retryMsg}` }, { status: 429 })
       }
       const msg = data?.error?.message || `AI request failed (${res.status}).`
       return NextResponse.json({ error: msg }, { status: 502 })

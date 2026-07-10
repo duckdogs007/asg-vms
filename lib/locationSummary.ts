@@ -228,21 +228,31 @@ For EVERY concern, follow_up, and pattern, include a "sources" array listing the
   if (/2\.5|latest/i.test(model)) generationConfig.thinkingConfig = { thinkingBudget: 0 }
 
   try {
-    const res = await fetch(apiUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }),
-    })
-    const data: any = await res.json().catch(() => null)
+    // Retry transient "model overloaded / high demand" (503 UNAVAILABLE) with backoff.
+    let res!: Response, data: any = null
+    for (let attempt = 0; attempt < 3; attempt++) {
+      res = await fetch(apiUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }),
+      })
+      data = await res.json().catch(() => null)
+      const overloaded = res.status === 503 || data?.error?.status === "UNAVAILABLE" || /overloaded|high demand/i.test(data?.error?.message || "")
+      if (!overloaded || attempt === 2) break
+      await new Promise(r => setTimeout(r, 900 * (attempt + 1)))
+    }
     if (!res.ok) {
       const isQuota = res.status === 429 || data?.error?.status === "RESOURCE_EXHAUSTED"
-      if (isQuota) {
+      const isOverloaded = res.status === 503 || data?.error?.status === "UNAVAILABLE" || /overloaded|high demand/i.test(data?.error?.message || "")
+      if (isQuota || isOverloaded) {
         const retryDelayStr: string | undefined = data?.error?.details?.find((d: any) => d["@type"]?.includes("RetryInfo"))?.retryDelay
         const retryMatch = (data?.error?.message as string | undefined)?.match(/retry in ([\d.]+)/i)
         const retrySeconds = retryDelayStr ? Math.ceil(parseFloat(retryDelayStr))
           : retryMatch ? Math.ceil(parseFloat(retryMatch[1])) : 12
-        return { ok: false, status: 429, error: `AI summary is temporarily unavailable (quota exceeded). Try again in ~${retrySeconds}s.`, retryAfter: retrySeconds }
+        const reason = isOverloaded ? "is busy right now (high demand)" : "is temporarily unavailable (quota exceeded)"
+        return { ok: false, status: 429, error: `AI summary ${reason}. Try again in ~${retrySeconds}s.`, retryAfter: retrySeconds }
       }
+      console.error("[location-summary] gemini error", { model, status: res.status, code: data?.error?.status, message: data?.error?.message })
       return { ok: false, status: 502, error: data?.error?.message || `AI request failed (${res.status}).` }
     }
 
