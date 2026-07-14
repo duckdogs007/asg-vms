@@ -1030,7 +1030,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
   }
 
   function exportCSV() {
-    const header = ["Date/Time", "First Name", "Last Name", "Type", "Location", "Unit", "Resident"]
+    const header = ["Date/Time", "First Name", "Last Name", "Type", "Location", "Unit", "Resident", "Destination"]
     const rows = visits.map(v => [
       formatTime(v.created_at),
       v.first_name || "", v.last_name || "",
@@ -1038,6 +1038,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       communityName || "",
       v.unit_number || "",
       v.resident_name || "",
+      (v as any).destination || "",
     ])
     const csv = [header, ...rows]
       .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))
