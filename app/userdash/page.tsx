@@ -65,7 +65,7 @@ type IncidentVehicle = {
   make: string; model: string; year: string; color: string
   plate: string; plate_state: string; description: string
 }
-const EMPTY_INC_PERSON  = (): IncidentPerson  => ({ name: "", role: "Suspect", dob: "", sex: "", race: "", address: "" })
+const EMPTY_INC_PERSON  = (): IncidentPerson  => ({ name: "", role: "", dob: "", sex: "", race: "", address: "" })
 const EMPTY_INC_VEHICLE = (): IncidentVehicle => ({ make: "", model: "", year: "", color: "", plate: "", plate_state: "", description: "" })
 
 type Tab       = "onduty" | "watchlist" | "reports" | "passdown" | "bolo" | "gatecheck"
@@ -2436,7 +2436,7 @@ export default function UserDashboard() {
                   <input type="time" value={incTime} onChange={e => setIncTime(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={incOfficer} onChange={e => setIncOfficer(e.target.value)} className={inputCls} /></div>
-                <div><label className={labelCls}>Location</label>
+                <div><label className={labelCls}>Location or Property Name</label>
                   <select value={incCommunity} onChange={e => { setIncCommunity(e.target.value); setIncLoc(EMPTY_LOCATION) }} className={inputCls}>
                     {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select></div>
@@ -2500,14 +2500,24 @@ export default function UserDashboard() {
                           onChange={e => setIncPersonList(prev => prev.map((x, idx) => idx === i ? { ...x, name: e.target.value } : x))}
                           placeholder="Last, First Middle" className={inputCls} />
                       </div>
-                      <div>
+                      <div className="col-span-2">
                         <label className={labelCls}>Role</label>
-                        <select value={p.role}
-                          onChange={e => setIncPersonList(prev => prev.map((x, idx) => idx === i ? { ...x, role: e.target.value } : x))}
-                          className={inputCls}>
-                          <option>Suspect</option><option>Victim</option><option>Witness</option>
-                          <option>Complainant</option><option>Reporting Party</option><option>Other</option>
-                        </select>
+                        <div className="grid grid-cols-3 gap-x-4 gap-y-1.5 mt-1">
+                          {(["Officer", "Tenant", "Visitor", "Witness", "Suspect", "Other"] as const).map(r => {
+                            const roles = p.role ? p.role.split(", ").filter(Boolean) : []
+                            return (
+                              <label key={r} className="flex items-center gap-1.5 text-sm cursor-pointer">
+                                <input type="checkbox" checked={roles.includes(r)}
+                                  onChange={e => {
+                                    const next = e.target.checked ? [...roles, r] : roles.filter(x => x !== r)
+                                    setIncPersonList(prev => prev.map((x, idx) => idx === i ? { ...x, role: next.join(", ") } : x))
+                                  }}
+                                  className="w-4 h-4 rounded border-gray-300 accent-red-700" />
+                                <span className="text-gray-700">{r}</span>
+                              </label>
+                            )
+                          })}
+                        </div>
                       </div>
                       <div>
                         <label className={labelCls}>Date of Birth</label>
