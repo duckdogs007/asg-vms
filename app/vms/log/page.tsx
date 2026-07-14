@@ -70,7 +70,7 @@ export default function VmsScanLogPage() {
     // rows with no entry_method that came from other flows (e.g. barred-person
     // records), which are not visitor check-ins.
     let q = supabase.from("visitor_logs")
-      .select("id, first_name, last_name, middle_name, person_type, visitor_type, community_id, unit_number, apartment, resident_name, dl_scanned, watchlist_hit, dob, oln, address, city, state_of_issue, zip, sex, created_at")
+      .select("id, first_name, last_name, middle_name, person_type, visitor_type, community_id, unit_number, apartment, resident_name, destination, dl_scanned, watchlist_hit, dob, oln, address, city, state_of_issue, zip, sex, created_at")
       .in("entry_method", ["scan", "checkin_manual", "manual"])
       .order("created_at", { ascending: false })
       .limit(300)
@@ -163,6 +163,7 @@ export default function VmsScanLogPage() {
               const destination = [
                 unit ? `Unit ${unit}` : null,
                 r.resident_name ? `visiting ${r.resident_name}` : null,
+                r.destination || null,
               ].filter(Boolean).join(" · ")
               const meta = [
                 r.dob ? `DOB ${fmtDOB(r.dob)}` : null,
