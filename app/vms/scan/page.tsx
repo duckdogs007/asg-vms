@@ -18,6 +18,21 @@ function formatDOB(raw: string): string {
   return raw
 }
 
+function decodeSex(code: string): string {
+  if (code === "1") return "M"
+  if (code === "2") return "F"
+  return code || "—"
+}
+
+function formatHeight(raw: string): string {
+  const m = raw.match(/^0*(\d+)\s*in/i)
+  if (m) {
+    const total = parseInt(m[1], 10)
+    return `${Math.floor(total / 12)}'${total % 12}"`
+  }
+  return raw || "—"
+}
+
 // Same parsing logic but returns YYYY-MM-DD for the DB date column
 function parseDOBToISO(raw: string): string | null {
   if (!raw || !/^\d{8}$/.test(raw)) return null
@@ -639,8 +654,8 @@ export default function ScanID(){
               <div><span className="text-gray-500">Name:</span> {[person.first_name, person.middle_name, person.last_name].filter(Boolean).join(" ") || "—"}</div>
               <div><span className="text-gray-500">DOB:</span> {formatDOB(person.dob) || "—"}</div>
               <div><span className="text-gray-500">License #:</span> {person.oln || "—"}</div>
-              <div><span className="text-gray-500">Sex:</span> {person.sex || "—"}</div>
-              {person.height   && <div><span className="text-gray-500">Height:</span> {person.height}</div>}
+              <div><span className="text-gray-500">Sex:</span> {decodeSex(person.sex)}</div>
+              {person.height   && <div><span className="text-gray-500">Height:</span> {formatHeight(person.height)}</div>}
               {person.eye_color && <div><span className="text-gray-500">Eyes:</span> {person.eye_color}</div>}
               {(person.address || person.city || person.state || person.zip) && (
                 <div className="sm:col-span-2">
@@ -665,8 +680,8 @@ export default function ScanID(){
             <div><span className="text-gray-500">Name:</span> {[person.first_name, person.middle_name, person.last_name].filter(Boolean).join(" ") || "—"}</div>
             <div><span className="text-gray-500">DOB:</span> {formatDOB(person.dob) || "—"}</div>
             <div><span className="text-gray-500">License #:</span> {person.oln || "—"}</div>
-            <div><span className="text-gray-500">Sex:</span> {person.sex || "—"}</div>
-            {person.height    && <div><span className="text-gray-500">Height:</span> {person.height}</div>}
+            <div><span className="text-gray-500">Sex:</span> {decodeSex(person.sex)}</div>
+            {person.height    && <div><span className="text-gray-500">Height:</span> {formatHeight(person.height)}</div>}
             {person.eye_color && <div><span className="text-gray-500">Eyes:</span> {person.eye_color}</div>}
             {(person.address || person.city || person.state || person.zip) && (
               <div className="sm:col-span-2">

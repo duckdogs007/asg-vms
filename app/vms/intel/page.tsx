@@ -643,8 +643,18 @@ export default function IntelPage() {
 
           {/* TABS */}
           <div className="flex border-b border-gray-200 mb-4">
-            <button className={tabCls("ban")}      onClick={() => setRightTab("ban")}>🚨 Ban History</button>
-            <button className={tabCls("visits")}   onClick={() => setRightTab("visits")}>📊 Visitor History</button>
+            <button className={tabCls("ban")} onClick={() => setRightTab("ban")}>
+              🚨 Ban History
+              {banHistory.length > 0 && (
+                <span className="ml-1.5 bg-red-600 text-white text-xs rounded-full px-1.5 py-0.5">{banHistory.length}</span>
+              )}
+            </button>
+            <button className={tabCls("visits")} onClick={() => setRightTab("visits")}>
+              📊 Visitor History
+              {history.length > 0 && (
+                <span className="ml-1.5 bg-blue-700 text-white text-xs rounded-full px-1.5 py-0.5">{history.length}</span>
+              )}
+            </button>
             <button className={tabCls("contacts")} onClick={() => setRightTab("contacts")}>
               📋 Contact History
               {contacts.length > 0 && (
