@@ -1917,6 +1917,88 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
 
       {activeTab === "activity" && hasData && (
         <>
+          {/* ── ENTRY LOG ── */}
+          <Section label={`Entry Log${
+            entryLogSearch.trim()
+              ? ` — ${filteredEntries.length} match${filteredEntries.length === 1 ? "" : "es"} of ${visits.length}`
+              : visits.length > logLimit ? ` (showing ${logLimit} of ${visits.length})` : ` (${visits.length})`
+          }`}>
+            <div className="mb-3 flex gap-2 items-center">
+              <input
+                type="text"
+                value={entryLogSearch}
+                onChange={e => setEntryLogSearch(e.target.value)}
+                placeholder="Search by name, unit, type, or resident..."
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
+              {entryLogSearch && (
+                <button
+                  onClick={() => setEntryLogSearch("")}
+                  className="px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md border-none cursor-pointer"
+                >
+                  ✕ Clear
+                </button>
+              )}
+              {hasData && (
+                <button onClick={exportCSV}
+                  className="px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700 border-none cursor-pointer whitespace-nowrap ml-auto">
+                  ⬇ Export CSV
+                </button>
+              )}
+            </div>
+            <div className="flex flex-col gap-1.5">
+              {filteredEntries.slice(0, logLimit).map((v) => (
+                <div key={v.id}
+                  className="bg-white border border-gray-200 px-4 py-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-50 hover:border-blue-300 transition-colors group"
+                  onClick={() => window.location.href = `/vms/intel?search=${encodeURIComponent(`${v.first_name} ${v.last_name}`)}`}
+                >
+                  <div>
+                    <div className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
+                      {v.first_name} {v.last_name}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-0.5">
+                      <span className="capitalize">{v.person_type}</span>
+                      {v.unit_number && ` · Unit ${v.unit_number}`}
+                      {v.resident_name && ` · Visiting: ${v.resident_name}`}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 ml-4 flex-shrink-0">
+                    <div className="text-right">
+                      <div className="text-sm text-gray-700">{formatTime(v.created_at)}</div>
+                      <div className="text-xs text-gray-400">{timeAgo(v.created_at)}</div>
+                    </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); window.location.href = `/vms/reports/visitor-log/${v.id}` }}
+                      title="View entry details"
+                      className="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded border-none cursor-pointer whitespace-nowrap"
+                    >
+                      View
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteEntry(v) }}
+                        disabled={deleting === v.id}
+                        title="Delete entry (admin)"
+                        className="px-2 py-1 bg-red-700 hover:bg-red-800 text-white text-xs font-semibold rounded border-none cursor-pointer disabled:opacity-50"
+                      >
+                        {deleting === v.id ? "…" : "🗑"}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+              {entryLogSearch.trim() && filteredEntries.length === 0 && (
+                <div className="text-gray-400 text-sm py-6 text-center">No entries match your search.</div>
+              )}
+            </div>
+            {filteredEntries.length > logLimit && (
+              <button onClick={() => setLogLimit(l => l + 50)}
+                className="mt-3 w-full py-2.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white">
+                Show more ({filteredEntries.length - logLimit} remaining)
+              </button>
+            )}
+          </Section>
+
           {/* ── TRAFFIC BREAKDOWN + DAILY ACTIVITY ── */}
           <Section label="Traffic Breakdown">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2081,88 +2163,6 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               </div>
             </Section>
           )}
-
-          {/* ── ENTRY LOG ── */}
-          <Section label={`Entry Log${
-            entryLogSearch.trim()
-              ? ` — ${filteredEntries.length} match${filteredEntries.length === 1 ? "" : "es"} of ${visits.length}`
-              : visits.length > logLimit ? ` (showing ${logLimit} of ${visits.length})` : ` (${visits.length})`
-          }`}>
-            <div className="mb-3 flex gap-2 items-center">
-              <input
-                type="text"
-                value={entryLogSearch}
-                onChange={e => setEntryLogSearch(e.target.value)}
-                placeholder="Search by name, unit, type, or resident..."
-                className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
-              />
-              {entryLogSearch && (
-                <button
-                  onClick={() => setEntryLogSearch("")}
-                  className="px-3 py-2 text-sm text-gray-600 bg-gray-100 hover:bg-gray-200 rounded-md border-none cursor-pointer"
-                >
-                  ✕ Clear
-                </button>
-              )}
-              {hasData && (
-                <button onClick={exportCSV}
-                  className="px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700 border-none cursor-pointer whitespace-nowrap ml-auto">
-                  ⬇ Export CSV
-                </button>
-              )}
-            </div>
-            <div className="flex flex-col gap-1.5">
-              {filteredEntries.slice(0, logLimit).map((v) => (
-                <div key={v.id}
-                  className="bg-white border border-gray-200 px-4 py-3 rounded-lg flex justify-between items-center cursor-pointer hover:bg-gray-50 hover:border-blue-300 transition-colors group"
-                  onClick={() => window.location.href = `/vms/intel?search=${encodeURIComponent(`${v.first_name} ${v.last_name}`)}`}
-                >
-                  <div>
-                    <div className="font-semibold text-gray-900 group-hover:text-blue-700 transition-colors">
-                      {v.first_name} {v.last_name}
-                    </div>
-                    <div className="text-xs text-gray-500 mt-0.5">
-                      <span className="capitalize">{v.person_type}</span>
-                      {v.unit_number && ` · Unit ${v.unit_number}`}
-                      {v.resident_name && ` · Visiting: ${v.resident_name}`}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 ml-4 flex-shrink-0">
-                    <div className="text-right">
-                      <div className="text-sm text-gray-700">{formatTime(v.created_at)}</div>
-                      <div className="text-xs text-gray-400">{timeAgo(v.created_at)}</div>
-                    </div>
-                    <button
-                      onClick={(e) => { e.stopPropagation(); window.location.href = `/vms/reports/visitor-log/${v.id}` }}
-                      title="View entry details"
-                      className="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded border-none cursor-pointer whitespace-nowrap"
-                    >
-                      View
-                    </button>
-                    {isAdmin && (
-                      <button
-                        onClick={(e) => { e.stopPropagation(); deleteEntry(v) }}
-                        disabled={deleting === v.id}
-                        title="Delete entry (admin)"
-                        className="px-2 py-1 bg-red-700 hover:bg-red-800 text-white text-xs font-semibold rounded border-none cursor-pointer disabled:opacity-50"
-                      >
-                        {deleting === v.id ? "…" : "🗑"}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              ))}
-              {entryLogSearch.trim() && filteredEntries.length === 0 && (
-                <div className="text-gray-400 text-sm py-6 text-center">No entries match your search.</div>
-              )}
-            </div>
-            {filteredEntries.length > logLimit && (
-              <button onClick={() => setLogLimit(l => l + 50)}
-                className="mt-3 w-full py-2.5 text-sm text-gray-500 border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer bg-white">
-                Show more ({filteredEntries.length - logLimit} remaining)
-              </button>
-            )}
-          </Section>
 
         </>
       )}
