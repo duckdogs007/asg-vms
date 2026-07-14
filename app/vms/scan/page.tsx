@@ -60,6 +60,7 @@ export default function ScanID(){
   const [residents,     setResidents]     = useState<Resident[]>([])
   const [residentId,    setResidentId]    = useState("")
   const [personType,    setPersonType]    = useState("Visitor")
+  const [destination,   setDestination]   = useState("")
   const [saving,        setSaving]        = useState(false)
   const [saveError,     setSaveError]     = useState("")
   const [logId,         setLogId]         = useState<string | null>(null) // id of the auto-logged visitor_logs row
@@ -434,6 +435,7 @@ export default function ScanID(){
     setResidents([])
     setResidentId("")
     setPersonType("Visitor")
+    setDestination("")
     setSaveError("")
     setLogId(null)
     setDetailMsg("")
@@ -478,6 +480,7 @@ export default function ScanID(){
       setResidents([])
       setResidentId("")
       setPersonType("Visitor")
+      setDestination("")
       setSaveError("")
       setLogId(null)
       setDetailMsg("")
@@ -623,6 +626,20 @@ export default function ScanID(){
                 <option>Contractor</option>
                 <option>Employee</option>
               </select>
+            </div>
+
+            <div className="sm:col-span-2">
+              <label className="block text-xs font-semibold text-gray-500 mb-1">
+                Destination <span className="font-normal text-gray-400">(optional)</span>
+              </label>
+              <input
+                type="text"
+                value={destination}
+                onChange={e => setDestination(e.target.value)}
+                onBlur={e => { if (e.target.value !== "") updateEntry({ destination: e.target.value || null }) }}
+                placeholder="e.g. Leasing office, Pool, Unit 4B…"
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-600"
+              />
             </div>
           </div>
 
