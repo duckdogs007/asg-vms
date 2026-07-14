@@ -203,6 +203,7 @@ export default function VisitorLogDetailPage() {
           </div>
           <Field label="Destination Unit"   value={r.unit_number || r.apartment} />
           <Field label="Visiting Resident"  value={r.resident_name} />
+          <Field label="Destination"        value={r.destination} />
           <Field label="Vehicle Plate"      value={r.vehicle_plate} />
         </div>
         {isDenied && r.denial_reason && (
