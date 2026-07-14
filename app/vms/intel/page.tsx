@@ -256,15 +256,29 @@ export default function IntelPage() {
     try {
       const { first, last } = parseName(query)
 
+      // Break the raw query into individual words (strip commas) so that
+      // searches like "BRITTANY,MICHELLE LAWSON" still find someone whose
+      // first_name=BRITTANY / middle_name=MICHELLE / last_name=LAWSON even
+      // though parseName would mis-read the comma as a Last,First separator.
+      const queryWords = query.toLowerCase().replace(/,/g, " ").trim().split(/\s+/).filter(Boolean)
+      const visitOrClauses = queryWords.flatMap(w => [
+        `last_name.ilike.%${w}%`,
+        `first_name.ilike.%${w}%`,
+        `middle_name.ilike.%${w}%`,
+      ]).join(",")
+
       const { data: visits, error: visitErr } = await supabase
         .from("visitor_logs")
         .select("*")
-        .or(`last_name.ilike.%${last}%,first_name.ilike.%${first}%`)
+        .or(visitOrClauses)
         .order("created_at", { ascending: false })
 
       if (visitErr) { setError("Failed to load visit history."); return }
 
-      const visitData = (visits || []).filter((v: VisitorLog) => nameMatch(v, first, last))
+      const visitData = (visits || []).filter((v: VisitorLog) => {
+        const fullName = `${(v as any).first_name || ""} ${(v as any).middle_name || ""} ${(v as any).last_name || ""}`.toLowerCase()
+        return queryWords.every(w => fullName.includes(w))
+      })
       setHistory(visitData)
       setHistoryLimit(25)
 

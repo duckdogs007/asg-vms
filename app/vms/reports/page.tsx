@@ -1235,7 +1235,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
           { key: "activity", label: "Visitor Activity",  icon: "📊" },
           { key: "registry", label: "Registry",           icon: "🚗" },
         ] as const).map(tab => (
-          <button key={tab.key} onClick={() => setActiveTab(tab.key)}
+          <button key={tab.key} onClick={() => { setActiveTab(tab.key); if (tab.key === "activity") window.scrollTo({ top: 0, behavior: "smooth" }) }}
             className={`px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors -mb-px whitespace-nowrap flex items-center gap-1.5 ${
               activeTab === tab.key
                 ? "border-blue-700 text-blue-700"
@@ -1963,6 +1963,13 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                       <div className="text-sm text-gray-700">{formatTime(v.created_at)}</div>
                       <div className="text-xs text-gray-400">{timeAgo(v.created_at)}</div>
                     </div>
+                    <button
+                      onClick={(e) => { e.stopPropagation(); window.location.href = `/vms/reports/visitor-log/${v.id}` }}
+                      title="View entry details"
+                      className="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded border-none cursor-pointer whitespace-nowrap"
+                    >
+                      View
+                    </button>
                     {isAdmin && (
                       <button
                         onClick={(e) => { e.stopPropagation(); deleteEntry(v) }}
