@@ -38,6 +38,7 @@ export interface VisitorLog {
   unit_number?: string | null
   apartment?: string | null
   resident_name?: string | null
+  destination?: string | null
   visitor_type?: string | null
   created_at: string
 }

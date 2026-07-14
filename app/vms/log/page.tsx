@@ -18,6 +18,7 @@ interface LogRow {
   unit_number:    string | null
   apartment:      string | null
   resident_name:  string | null
+  destination:    string | null
   dl_scanned:     boolean | null
   watchlist_hit:  boolean | null
   dob:            string | null

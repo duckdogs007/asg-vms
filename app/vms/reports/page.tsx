@@ -1038,7 +1038,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
       communityName || "",
       v.unit_number || "",
       v.resident_name || "",
-      (v as any).destination || "",
+      v.destination || "",
     ])
     const csv = [header, ...rows]
       .map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(","))

@@ -756,7 +756,7 @@ export default function IntelPage() {
                       <div className="text-sm text-gray-600 mt-0.5">
                         {getCommunityName(v.community_id || "")} · Unit: {v.unit_number || "N/A"}
                         {v.resident_name && ` · Visiting: ${v.resident_name}`}
-                        {(v as any).destination && ` · ${(v as any).destination}`}
+                        {v.destination && ` · ${v.destination}`}
                       </div>
                       <div className="text-xs text-gray-400 mt-0.5 flex items-center justify-between">
                         <span>{fmtDate(v.created_at)}</span>
