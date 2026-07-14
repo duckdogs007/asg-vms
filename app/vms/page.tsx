@@ -27,6 +27,7 @@ export default function VMSPage() {
 
   const [visitorName,    setVisitorName]    = useState("")
   const [personType,     setPersonType]     = useState("Visitor")
+  const [destination,    setDestination]    = useState("")
 
   const [matchStatus,    setMatchStatus]    = useState<MatchStatus>("none")
   const [boloHit,        setBoloHit]        = useState<any>(null)  // active BOLO match (non-blocking)
@@ -305,6 +306,7 @@ export default function VMSPage() {
     setResidentId("")
     setResidents([])
     setPersonType("Visitor")
+    setDestination("")
     setMatchStatus("none")
     setBoloHit(null)
     setResolvedName("")
@@ -372,6 +374,7 @@ export default function VMSPage() {
         community_id:  communityId,
         unit_number:   unitNumber,
         resident_name: selectedResident?.name || null,
+        destination:   destination || null,
         entry_method:   "checkin_manual",
         watchlist_hit:  matchStatus === "verify",
         dob:            dob || null,
@@ -528,6 +531,17 @@ export default function VMSPage() {
                   <option>Contractor</option>
                   <option>Employee</option>
                 </select>
+              </div>
+
+              <div>
+                <label className={labelCls}>Destination <span className="font-normal text-gray-400">(optional)</span></label>
+                <input
+                  type="text"
+                  value={destination}
+                  onChange={e => setDestination(e.target.value)}
+                  placeholder="e.g. Leasing office, Pool, Unit 4B…"
+                  className={inputCls}
+                />
               </div>
 
               {!isGuest && (
