@@ -927,7 +927,7 @@ ${sec("Recommendations", list(aiResult.recommendations, (r: any) => esc(r)))}
           date = r.created_at ? new Date(utc(r.created_at)).toLocaleDateString("en-CA") : ""
           officer = r.person_type || "visitor"
           const name = [r.dl_first_name || r.first_name, r.dl_last_name || r.last_name].filter(Boolean).join(" ")
-          summary = [name, r.unit_number && `Unit ${r.unit_number}`, r.resident_name && `→ ${r.resident_name}`, r.status === "denied" && "DENIED"].filter(Boolean).join(" · ")
+          summary = [name, r.unit_number && `Unit ${r.unit_number}`, r.resident_name && `→ ${r.resident_name}`, r.destination || null, r.status === "denied" && "DENIED"].filter(Boolean).join(" · ")
         }
         rows.push({ id: r.id, typeKey: rt.key, typeLabel: rt.label, color: rt.color,
           date, summary: summary || "—", officer, slug: RUNNER_SLUG[rt.key] || rt.key })
@@ -1891,6 +1891,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                                     <span className="capitalize">{row.person_type || "visitor"}</span>
                                     {row.unit_number ? ` · Unit ${row.unit_number}` : ""}
                                     {row.resident_name ? ` · Visiting: ${row.resident_name}` : ""}
+                                    {row.destination ? ` · ${row.destination}` : ""}
                                     {row.status === "denied" && <span className="ml-1 text-red-600 font-semibold">· Denied</span>}
                                   </div>
                                 </div>
@@ -1960,6 +1961,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                       <span className="capitalize">{v.person_type}</span>
                       {v.unit_number && ` · Unit ${v.unit_number}`}
                       {v.resident_name && ` · Visiting: ${v.resident_name}`}
+                      {v.destination && ` · ${v.destination}`}
                     </div>
                   </div>
                   <div className="flex items-center gap-3 ml-4 flex-shrink-0">
