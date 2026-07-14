@@ -92,12 +92,14 @@ export default function VmsSearchPage() {
         const k = `${(v.first_name || "").toLowerCase()}|${(v.last_name || "").toLowerCase()}`
         if (seen.has(k)) continue
         seen.add(k)
+        const visitorName = `${v.first_name || ""} ${v.last_name || ""}`.trim()
         output.push({
           type:     "Visitor",
-          name:     `${v.first_name || ""} ${v.last_name || ""}`.trim(),
+          name:     visitorName,
           detail:   v.unit_number ? `Unit ${v.unit_number}` : "",
           location: locationName(v.community_id),
           date:     v.created_at,
+          link:     visitorName ? `/vms/intel?search=${encodeURIComponent(visitorName)}` : undefined,
         })
       }
     }

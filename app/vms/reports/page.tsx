@@ -906,8 +906,8 @@ ${sec("Recommendations", list(aiResult.recommendations, (r: any) => esc(r)))}
           date = r.date || ""; officer = r.issued_by || r.officer_name || "—"
           summary = [r.incident_type, r.description?.substring(0, 120)].filter(Boolean).join(" · ")
         } else if (rt.key === "fieldContacts") {
-          date = r.created_at ? new Date(utc(r.created_at)).toLocaleDateString("en-CA") : ""; officer = r.officer_name || "—"
-          summary = r.contact_name || r.subject_name || "—"
+          date = r.created_at ? new Date(utc(r.created_at)).toLocaleDateString("en-CA") : ""; officer = r.officer || "—"
+          summary = [r.first_name, r.last_name].filter(Boolean).join(" ") || "—"
         } else if (rt.key === "vehicleFIs") {
           date = r.date || ""; officer = r.officer_name || "—"
           summary = [displayPlate(r.plate), [r.year, r.color, r.make, r.model].filter(Boolean).join(" ")].filter(Boolean).join(" · ")
