@@ -53,7 +53,7 @@ export default function VMSPage() {
   const [confirmed,      setConfirmed]      = useState<{ name: string; wasVerify: boolean } | null>(null)
 
   const [todayStats, setTodayStats] = useState({ total: 0, visitors: 0, contractors: 0, deliveries: 0, employees: 0 })
-  const [todayLogs,  setTodayLogs]  = useState<Array<{ first_name: string; last_name: string; person_type: string; unit_number: string | null; created_at: string }>>([])
+  const [todayLogs,  setTodayLogs]  = useState<Array<{ first_name: string; last_name: string; person_type: string; unit_number: string | null; destination: string | null; created_at: string }>>([])
 
   // Guards against firing the watchlist-hit alert + denied_entries insert more
   // than once per BARRED confirmation (DOB input can re-fire on backspace/retype).
@@ -98,7 +98,7 @@ export default function VMSPage() {
     const today = new Date().toISOString().split("T")[0]
     const { data } = await supabase
       .from("visitor_logs")
-      .select("first_name, last_name, person_type, unit_number, created_at")
+      .select("first_name, last_name, person_type, unit_number, destination, created_at")
       .eq("community_id", commId)
       .gte("created_at", today + "T00:00:00")
       .order("created_at", { ascending: false })
@@ -743,7 +743,7 @@ export default function VMSPage() {
                               <Link href={intelHref} className="text-sm font-semibold text-white hover:text-blue-300 transition-colors">
                                 {e.first_name} {e.last_name}
                               </Link>
-                              <div className={`text-xs ${tColor}`}>{e.person_type}{e.unit_number ? ` · Unit ${e.unit_number}` : ""}</div>
+                              <div className={`text-xs ${tColor}`}>{e.person_type}{e.unit_number ? ` · Unit ${e.unit_number}` : ""}{e.destination ? ` · ${e.destination}` : ""}</div>
                             </div>
                             <div className="text-xs text-gray-500 shrink-0 ml-3">{t}</div>
                           </div>

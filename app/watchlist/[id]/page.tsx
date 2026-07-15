@@ -99,7 +99,8 @@ export default function WatchlistProfilePage() {
             padding: "6px 0"
           }}>
             <div>{new Date(v.created_at).toLocaleString()}</div>
-            <div>{v.unit_number} — {v.resident_name}</div>
+            <div>{[v.unit_number, v.resident_name].filter(Boolean).join(" — ") || "—"}</div>
+            {v.destination && <div>Destination: {v.destination}</div>}
             <div>Status: {v.status}</div>
           </div>
         ))}
