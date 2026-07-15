@@ -76,7 +76,8 @@ export default function ScanID(){
   const boloFiredRef      = useRef<boolean>(false) // dedupe BOLO alert
   const lastProcessedRef  = useRef<string>("")   // exact text passed to processScan last
   const RESET_GRACE_MS    = 250                  // ignore input this long after result appears
-  const SCAN_END_MS       = 200                  // pause this long => scan finished, process
+  const SCAN_END_MS       = 90                   // fallback: pause this long => scan finished, process
+  const SCAN_FAST_MS      = 35                   // used once the buffer already looks like a complete AAMVA DL
 
   useEffect(() => {
     // Load all communities for the dropdown, then pick the active one:
@@ -512,13 +513,19 @@ export default function ScanID(){
       setDetailMsg("")
     }
 
-    // (Re)start the scan-end timer. Each new keystroke pushes it back; when
-    // the scanner finally pauses for SCAN_END_MS, we process the buffer.
+    // (Re)start the scan-end timer. Each keystroke pushes it back; the timer only
+    // fires after the scanner's burst ends (no input for the delay). A wedge
+    // scanner delivers the whole string in a sub-millisecond burst, so once the
+    // buffer already contains a complete AAMVA DL (ANSI header + mandatory DCS
+    // last-name + DAQ license-number elements), we can process almost instantly;
+    // otherwise fall back to the slightly longer safety window.
     if (scanTimerRef.current) clearTimeout(scanTimerRef.current)
+    const buf = textareaRef.current?.value || ""
+    const looksComplete = /ANSI/.test(buf) && buf.includes("DCS") && buf.includes("DAQ") && buf.length >= 120
     scanTimerRef.current = setTimeout(() => {
       const val = textareaRef.current?.value || ""
       if (val.trim().length >= 20) processScan(val)
-    }, SCAN_END_MS)
+    }, looksComplete ? SCAN_FAST_MS : SCAN_END_MS)
   }
 
   const displayName   = person ? `${person.first_name} ${person.last_name}`.trim() : ""
