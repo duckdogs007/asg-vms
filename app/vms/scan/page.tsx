@@ -66,6 +66,8 @@ export default function ScanID(){
   const [logId,         setLogId]         = useState<string | null>(null) // id of the auto-logged visitor_logs row
   const [detailMsg,     setDetailMsg]     = useState("")  // subtle "saved" feedback on enrichment updates
   const autoSavedRef    = useRef(false)                   // dedupe auto-log per scan result
+  const logIdRef        = useRef<string | null>(null)     // sync copy of logId (avoids the stale-closure race)
+  const pendingPatchRef = useRef<Record<string, any>>({}) // destination/type picked before the row exists
 
   const textareaRef       = useRef<HTMLTextAreaElement>(null)
   const lastResultRef     = useRef<number>(0)
@@ -138,7 +140,7 @@ export default function ScanID(){
           .gte("created_at", cutoff)
           .order("created_at", { ascending: false }).limit(1).maybeSingle()
         if (recent) {
-          setLogId(recent.id)
+          applyLogId(recent.id)
           setDetailMsg("Already logged moments ago — not duplicated")
           setTimeout(() => setDetailMsg(""), 2500)
           return
@@ -191,7 +193,7 @@ export default function ScanID(){
         created_at:     new Date().toISOString(),
       }).select("id").single()
       if (logErr) { setSaveError("Auto-log failed: " + logErr.message); return }
-      setLogId(logRow!.id)
+      applyLogId(logRow!.id)
       const dlName = `${p.first_name} ${p.last_name}`.trim()
       supabase.auth.getUser().then(({ data: { user } }) => {
         supabase.from("audit_logs").insert({
@@ -206,11 +208,31 @@ export default function ScanID(){
     }
   }
 
-  // Patch the already-logged row as the guard fills in unit / resident / type.
+  // Record the auto-logged row id (sync + state) and flush any enrichment the
+  // guard picked before the row existed (fixes destination not persisting).
+  function applyLogId(newId: string) {
+    logIdRef.current = newId
+    setLogId(newId)
+    const pending = pendingPatchRef.current
+    if (Object.keys(pending).length) {
+      pendingPatchRef.current = {}
+      supabase.from("visitor_logs").update(pending).eq("id", newId).then(({ error }) => {
+        if (error) setSaveError("Update failed: " + error.message)
+        else { setDetailMsg("✓ Saved"); setTimeout(() => setDetailMsg(""), 1500) }
+      })
+    }
+  }
+
+  // Patch the logged row as the guard fills in unit / resident / type. If the
+  // auto-log row isn't created yet, queue the patch — applyLogId flushes it.
   async function updateEntry(patch: Record<string, any>) {
-    if (!logId) return
+    if (!logIdRef.current) {
+      pendingPatchRef.current = { ...pendingPatchRef.current, ...patch }
+      setDetailMsg("Saving…")
+      return
+    }
     setSaveError(""); setDetailMsg("Saving…")
-    const { error } = await supabase.from("visitor_logs").update(patch).eq("id", logId)
+    const { error } = await supabase.from("visitor_logs").update(patch).eq("id", logIdRef.current)
     setDetailMsg(error ? "" : "✓ Saved")
     if (error) setSaveError("Update failed: " + error.message)
     else setTimeout(() => setDetailMsg(""), 1500)
@@ -425,6 +447,8 @@ export default function ScanID(){
     barredFiredRef.current = false
     boloFiredRef.current = false
     autoSavedRef.current = false
+    logIdRef.current = null
+    pendingPatchRef.current = {}
     lastProcessedRef.current = ""
     if (textareaRef.current) textareaRef.current.value = ""
     setPerson(null)
@@ -471,6 +495,8 @@ export default function ScanID(){
       barredFiredRef.current = false
       boloFiredRef.current = false
       autoSavedRef.current = false
+      logIdRef.current = null
+      pendingPatchRef.current = {}
       lastProcessedRef.current = ""
       setPerson(null)
       setAlertPerson(null)
