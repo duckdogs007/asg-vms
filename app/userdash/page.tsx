@@ -151,6 +151,7 @@ export default function UserDashboard() {
 
   // Officer reports
   const [reportTab,     setReportTab]     = useState<ReportTab>("daily")
+  const [passdownNote,  setPassdownNote]  = useState("")  // flag-to-passdown note shared across report forms
   const [drafts,        setDrafts]        = useState<any[]>([])
   const [draftsLoading, setDraftsLoading] = useState(false)
   const [activeDraftId, setActiveDraftId] = useState<string | null>(null)
@@ -714,6 +715,8 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); return }
     if (ins?.id) enqueueReport("daily_log", ins.id, dailyCommunity, dailyOfficer || officerName, `Daily Log — ${dailyDate}`)
     setReportMessage("✅ Daily log submitted — pending supervisor review.")
+    await flagToPassdown({ community: dailyCommunity, date: dailyDate, shift: dailyShift, officer: dailyOfficer || officerName, source: "Daily Log" })
+    setPassdownNote("")
     clearDraftAfterSubmit()
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather(""); setDailyPhotoFiles([])
     setDailyShiftStart(""); setDailyShiftEnd(""); setDailyAddlOfficers([])
@@ -788,6 +791,8 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); return }
     if (ins?.id) enqueueReport("incident", ins.id, incCommunity, incOfficer || officerName, incTypes.join(", ") || "Incident Report")
     setReportMessage("✅ Incident report submitted — pending supervisor review.")
+    await flagToPassdown({ community: incCommunity, date: incDate, officer: incOfficer || officerName, source: "Incident Report" })
+    setPassdownNote("")
     clearDraftAfterSubmit()
     if (isHighPriorityIncident(incTypes.join(" "))) {
       const communityName = communities.find(c => c.id === incCommunity)?.name || "Unknown"
@@ -846,6 +851,8 @@ export default function UserDashboard() {
     if (error) { setReportError(error.message); return }
     if (ins?.id) enqueueReport("field_contact", ins.id, ctCommunity || null, ctOfficer || officerName, `${ctFirstName} ${ctLastName}`.trim() || "Field Contact")
     setReportMessage("✅ Field contact logged — pending supervisor review.")
+    await flagToPassdown({ community: ctCommunity, date: ctDate, officer: ctOfficer || officerName, source: "Field Contact" })
+    setPassdownNote("")
     clearDraftAfterSubmit()
     logActivity("created", "Field Contact", "", `Field contact logged — ${ctFirstName} ${ctLastName}`)
     setCtFirstName(""); setCtLastName(""); setCtLocation(""); setCtReason(""); setCtOfficer(""); setCtNotes("")
@@ -925,6 +932,8 @@ export default function UserDashboard() {
     }
 
     setReportMessage("✅ Vehicle FI logged — pending supervisor review." + (boloMatch ? " ⚠ BOLO match — supervisor alerted." : ""))
+    await flagToPassdown({ community: vfiCommunity, date: vfiDate, officer: vfiOfficer || officerName, source: "Vehicle FI" })
+    setPassdownNote("")
     clearDraftAfterSubmit()
     logActivity("created", "Vehicle FI", "", `Vehicle FI logged — ${vfiVehicle.plate || vfiVehicle.make} ${vfiDate}`)
     setVfiLoc(EMPTY_LOCATION); setVfiVehicle(EMPTY_VEHICLE); setVfiDescriptors(""); setVfiReason(""); setVfiNotes("")
@@ -1196,6 +1205,35 @@ export default function UserDashboard() {
     logActivity("submitted", "Report Queue", id, `${type.replace(/_/g, " ")} submitted — ${summary}`)
   }
 
+  // Post a flagged note from a report into the community's Passdown Log so the
+  // next shift sees it at sign-in. No-op when the note is blank.
+  async function flagToPassdown(opts: { community: string | null; date: string; shift?: string; officer: string; source: string }) {
+    const note = passdownNote.trim()
+    if (!note) return
+    const { error } = await supabase.from("passdown_logs").insert({
+      date:         opts.date || new Date().toISOString().split("T")[0],
+      shift:        opts.shift || null,
+      community_id: opts.community || null,
+      officer_name: opts.officer || officerName || null,
+      notes:        `🚩 Flagged from ${opts.source}: ${note}`,
+      created_at:   new Date().toISOString(),
+    })
+    if (!error) logActivity("created", "Passdown", "", `Passdown flag from ${opts.source} — ${opts.date}`)
+  }
+
+  // Reusable "flag for passdown" field rendered inside report forms.
+  function passdownFlagField() {
+    return (
+      <div className="mb-5 border border-amber-300 rounded-xl bg-amber-50 p-4">
+        <label className={labelCls + " mb-1"}>🚩 Flag for Passdown <span className="font-normal text-gray-500">— shared with the next shift</span></label>
+        <textarea rows={2} value={passdownNote} onChange={e => setPassdownNote(e.target.value)}
+          placeholder="e.g. Suspicious silver sedan circling Lot B around 0200 — watch for it tomorrow."
+          className={textareaCls} />
+        <p className="text-[11px] text-gray-500 mt-1">If filled, this is posted to this location&apos;s Passdown Log so the next officers see it when they sign in.</p>
+      </div>
+    )
+  }
+
   // ── REPORT DRAFTS (private per-user save-for-later) ──
   const DRAFT_LABEL: Record<string, string> = {
     daily: "Daily Log", incident: "Incident Report", contact: "Field Contact",
@@ -1383,7 +1421,7 @@ export default function UserDashboard() {
         await saveDraft(cur)
       }
     }
-    setReportTab(t); setActiveDraftId(null); setReportError(""); setReportMessage(""); lastSavedRef.current = ""
+    setReportTab(t); setActiveDraftId(null); setReportError(""); setReportMessage(""); setPassdownNote(""); lastSavedRef.current = ""
     if (t === "drafts") loadDrafts()
     if (t === "view") loadPastReports()
   }
@@ -2411,6 +2449,7 @@ export default function UserDashboard() {
                   </div>
                 )}
               </div>
+              {passdownFlagField()}
               <div className="flex items-center gap-2 flex-wrap">
                 <button onClick={() => saveDraft("daily")} disabled={reportSaving}
                   className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
@@ -2708,6 +2747,7 @@ export default function UserDashboard() {
                 <input type="checkbox" id="followup" checked={incFollowUp} onChange={e => setIncFollowUp(e.target.checked)} className="w-4 h-4 accent-blue-700" />
                 <label htmlFor="followup" className="text-sm font-medium text-gray-700">Follow-up required</label>
               </div>
+              {passdownFlagField()}
               <div className="flex items-center gap-2 flex-wrap">
                 <button onClick={() => saveDraft("incident")} disabled={reportSaving}
                   className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
@@ -2800,6 +2840,7 @@ export default function UserDashboard() {
                   </div>
                 )}
               </div>
+              {passdownFlagField()}
               <div className="flex items-center gap-2 flex-wrap">
                 <button onClick={() => saveDraft("contact")} disabled={reportSaving}
                   className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
@@ -2919,6 +2960,7 @@ export default function UserDashboard() {
                   </div>
                 )}
               </div>
+              {passdownFlagField()}
               <div className="flex items-center gap-2 flex-wrap">
                 <button onClick={() => saveDraft("vfi")} disabled={reportSaving}
                   className="px-5 py-3 bg-white border border-gray-300 text-gray-700 font-semibold rounded-lg hover:bg-gray-50 cursor-pointer disabled:opacity-50">
