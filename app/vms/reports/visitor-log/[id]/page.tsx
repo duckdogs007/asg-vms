@@ -6,6 +6,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { SignedImage } from "@/components/SignedImage"
 import { ADMIN_EMAILS } from "@/lib/admin"
+import { decodeSex, formatHeight } from "@/lib/dlFormat"
 
 function utc(ts: string) {
   return ts.endsWith("Z") || ts.includes("+") ? ts : ts + "Z"
@@ -221,8 +222,8 @@ export default function VisitorLogDetailPage() {
             <Field label="DL Number"     value={r.dl_number || r.license_number || r.oln} />
             <Field label="State Issued"  value={r.dl_state || r.state_of_issue} />
             <Field label="Date of Birth" value={fmtDate(r.dob || r.visitor_dob)} />
-            <Field label="Sex"           value={r.sex} />
-            <Field label="Height"        value={r.height} />
+            <Field label="Sex"           value={decodeSex(r.sex)} />
+            <Field label="Height"        value={formatHeight(r.height)} />
             <Field label="Eye Color"     value={r.eye_color} />
             {(r.address || r.city || r.state_of_issue || r.zip) && (
               <div className="col-span-2 sm:col-span-3">

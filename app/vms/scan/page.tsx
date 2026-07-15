@@ -5,6 +5,7 @@ import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import SecurityAlert from "../../../components/SecurityAlert"
 import { fireAlert } from "@/lib/alerts"
+import { decodeSex, formatHeight } from "@/lib/dlFormat"
 import { Community, Unit, Resident } from "@/lib/types"
 
 // AAMVA DBB can be YYYYMMDD or MMDDYYYY (Virginia uses MMDDYYYY). Returns
@@ -16,21 +17,6 @@ function formatDOB(raw: string): string {
   const mB = raw.slice(0, 2), dB = raw.slice(2, 4), yB = raw.slice(4, 8)
   if (+yB >= 1900 && +yB <= 2099 && +mB >= 1 && +mB <= 12 && +dB >= 1 && +dB <= 31) return `${mB}/${dB}/${yB}`
   return raw
-}
-
-function decodeSex(code: string): string {
-  if (code === "1") return "M"
-  if (code === "2") return "F"
-  return code || "—"
-}
-
-function formatHeight(raw: string): string {
-  const m = raw.match(/^0*(\d+)\s*in/i)
-  if (m) {
-    const total = parseInt(m[1], 10)
-    return `${Math.floor(total / 12)}'${total % 12}"`
-  }
-  return raw || "—"
 }
 
 // Same parsing logic but returns YYYY-MM-DD for the DB date column

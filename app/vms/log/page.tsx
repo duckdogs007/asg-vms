@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { checkIsAdmin } from "@/lib/admin"
+import { decodeSex } from "@/lib/dlFormat"
 import { Community } from "@/lib/types"
 
 // One visitor-log line item. Columns come from public.visitor_logs.
@@ -169,7 +170,7 @@ export default function VmsScanLogPage() {
               const meta = [
                 r.dob ? `DOB ${fmtDOB(r.dob)}` : null,
                 r.oln ? `OLN ${r.oln}` : null,
-                r.sex || null,
+                r.sex ? decodeSex(r.sex) : null,
               ].filter(Boolean).join(" · ")
               return (
                 <div
