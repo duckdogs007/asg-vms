@@ -6,6 +6,7 @@ import { useRouter, usePathname } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { fireAlert } from "@/lib/alerts"
 import { ADMIN_EMAILS } from "@/lib/admin"
+import QuickNav from "./QuickNav"
 
 export default function TopNav() {
 
@@ -28,6 +29,7 @@ export default function TopNav() {
   const [chatUnread,     setChatUnread]     = useState(false)
   const [openDropdown,   setOpenDropdown]   = useState<string | null>(null)
   const [mobileExpanded, setMobileExpanded] = useState<string | null>(null)
+  const [quickNavOpen,   setQuickNavOpen]   = useState(false)
 
   useEffect(() => {
     const saved = localStorage.getItem("asg-changelog-last-seen")
@@ -55,6 +57,18 @@ export default function TopNav() {
     const clearBadge = () => setChatUnread(false)
     window.addEventListener("chat-read", clearBadge)
     return () => window.removeEventListener("chat-read", clearBadge)
+
+  // Cmd+K keyboard shortcut for quick navigation
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault()
+        setQuickNavOpen(true)
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown)
+    return () => window.removeEventListener("keydown", handleKeyDown)
+  }, [])
   }, [])
 
   useEffect(() => {
@@ -305,6 +319,16 @@ export default function TopNav() {
           <span className="hidden lg:block text-xs text-gray-500">{currentTime}</span>
           <span className="hidden lg:block text-gray-300">|</span>
 
+
+            {/* Quick Nav Button */}
+            <button
+              onClick={() => setQuickNavOpen(true)}
+              title="Quick Navigation (Cmd+K)"
+              className="hidden md:flex items-center gap-2 px-2 sm:px-3 py-1.5 bg-gray-100 text-gray-600 text-xs rounded-md hover:bg-gray-200 border border-gray-300 cursor-pointer transition-colors"
+            >
+              <span>🔍</span>
+              <span className="hidden sm:inline text-gray-400">Cmd+K</span>
+            </button>
           {/* User dropdown */}
           <div className="relative flex items-center gap-1.5 cursor-pointer" onClick={() => { setMenuOpen(!menuOpen); setChangelogOpen(false) }}>
             <span className="w-2 h-2 bg-green-500 rounded-full flex-shrink-0"></span>
@@ -568,6 +592,13 @@ export default function TopNav() {
         </>
       )}
 
+
+      {/* Quick Nav Modal */}
+      <QuickNav 
+        isOpen={quickNavOpen} 
+        onClose={() => setQuickNavOpen(false)} 
+        isAdmin={isAdmin} 
+      />
     </nav>
   )
 }
