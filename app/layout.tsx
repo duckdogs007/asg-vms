@@ -1,6 +1,7 @@
 import "./globals.css"
 import type { Metadata } from "next"
 import TopNav from "@/components/TopNav"
+import Breadcrumbs from "@/components/Breadcrumbs"
 
 export const metadata: Metadata = {
   title: {
@@ -17,6 +18,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en">
       <body>
         <TopNav />
+        <Breadcrumbs />
         <div className="p-5">
           {children}
         </div>
