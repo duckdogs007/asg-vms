@@ -26,6 +26,8 @@ export default function TopNav() {
   const [changelog,      setChangelog]      = useState<Array<{id: string; title: string; blurb: string; posted_at: string}>>([])
   const [lastSeenAt,     setLastSeenAt]     = useState<string | null>(null)
   const [chatUnread,     setChatUnread]     = useState(false)
+  const [openDropdown,   setOpenDropdown]   = useState<string | null>(null)
+  const [mobileExpanded, setMobileExpanded] = useState<string | null>(null)
 
   useEffect(() => {
     const saved = localStorage.getItem("asg-changelog-last-seen")
@@ -193,8 +195,10 @@ export default function TopNav() {
     ? userEmail.split("@")[0].replace(/\./g, " ").replace(/\b\w/g, c => c.toUpperCase())
     : ""
 
-  const navLinkCls = "text-gray-700 hover:text-blue-800 text-sm font-medium transition-colors"
-  const mobileNavLinkCls = "block px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+  const navLinkCls        = "text-gray-700 hover:text-blue-800 text-sm font-medium transition-colors"
+  const mobileNavLinkCls  = "block px-4 py-2.5 text-sm font-medium text-gray-700 hover:bg-gray-50 whitespace-nowrap"
+  const dropdownItemCls   = "block px-4 py-2 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-800 whitespace-nowrap"
+  const mobileSubLinkCls  = "block pl-8 pr-4 py-2 text-sm text-gray-600 hover:bg-gray-100 hover:text-blue-800"
 
   if (pathname === "/login") return null
 
@@ -225,14 +229,63 @@ export default function TopNav() {
           </button>
 
           {/* Desktop nav links (hidden below md) */}
-          <div className="hidden md:flex gap-5">
-            <Link href="/"             className={navLinkCls}>Home</Link>
-            <Link href="/vms"          className={navLinkCls}>VMS</Link>
-            <Link href="/userdash"     className={navLinkCls}>User Dashboard</Link>
-            <Link href="/vms/property" className={navLinkCls}>Property Hub</Link>
-            <Link href="/vms/intel"    className={navLinkCls}>Intel Hub</Link>
-            <Link href="/alerts"       className={navLinkCls}>Alert Log</Link>
-            <Link href="/vms/reports"  className={navLinkCls}>Reports</Link>
+          <div className="hidden md:flex gap-5 items-center">
+            <Link href="/" className={navLinkCls}>Home</Link>
+
+            {/* VMS dropdown */}
+            <div className="relative" onMouseEnter={() => setOpenDropdown("vms")} onMouseLeave={() => setOpenDropdown(null)}>
+              <Link href="/vms" className={`${navLinkCls} flex items-center gap-0.5`}>
+                VMS <span className="text-[10px] text-gray-400 ml-0.5">▾</span>
+              </Link>
+              {openDropdown === "vms" && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px] z-50">
+                  <Link href="/vms"        className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🛂 Check-In</Link>
+                  <Link href="/vms/scan"   className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📷 Scan License</Link>
+                  <Link href="/vms/search" className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🔎 Search</Link>
+                  <Link href="/vms/log"    className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📜 Scan Log</Link>
+                </div>
+              )}
+            </div>
+
+            {/* User Dashboard dropdown */}
+            <div className="relative" onMouseEnter={() => setOpenDropdown("userdash")} onMouseLeave={() => setOpenDropdown(null)}>
+              <Link href="/userdash" className={`${navLinkCls} flex items-center gap-0.5`}>
+                User Dashboard <span className="text-[10px] text-gray-400 ml-0.5">▾</span>
+              </Link>
+              {openDropdown === "userdash" && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50">
+                  <Link href="/userdash?tab=reports"  className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📝 Reports</Link>
+                  <Link href="/userdash?tab=onduty"   className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🟢 On Duty</Link>
+                  <Link href="/userdash?tab=watchlist" className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🚫 Watchlist</Link>
+                  <Link href="/userdash?tab=passdown" className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📋 Passdown</Link>
+                  <Link href="/userdash?tab=bolo"     className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>⚠️ BOLO</Link>
+                  <Link href="/userdash?tab=gatecheck" className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🔒 Gate Check</Link>
+                </div>
+              )}
+            </div>
+
+            {/* Property Hub dropdown */}
+            <div className="relative" onMouseEnter={() => setOpenDropdown("property")} onMouseLeave={() => setOpenDropdown(null)}>
+              <Link href="/vms/property" className={`${navLinkCls} flex items-center gap-0.5`}>
+                Property Hub <span className="text-[10px] text-gray-400 ml-0.5">▾</span>
+              </Link>
+              {openDropdown === "property" && (
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[200px] z-50">
+                  <Link href="/vms/property?tab=post-orders"  className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📋 Post Orders</Link>
+                  <Link href="/vms/property?tab=info"         className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🏢 Community Info</Link>
+                  <Link href="/vms/property?tab=documents"    className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📁 Documents</Link>
+                  <Link href="/vms/property?tab=vehicles"     className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🚗 Vehicles</Link>
+                  <Link href="/vms/property?tab=rentroll"     className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🏠 Rent Roll</Link>
+                  <Link href="/vms/property?tab=history"      className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📅 Unit History</Link>
+                  <Link href="/vms/property?tab=violations"   className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>⚠️ Lease Violations</Link>
+                  <Link href="/vms/property?tab=maintenance"  className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🔧 Maintenance</Link>
+                </div>
+              )}
+            </div>
+
+            <Link href="/vms/intel"   className={navLinkCls}>Intel Hub</Link>
+            <Link href="/alerts"      className={navLinkCls}>Alert Log</Link>
+            <Link href="/vms/reports" className={navLinkCls}>Reports</Link>
             {userEmail && (
               <Link href="/chat" className={`${navLinkCls} relative`}>
                 💬 Chat
@@ -424,15 +477,85 @@ export default function TopNav() {
       {mobileNavOpen && (
         <>
           {/* Click-outside catcher */}
-          <div className="fixed inset-0 z-40" onClick={() => setMobileNavOpen(false)} />
-          <div className="absolute left-3 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[220px] py-1">
-            <Link href="/"             className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
-            <Link href="/vms"          className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
-            <Link href="/userdash"     className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>
-            <Link href="/vms/property" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏢 Property Hub</Link>
-            <Link href="/vms/intel"    className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Hub</Link>
-            <Link href="/alerts"       className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alert Log</Link>
-            <Link href="/vms/reports"  className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
+          <div className="fixed inset-0 z-40" onClick={() => { setMobileNavOpen(false); setMobileExpanded(null) }} />
+          <div className="absolute left-3 top-full mt-1 z-50 bg-white border border-gray-200 rounded-lg shadow-lg min-w-[240px] py-1">
+            <Link href="/" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Home</Link>
+
+            {/* VMS expandable */}
+            <div>
+              <div className="flex items-center">
+                <Link href="/vms" className={`${mobileNavLinkCls} flex-1`} onClick={() => setMobileNavOpen(false)}>🛂 VMS</Link>
+                <button
+                  className="pr-4 py-2.5 text-gray-400 text-xs bg-transparent border-none cursor-pointer"
+                  onClick={() => setMobileExpanded(mobileExpanded === "vms" ? null : "vms")}
+                  aria-label="Toggle VMS sub-menu"
+                >
+                  {mobileExpanded === "vms" ? "▲" : "▾"}
+                </button>
+              </div>
+              {mobileExpanded === "vms" && (
+                <div className="bg-gray-50 border-t border-gray-100 pb-1">
+                  <Link href="/vms"        className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>🛂 Check-In</Link>
+                  <Link href="/vms/scan"   className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>📷 Scan License</Link>
+                  <Link href="/vms/search" className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Search</Link>
+                  <Link href="/vms/log"    className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>📜 Scan Log</Link>
+                </div>
+              )}
+            </div>
+
+            {/* User Dashboard expandable */}
+            <div>
+              <div className="flex items-center">
+                <Link href="/userdash" className={`${mobileNavLinkCls} flex-1`} onClick={() => setMobileNavOpen(false)}>📋 User Dashboard</Link>
+                <button
+                  className="pr-4 py-2.5 text-gray-400 text-xs bg-transparent border-none cursor-pointer"
+                  onClick={() => setMobileExpanded(mobileExpanded === "userdash" ? null : "userdash")}
+                  aria-label="Toggle User Dashboard sub-menu"
+                >
+                  {mobileExpanded === "userdash" ? "▲" : "▾"}
+                </button>
+              </div>
+              {mobileExpanded === "userdash" && (
+                <div className="bg-gray-50 border-t border-gray-100 pb-1">
+                  <Link href="/userdash?tab=reports"   className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>📝 Reports</Link>
+                  <Link href="/userdash?tab=onduty"    className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>🟢 On Duty</Link>
+                  <Link href="/userdash?tab=watchlist" className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>🚫 Watchlist</Link>
+                  <Link href="/userdash?tab=passdown"  className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>📋 Passdown</Link>
+                  <Link href="/userdash?tab=bolo"      className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>⚠️ BOLO</Link>
+                  <Link href="/userdash?tab=gatecheck" className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>🔒 Gate Check</Link>
+                </div>
+              )}
+            </div>
+
+            {/* Property Hub expandable */}
+            <div>
+              <div className="flex items-center">
+                <Link href="/vms/property" className={`${mobileNavLinkCls} flex-1`} onClick={() => setMobileNavOpen(false)}>🏢 Property Hub</Link>
+                <button
+                  className="pr-4 py-2.5 text-gray-400 text-xs bg-transparent border-none cursor-pointer"
+                  onClick={() => setMobileExpanded(mobileExpanded === "property" ? null : "property")}
+                  aria-label="Toggle Property Hub sub-menu"
+                >
+                  {mobileExpanded === "property" ? "▲" : "▾"}
+                </button>
+              </div>
+              {mobileExpanded === "property" && (
+                <div className="bg-gray-50 border-t border-gray-100 pb-1">
+                  <Link href="/vms/property?tab=post-orders" className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>📋 Post Orders</Link>
+                  <Link href="/vms/property?tab=info"        className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>🏢 Community Info</Link>
+                  <Link href="/vms/property?tab=documents"   className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>📁 Documents</Link>
+                  <Link href="/vms/property?tab=vehicles"    className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>🚗 Vehicles</Link>
+                  <Link href="/vms/property?tab=rentroll"    className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>🏠 Rent Roll</Link>
+                  <Link href="/vms/property?tab=history"     className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>📅 Unit History</Link>
+                  <Link href="/vms/property?tab=violations"  className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>⚠️ Lease Violations</Link>
+                  <Link href="/vms/property?tab=maintenance" className={mobileSubLinkCls} onClick={() => setMobileNavOpen(false)}>🔧 Maintenance</Link>
+                </div>
+              )}
+            </div>
+
+            <Link href="/vms/intel"   className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔎 Intel Hub</Link>
+            <Link href="/alerts"      className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>🔔 Alert Log</Link>
+            <Link href="/vms/reports" className={mobileNavLinkCls} onClick={() => setMobileNavOpen(false)}>📊 Reports</Link>
             {userEmail && (
               <Link href="/chat" className={`${mobileNavLinkCls} flex items-center justify-between`} onClick={() => setMobileNavOpen(false)}>
                 <span>💬 Chat</span>
