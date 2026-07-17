@@ -12,7 +12,7 @@ import { VMS_TABS, VMS_TAB_PATHS } from "@/lib/routes"
 export default function VmsTabBar() {
   const pathname = usePathname()
 
-  if (!VMS_TAB_PATHS.has(pathname)) return null
+  if (!VMS_TAB_PATHS.has(pathname as any)) return null
 
   return <TabNavigation tabs={VMS_TABS} activeTab="" useUrls={true} />
 }
