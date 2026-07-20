@@ -8,6 +8,7 @@ import { WatchlistEntry } from "@/lib/types"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
 import { ADMIN_EMAILS } from "@/lib/admin"
 import { personsInvolvedMatch } from "@/lib/nameSearch"
+import PoliceReportsPanel from "@/components/PoliceReportsPanel"
 
 interface PersonRow extends WatchlistEntry {
   photo_url?: string | null
@@ -576,6 +577,13 @@ export default function ProfilePage() {
           </div>
         </div>
       )}
+
+      {/* POLICE REPORTS */}
+      <PoliceReportsPanel
+        personName={[person.first_name, person.middle_name, person.last_name].filter(Boolean).join(" ").trim()}
+        watchlistId={id || null}
+        communityId={person.community_id || null}
+      />
 
       {/* NOTES */}
       <div className={sectionCls}>

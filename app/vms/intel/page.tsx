@@ -7,6 +7,7 @@ import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
 import { maskSSN } from "@/lib/format"
 import { sanitizeFilterTerm } from "@/lib/searchSanitize"
 import { personsInvolvedMatch } from "@/lib/nameSearch"
+import PoliceReportsPanel from "@/components/PoliceReportsPanel"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
 
 function fmtDate(ts: string) {
@@ -1081,6 +1082,17 @@ export default function IntelPage() {
 
         </div>
       </div>
+
+      {/* POLICE REPORTS — attached to the searched person (works whether or not
+          they're on the watchlist) */}
+      {selectedPerson && (
+        <div className="mt-5">
+          <PoliceReportsPanel
+            personName={selectedPerson.name}
+            watchlistId={confirmedMatch?.id || (banHistory.length === 1 ? banHistory[0].id : null)}
+          />
+        </div>
+      )}
     </div>
   )
 }
