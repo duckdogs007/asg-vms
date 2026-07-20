@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { checkIsAdmin } from "@/lib/admin"
 import { sanitizeFilterTerm } from "@/lib/searchSanitize"
+import { splitPersonName, firstNameCompatible } from "@/lib/nameSearch"
 import { SignedLink } from "@/components/SignedImage"
 
 // Police reports attached to a person. Reports link by watchlist_id when the
@@ -15,6 +16,8 @@ interface Report {
   community_id: string | null
   watchlist_id: string | null
   person_name: string
+  person_first: string | null
+  person_last: string | null
   agency: string | null
   case_number: string | null
   incident_date: string | null
@@ -51,16 +54,28 @@ export default function PoliceReportsPanel({
 
   useEffect(() => { checkIsAdmin().then(setIsAdmin).catch(() => setIsAdmin(false)) }, [])
 
+  // Surname anchors the lookup; the first name only broadens it, so "Johnson, O",
+  // "O Johnson" and "Oliver Johnson" all find each other. A surname-only search
+  // returns every match — better to show one extra than miss the right person.
   const load = useCallback(async () => {
-    const name = sanitizeFilterTerm(personName)
-    if (!name) { setReports([]); return }
+    const { first, last } = splitPersonName(personName)
+    const lastSafe = sanitizeFilterTerm(last)
+    if (!lastSafe && !watchlistId) { setReports([]); return }
     setLoading(true)
     let q = supabase.from("police_reports").select("*").order("created_at", { ascending: false })
-    q = watchlistId
-      ? q.or(`watchlist_id.eq.${watchlistId},person_name.ilike.${name}`)
-      : q.ilike("person_name", name)
+    q = watchlistId && lastSafe
+      ? q.or(`watchlist_id.eq.${watchlistId},person_last.eq.${lastSafe}`)
+      : watchlistId
+      ? q.eq("watchlist_id", watchlistId)
+      : q.eq("person_last", lastSafe)
     const { data } = await q
-    setReports((data as Report[]) || [])
+    const rows = (data as Report[]) || []
+    const surnameOnly = !first || first === last
+    setReports(rows.filter(r =>
+      (watchlistId && r.watchlist_id === watchlistId) ||   // hard link always wins
+      surnameOnly ||                                        // "Johnson" → all Johnsons
+      firstNameCompatible(r.person_first, first)
+    ))
     setLoading(false)
   }, [personName, watchlistId])
 
@@ -82,10 +97,13 @@ export default function PoliceReportsPanel({
       const comm = communityId
         || (typeof window !== "undefined" ? localStorage.getItem("asg-current-community-id") : null)
         || null
+      const parts = splitPersonName(personName)
       const { error } = await supabase.from("police_reports").insert({
         community_id:  comm,
         watchlist_id:  watchlistId || null,
         person_name:   personName.trim(),
+        person_first:  parts.first || null,
+        person_last:   parts.last || null,
         agency:        form.agency.trim() || null,
         case_number:   form.case_number.trim() || null,
         incident_date: form.incident_date || null,
@@ -173,7 +191,8 @@ export default function PoliceReportsPanel({
                   {r.title && <div className="text-sm font-semibold text-gray-900 mt-1">{r.title}</div>}
                   {r.notes && <div className="text-xs text-gray-600 mt-0.5 whitespace-pre-wrap">{r.notes}</div>}
                   <div className="text-[11px] text-gray-400 mt-1">
-                    Uploaded {new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                    Filed as <span className="font-semibold text-gray-500 capitalize">{r.person_name}</span>
+                    {" · "}Uploaded {new Date(r.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
                     {r.uploaded_by ? ` · ${r.uploaded_by}` : ""}
                   </div>
                 </div>

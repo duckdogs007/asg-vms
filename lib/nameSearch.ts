@@ -1,3 +1,29 @@
+// Split a typed name into normalized {first, last}. Handles "Last, First" and
+// "First Last"; a single word is treated as both (so a surname-only search
+// matches broadly). Mirrors the parseName logic used by the Intel search.
+export function splitPersonName(input: string | null | undefined): { first: string; last: string } {
+  const s = (input || "").toLowerCase().trim()
+  if (!s) return { first: "", last: "" }
+  if (s.includes(",")) {
+    const [last, first] = s.split(",").map(p => p.trim())
+    return { first: first || last || "", last: last || "" }
+  }
+  const parts = s.split(/\s+/).filter(Boolean)
+  if (parts.length === 1) return { first: parts[0], last: parts[0] }
+  return { first: parts[0], last: parts[parts.length - 1] }
+}
+
+// Deliberately INCLUSIVE first-name comparison: an initial matches a full name
+// and a prefix matches ("O" ↔ "Oliver", "Rob" ↔ "Robert"), and an unknown side
+// never excludes. Surname is the real anchor — for this use case, showing one
+// extra person is far better than missing the right one.
+export function firstNameCompatible(a: string | null | undefined, b: string | null | undefined): boolean {
+  const x = (a || "").toLowerCase().trim()
+  const y = (b || "").toLowerCase().trim()
+  if (!x || !y) return true
+  return x === y || x.startsWith(y) || y.startsWith(x)
+}
+
 // Matching a person against a free-text "persons involved" field.
 //
 // This MUST anchor on the last name. A previous version could match on the
