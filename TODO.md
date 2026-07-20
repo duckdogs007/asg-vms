@@ -74,6 +74,25 @@
 
 ## Open items
 
+#### 59. 💡 AI extraction from uploaded police reports → auto-match person cards
+**Status: idea / parked (July 16, 2026).** Today the officer uploads a police report and manually cross-checks names to decide who it belongs to. Automate the lookup, keep the human as the final gate.
+
+**Flow:** on upload → server route sends the PDF/image to Gemini (reads PDFs + images natively, no separate OCR) → extract to a strict schema → auto-search each extracted person against `watchlist`, `bolos`, and existing `police_reports` using the surname-anchored matching in `lib/nameSearch.ts` → present ranked match candidates → officer clicks **Link to this person** / **Create new** / **Ignore**.
+
+**Extract:** report metadata (agency, case #, incident date, offense/charges, location, summary) → auto-fills the attach form; and per person (name parts, DOB, race/sex, address, OLN, **role**: suspect/victim/witness/complainant).
+
+**⚠ Do NOT auto-create person records.** This data feeds the BARRED list — a misread name/DOB on a faxed scan could bar the wrong person and get them wrongly denied entry at the gate. The manual labor is the *lookup*, not the confirm click, so AI-proposes/officer-confirms keeps ~95% of the time savings with none of the risk. Matches the review-first pattern already used for AI summaries and report approval.
+
+**Decide before building:**
+- **PII to Google** — police reports carry DOB/address/SSN. Recommend stripping SSNs before sending; alternative is on-server OCR so nothing leaves the system. Needs an explicit decision + note in the security review.
+- Scan quality drives accuracy (clean PDFs near-perfect; handwriting/fax spotty) — the confirm step absorbs this.
+- Cost negligible (one Gemini call per upload).
+
+**Phase 1:** extraction + metadata auto-fill + ranked candidates + one-click link/create.
+**Phase 2 (optional):** auto-link only when confidence is high AND DOB matches exactly; ambiguous ones still reviewed.
+
+Builds on: `police_reports` table + `PoliceReportsPanel` (shipped July 16), `lib/nameSearch.ts`, existing Gemini plumbing (`gemini-flash-latest`, `GEMINI_API_KEY`).
+
 #### 56. Punch in / punch out — officer time clock at locations
 Geofence-based check-in so officers clock on/off post. Per-location lat/long + radius; punch validates GPS position is inside the geofence. Data model: `shifts` / `time_clock` table (officer, location, punch_in, punch_out, lat/long, accuracy). Feeds coverage/hours reporting. Scoping phase — geofence chosen over QR/NFC.
 
