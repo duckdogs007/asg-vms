@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import { WatchlistEntry } from "@/lib/types"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
 import { ADMIN_EMAILS } from "@/lib/admin"
+import { personsInvolvedMatch } from "@/lib/nameSearch"
 
 interface PersonRow extends WatchlistEntry {
   photo_url?: string | null
@@ -157,20 +158,9 @@ export default function ProfilePage() {
         .order("created_at", { ascending: false })
         .limit(100)
       const baseIds = new Set(base.map(r => r.id))
-      const extra = (byName || []).filter((r: any) => {
-        if (baseIds.has(r.id)) return false
-        const pi = (r.persons_involved || "").toLowerCase()
-        if (!pi.includes(last)) return false
-        const tokens = pi.split(/\W+/).filter(Boolean)
-        const minLen = Math.min(4, first.length)
-        // Accept on first-name match (full/nickname/initial) or last-name-only entry
-        const firstMatch = tokens.some((w: string) => {
-          if (w.length === 1) return w === first[0]           // "T" → "Theodore"
-          return w.length >= minLen && (w.includes(first) || first.includes(w))
-        })
-        const hasOtherTokens = tokens.some((w: string) => w !== last && w.length >= 2)
-        return firstMatch || !hasOtherTokens
-      })
+      const extra = (byName || []).filter((r: any) =>
+        !baseIds.has(r.id) && personsInvolvedMatch(r.persons_involved, first, last)
+      )
       setIncidents(
         [...base, ...(extra as IncidentRow[])]
           .sort((a, b) => (b.created_at || "").localeCompare(a.created_at || ""))

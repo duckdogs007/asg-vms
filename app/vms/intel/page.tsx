@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
 import { maskSSN } from "@/lib/format"
 import { sanitizeFilterTerm } from "@/lib/searchSanitize"
+import { personsInvolvedMatch } from "@/lib/nameSearch"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
 
 function fmtDate(ts: string) {
@@ -330,28 +331,19 @@ export default function IntelPage() {
       const filtered = (contactData || []).filter((c: ContactRecord) => nameMatch(c, first, last))
       setContacts(filtered)
 
-      // Load incident report appearances — search persons_involved text field
+      // Load incident report appearances — search the persons_involved text field.
+      // Anchor the query on the surname; personsInvolvedMatch then verifies it as
+      // a whole word (a bare first initial must never match on its own).
       const { data: incData } = await supabase
         .from("incident_reports")
         .select("id, created_at, incident_type, location, persons_involved, persons_data, community_id")
-        .or(`persons_involved.ilike.%${first}%,persons_involved.ilike.%${last}%`)
+        .ilike("persons_involved", `%${last}%`)
         .order("created_at", { ascending: false })
         .limit(100)
 
-      const incFiltered = (incData || []).filter((r: IncidentAppearance) => {
-        if (!r.persons_involved) return false
-        const pi = r.persons_involved.toLowerCase()
-        const tokens = pi.split(/\W+/).filter(Boolean)
-        const minLen = Math.min(4, first.length)
-        const firstOk = tokens.some((w: string) => {
-          if (w.length === 1) return w === first[0]           // "T" → "Theodore"
-          return w.length >= minLen && (w.includes(first) || first.includes(w))
-        })
-        if (first === last) return firstOk
-        // Also accept last-name-only entries (officer didn't document first name)
-        const hasOtherTokens = tokens.some(w => w !== last && w.length >= 2)
-        return firstOk || (!hasOtherTokens && pi.includes(last))
-      })
+      const incFiltered = (incData || []).filter((r: IncidentAppearance) =>
+        personsInvolvedMatch(r.persons_involved, first, last)
+      )
       setIncidentAppearances(incFiltered)
 
       tryLoadPhoto(`${first}_${last}`)
