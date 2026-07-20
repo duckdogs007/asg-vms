@@ -6,7 +6,7 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
 import { maskSSN } from "@/lib/format"
 import { sanitizeFilterTerm } from "@/lib/searchSanitize"
-import { personsInvolvedMatch } from "@/lib/nameSearch"
+import { personsInvolvedMatch, firstNameCompatible } from "@/lib/nameSearch"
 import PoliceReportsPanel from "@/components/PoliceReportsPanel"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
 
@@ -86,7 +86,7 @@ interface ContactRecord {
   photo_url: string | null
 }
 
-type RightTab = "ban" | "visits" | "contacts" | "reports" | "osint"
+type RightTab = "ban" | "visits" | "contacts" | "reports" | "police" | "osint"
 
 interface IncidentAppearance {
   id: string
@@ -176,6 +176,7 @@ export default function IntelPage() {
   const [loading,        setLoading]        = useState(false)
   const [error,          setError]          = useState("")
   const [rightTab,           setRightTab]           = useState<RightTab>("ban")
+  const [policeCount,        setPoliceCount]        = useState(0)
   const [incidentAppearances, setIncidentAppearances] = useState<IncidentAppearance[]>([])
 
   const [photoUrl,       setPhotoUrl]       = useState("")
@@ -346,6 +347,19 @@ export default function IntelPage() {
         personsInvolvedMatch(r.persons_involved, first, last)
       )
       setIncidentAppearances(incFiltered)
+
+      // Police-report count for the tab badge (same surname-anchored, inclusive
+      // matching the panel uses) so the number shows before the tab is opened.
+      if (last) {
+        const { data: prs } = await supabase
+          .from("police_reports").select("person_first").eq("person_last", last)
+        const surnameOnly = !first || first === last
+        setPoliceCount((prs || []).filter((p: { person_first: string | null }) =>
+          surnameOnly || firstNameCompatible(p.person_first, first)
+        ).length)
+      } else {
+        setPoliceCount(0)
+      }
 
       tryLoadPhoto(`${first}_${last}`)
 
@@ -660,8 +674,23 @@ export default function IntelPage() {
                 <span className="ml-1.5 bg-blue-700 text-white text-xs rounded-full px-1.5 py-0.5">{incidentAppearances.length}</span>
               )}
             </button>
+            <button className={tabCls("police")} onClick={() => setRightTab("police")}>
+              🚔 Police Reports
+              {policeCount > 0 && (
+                <span className="ml-1.5 bg-blue-700 text-white text-xs rounded-full px-1.5 py-0.5">{policeCount}</span>
+              )}
+            </button>
             <button className={tabCls("osint")} onClick={() => setRightTab("osint")}>🌐 OSINT</button>
           </div>
+
+          {/* POLICE REPORTS TAB */}
+          {rightTab === "police" && selectedPerson && (
+            <PoliceReportsPanel
+              personName={selectedPerson.name}
+              watchlistId={confirmedMatch?.id || (banHistory.length === 1 ? banHistory[0].id : null)}
+              onCount={setPoliceCount}
+            />
+          )}
 
           {/* BAN HISTORY TAB */}
           {rightTab === "ban" && (
@@ -1083,16 +1112,6 @@ export default function IntelPage() {
         </div>
       </div>
 
-      {/* POLICE REPORTS — attached to the searched person (works whether or not
-          they're on the watchlist) */}
-      {selectedPerson && (
-        <div className="mt-5">
-          <PoliceReportsPanel
-            personName={selectedPerson.name}
-            watchlistId={confirmedMatch?.id || (banHistory.length === 1 ? banHistory[0].id : null)}
-          />
-        </div>
-      )}
     </div>
   )
 }

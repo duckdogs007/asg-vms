@@ -37,11 +37,12 @@ function fmtDate(d: string | null): string {
 }
 
 export default function PoliceReportsPanel({
-  personName, watchlistId = null, communityId = null,
+  personName, watchlistId = null, communityId = null, onCount,
 }: {
   personName: string
   watchlistId?: string | null
   communityId?: string | null
+  onCount?: (n: number) => void
 }) {
   const [reports, setReports] = useState<Report[]>([])
   const [loading, setLoading] = useState(false)
@@ -60,7 +61,7 @@ export default function PoliceReportsPanel({
   const load = useCallback(async () => {
     const { first, last } = splitPersonName(personName)
     const lastSafe = sanitizeFilterTerm(last)
-    if (!lastSafe && !watchlistId) { setReports([]); return }
+    if (!lastSafe && !watchlistId) { setReports([]); onCount?.(0); return }
     setLoading(true)
     let q = supabase.from("police_reports").select("*").order("created_at", { ascending: false })
     q = watchlistId && lastSafe
@@ -71,12 +72,15 @@ export default function PoliceReportsPanel({
     const { data } = await q
     const rows = (data as Report[]) || []
     const surnameOnly = !first || first === last
-    setReports(rows.filter(r =>
+    const matched = rows.filter(r =>
       (watchlistId && r.watchlist_id === watchlistId) ||   // hard link always wins
       surnameOnly ||                                        // "Johnson" → all Johnsons
       firstNameCompatible(r.person_first, first)
-    ))
+    )
+    setReports(matched)
+    onCount?.(matched.length)
     setLoading(false)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [personName, watchlistId])
 
   useEffect(() => { load() }, [load])
