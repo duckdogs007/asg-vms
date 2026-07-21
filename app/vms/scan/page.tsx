@@ -569,7 +569,7 @@ export default function ScanID(){
           <div className="text-red-200 text-xs mt-2">Contact supervisor before proceeding. Alert sent and attempt logged.</div>
           <button
             onClick={reset}
-            className="mt-3 px-4 py-2 bg-gray-700 hover:bg-gray-800 text-white text-sm font-semibold rounded border-none cursor-pointer"
+            className="mt-3 w-full py-4 px-6 bg-gray-700 hover:bg-gray-800 text-white text-xl font-bold rounded-lg border-none cursor-pointer"
           >
             ✓ Acknowledge & Clear — Next Visitor
           </button>
@@ -666,14 +666,14 @@ export default function ScanID(){
             <div className="bg-red-50 border border-red-200 text-red-700 text-sm rounded px-3 py-2 mb-3">{saveError}</div>
           )}
 
-          <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex flex-col gap-2">
             <div className="text-sm font-semibold text-green-700">
               {logId ? "✅ Entry logged" : saving ? "Logging…" : ""}
               {detailMsg && <span className="ml-2 text-gray-400 font-normal">{detailMsg}</span>}
             </div>
             <button
               onClick={reset}
-              className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-md border-none cursor-pointer"
+              className="w-full py-4 px-6 bg-green-600 hover:bg-green-700 text-white text-xl font-bold rounded-lg border-none cursor-pointer"
             >
               ✓ Done — Next Visitor
             </button>
