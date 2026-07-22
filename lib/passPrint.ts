@@ -56,6 +56,9 @@ function shell(title: string, inner: string): string {
 
 function visitorCard(p: PassData): string {
   const dest = [p.unit_number && `Unit ${p.unit_number}`, p.resident_name && `visiting ${p.resident_name}`].filter(Boolean).join(" · ") || "—"
+  const validLine = p.valid_from && p.valid_to
+    ? (p.valid_from === p.valid_to ? `EXPIRES: ${fmtDate(p.valid_to)}` : `VALID: ${fmtDate(p.valid_from)} – ${fmtDate(p.valid_to)}`)
+    : ""
   return `<div class="pass">
     <div class="khead">${esc(p.community_name)}</div>
     <div class="title">Visitor Pass</div>
@@ -63,6 +66,7 @@ function visitorCard(p: PassData): string {
     <div class="row"><span class="k">Type</span><span class="v">${esc(p.person_type || "Visitor")}</span></div>
     <div class="row"><span class="k">Destination</span><span class="v">${esc(dest)}</span></div>
     <div class="row"><span class="k">Issued</span><span class="v">${esc(fmtDateTime(p.issued_at))}</span></div>
+    ${validLine ? `<div class="valid">${esc(validLine)}</div>` : ""}
     <div class="foot"><span>Pass #${esc(p.pass_number)}</span><span>${p.issued_by ? "Issued by " + esc(p.issued_by) : ""}</span></div>
   </div>`
 }

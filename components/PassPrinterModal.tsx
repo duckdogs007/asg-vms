@@ -22,20 +22,21 @@ export default function PassPrinterModal({
   visitorLogId?: string | null
   defaultPlate?: string
 }) {
-  const [plate, setPlate]     = useState("")
-  const [state, setState]     = useState("")
-  const [vehicle, setVehicle] = useState("")
-  const [days, setDays]       = useState(1)   // 1 = today only
-  const [busy, setBusy]       = useState("")
-  const [msg, setMsg]         = useState("")
+  const [plate, setPlate]         = useState("")
+  const [state, setState]         = useState("")
+  const [vehicle, setVehicle]     = useState("")
+  const [visitorDays, setVisitorDays] = useState(1)   // visitor-pass validity; 1 = today only
+  const [days, setDays]           = useState(1)       // vehicle-pass validity; 1 = today only
+  const [busy, setBusy]           = useState("")
+  const [msg, setMsg]             = useState("")
 
-  useEffect(() => { if (open) { setPlate(defaultPlate || ""); setState(""); setVehicle(""); setDays(1); setMsg("") } }, [open, defaultPlate])
+  useEffect(() => { if (open) { setPlate(defaultPlate || ""); setState(""); setVehicle(""); setVisitorDays(1); setDays(1); setMsg("") } }, [open, defaultPlate])
 
   if (!open) return null
 
-  function validRange() {
+  function validRange(n: number) {
     const today = new Date()
-    const to = new Date(today); to.setDate(to.getDate() + (days - 1))
+    const to = new Date(today); to.setDate(to.getDate() + (n - 1))
     const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`
     return { from: iso(today), to: iso(to) }
   }
@@ -44,7 +45,7 @@ export default function PassPrinterModal({
     if (type === "vehicle" && !plate.trim()) { setMsg("⚠ Enter a plate for the vehicle pass."); return }
     setBusy(type); setMsg("")
     const pass_number = generatePassNumber(type)
-    const range = type === "vehicle" ? validRange() : null
+    const range = validRange(type === "vehicle" ? days : visitorDays)
     const { data: { user } } = await supabase.auth.getUser()
     const row = {
       pass_number, pass_type: type,
@@ -57,8 +58,8 @@ export default function PassPrinterModal({
       plate: type === "vehicle" ? plate.trim().toUpperCase() : null,
       plate_state: type === "vehicle" ? (state.trim().toUpperCase() || null) : null,
       vehicle: type === "vehicle" ? (vehicle.trim() || null) : null,
-      valid_from: range?.from || null,
-      valid_to: range?.to || null,
+      valid_from: range.from,
+      valid_to: range.to,
       issued_by: user?.email || null,
     }
     const { error } = await supabase.from("visitor_passes").insert(row)
@@ -90,10 +91,19 @@ export default function PassPrinterModal({
 
         <div className="p-5 space-y-5">
           {/* Visitor pass */}
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-sm text-gray-700">Visitor entry pass (name · destination)</div>
+          <div>
+            <div className="text-sm font-semibold text-gray-800 mb-2">Visitor Pass</div>
+            <div className="text-xs text-gray-500 mb-2">Entry pass — name · destination</div>
+            <label className={labelCls}>Valid for</label>
+            <select value={visitorDays} onChange={e => setVisitorDays(Number(e.target.value))} className={inputCls}>
+              <option value={1}>Today only</option>
+              <option value={2}>48 hours</option>
+              <option value={3}>3 days</option>
+              <option value={7}>7 days</option>
+              <option value={30}>30 days</option>
+            </select>
             <button onClick={() => issue("visitor")} disabled={busy === "visitor" || !visitorName}
-              className="px-4 py-2 bg-blue-800 text-white text-sm font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50 whitespace-nowrap">
+              className="mt-3 w-full px-4 py-2 bg-blue-800 text-white text-sm font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
               {busy === "visitor" ? "…" : "🖨 Visitor Pass"}
             </button>
           </div>
