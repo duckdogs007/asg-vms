@@ -319,6 +319,8 @@ export default function ReportsPage() {
   const [approvedLoading, setApprovedLoading] = useState(false)
   const [approvedExpanded, setApprovedExpanded] = useState(false)
   const [approvingId,  setApprovingId]  = useState<string | null>(null)
+  const [preparingId,  setPreparingId]  = useState<string>("")
+  const [sendConfirm,  setSendConfirm]  = useState<null | { q: any; recipients: string[]; source: string; fallback: boolean; comm: string }>(null)
   const [returnId,     setReturnId]     = useState<string | null>(null)
   const [returnNotes,  setReturnNotes]  = useState("")
   const [returnSaving, setReturnSaving] = useState(false)
@@ -677,7 +679,34 @@ export default function ReportsPage() {
     setApprovedLoading(false)
   }
 
+  // Resolve the exact recipients the server will email (same order:
+  // per-type delivery list → community contacts → supervisor fallback) and open
+  // the confirm dialog so the reviewer verifies the destination before sending.
+  async function prepareApprove(q: any) {
+    setPreparingId(q.id)
+    let recipients: string[] = []
+    let source = ""
+    if (q.community_id) {
+      const { data: rdr } = await supabase.from("report_delivery_recipients")
+        .select("email").eq("community_id", q.community_id).eq("report_type", q.report_type)
+      recipients = (rdr || []).map((r: any) => r.email).filter(Boolean)
+      if (recipients.length) source = "Client delivery list for this report type"
+      else {
+        const { data: contacts } = await supabase.from("community_contacts")
+          .select("email").eq("community_id", q.community_id)
+        recipients = (contacts || []).map((c: any) => c.email).filter(Boolean)
+        if (recipients.length) source = "Community points of contact"
+      }
+    }
+    let fallback = false
+    if (recipients.length === 0) { recipients = ["ASG-Supervisors@teamasg.com"]; source = "Supervisor fallback"; fallback = true }
+    setPreparingId("")
+    const comm = communities.find(c => c.id === q.community_id)?.name || "—"
+    setSendConfirm({ q, recipients, source, fallback, comm })
+  }
+
   async function approveReport(queueId: string) {
+    setSendConfirm(null)
     setApprovingId(queueId)
     const res = await fetch("/api/reports/queue/approve", {
       method: "POST",
@@ -1488,11 +1517,11 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                           🔍 View
                         </Link>
                         <button
-                          onClick={() => approveReport(q.id)}
-                          disabled={approvingId === q.id}
+                          onClick={() => prepareApprove(q)}
+                          disabled={approvingId === q.id || preparingId === q.id}
                           className="px-3 py-1.5 bg-green-700 hover:bg-green-800 text-white text-xs font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50"
                         >
-                          {approvingId === q.id ? "Sending…" : "✅ Approve & Send"}
+                          {approvingId === q.id ? "Sending…" : preparingId === q.id ? "Checking…" : "✅ Approve & Send"}
                         </button>
                         <button
                           onClick={() => { setReturnId(returnId === q.id ? null : q.id); setReturnNotes("") }}
@@ -2397,6 +2426,49 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
           </Section>
         )
       })()}
+
+      {/* Confirm email delivery before sending to the client */}
+      {sendConfirm && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto" onClick={() => setSendConfirm(null)}>
+          <div className="bg-white rounded-xl w-full max-w-lg my-8 shadow-2xl" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-gray-200">
+              <h2 className="text-lg font-bold text-gray-900">📧 Confirm email delivery</h2>
+              <p className="text-sm text-gray-500 mt-1">Verify where this report is going before it&apos;s sent to the client.</p>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 text-sm">
+                <div className="font-semibold text-gray-900 capitalize">{String(sendConfirm.q.report_type || "").replace(/_/g, " ")} report</div>
+                <div className="text-gray-600 mt-0.5">{sendConfirm.comm} · {sendConfirm.q.officer_name || sendConfirm.q.submitted_by || "—"}</div>
+                {sendConfirm.q.summary && <div className="text-gray-500 text-xs mt-1 truncate">{sendConfirm.q.summary}</div>}
+              </div>
+
+              <div>
+                <div className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1">Will be emailed to</div>
+                <div className="flex flex-col gap-1.5">
+                  {sendConfirm.recipients.map(email => (
+                    <div key={email} className="flex items-center gap-2 px-3 py-2 bg-white border border-gray-200 rounded-md text-sm font-medium text-gray-800">
+                      <span>✉️</span>{email}
+                    </div>
+                  ))}
+                </div>
+                <div className={`text-xs mt-2 ${sendConfirm.fallback ? "text-amber-700 font-semibold" : "text-gray-500"}`}>
+                  {sendConfirm.fallback
+                    ? "⚠ No client email on file for this location/report type — this will go to the ASG supervisor fallback, NOT the client. Add recipients in Post Orders if it should reach the client."
+                    : `Source: ${sendConfirm.source}.`}
+                </div>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 p-4 border-t border-gray-200">
+              <button onClick={() => setSendConfirm(null)}
+                className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-semibold rounded-md hover:bg-gray-200 border-none cursor-pointer">Cancel</button>
+              <button onClick={() => approveReport(sendConfirm.q.id)}
+                className="px-5 py-2 bg-green-700 text-white text-sm font-semibold rounded-md hover:bg-green-800 border-none cursor-pointer">
+                ✅ Confirm &amp; Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* AI Summary modal */}
       {aiOpen && (
