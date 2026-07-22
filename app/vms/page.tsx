@@ -476,7 +476,7 @@ export default function VMSPage() {
               </select>
             </div>
             <div>
-              <label className={labelCls}>Resident Being Visited</label>
+              <label className={labelCls}>Person Being Visited</label>
               <select value={residentId} onChange={(e) => setResidentId(e.target.value)} className={inputCls}>
                 <option value="">Select Resident</option>
                 {residents.map(r => (

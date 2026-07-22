@@ -111,6 +111,7 @@ export default function PassPrinterModal({
               <div className="col-span-2"><label className={labelCls}>Valid for</label>
                 <select value={days} onChange={e => setDays(Number(e.target.value))} className={inputCls}>
                   <option value={1}>Today only</option>
+                  <option value={2}>48 hours</option>
                   <option value={3}>3 days</option>
                   <option value={7}>7 days</option>
                   <option value={30}>30 days</option>

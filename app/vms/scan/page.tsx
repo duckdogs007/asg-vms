@@ -622,7 +622,7 @@ export default function ScanID(){
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-gray-500 mb-1">Resident Visiting</label>
+              <label className="block text-xs font-semibold text-gray-500 mb-1">Person Being Visited</label>
               <select
                 value={residentId}
                 onChange={e => { setResidentId(e.target.value); const r = residents.find(x => x.id === e.target.value); updateEntry({ resident_name: r?.name || null }) }}
