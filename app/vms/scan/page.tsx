@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 import SecurityAlert from "../../../components/SecurityAlert"
 import { fireAlert } from "@/lib/alerts"
 import { decodeSex, formatHeight } from "@/lib/dlFormat"
+import { sortUnits } from "@/lib/units"
 import { Community, Unit, Resident } from "@/lib/types"
 
 // AAMVA DBB can be YYYYMMDD or MMDDYYYY (Virginia uses MMDDYYYY). Returns
@@ -97,8 +98,8 @@ export default function ScanID(){
 
   async function loadUnits(commId: string) {
     if (!commId) { setUnits([]); return }
-    const { data } = await supabase.from("units").select("*").eq("community_id", commId)
-    setUnits(data || [])
+    const { data } = await supabase.from("units").select("*").eq("community_id", commId).limit(5000)
+    setUnits(sortUnits(data || []))
   }
 
   async function loadResidents(rawUnit: string) {

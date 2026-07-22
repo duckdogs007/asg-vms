@@ -11,6 +11,7 @@ import { fireAlert } from "@/lib/alerts"
 import { checkIsGuest } from "@/lib/admin"
 import VisitorPhotoCapture from "@/components/VisitorPhotoCapture"
 import { saveVisitorPhotos } from "@/lib/visitorPhotos"
+import { sortUnits } from "@/lib/units"
 
 type MatchStatus = "none" | "verify" | "confirmed" | "cleared"
 
@@ -142,9 +143,9 @@ export default function VMSPage() {
     const c = list.find(x => x.id === commId)
     if (c) rememberCommunity(c.id, c.name)
     const { data, error } = await supabase
-      .from("units").select("*").eq("community_id", commId)
+      .from("units").select("*").eq("community_id", commId).limit(5000)
     if (error) { setLoadError("Failed to load units."); return }
-    setUnits(data || [])
+    setUnits(sortUnits(data || []))
   }
 
   async function loadResidents(rawUnitNumber: string) {

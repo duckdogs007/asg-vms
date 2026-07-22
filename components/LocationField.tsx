@@ -52,6 +52,7 @@ export default function LocationField({
       .from("units")
       .select("unit_number")
       .eq("community_id", communityId)
+      .limit(5000)
       .then(({ data }) => {
         if (!active) return
         const list = Array.from(
