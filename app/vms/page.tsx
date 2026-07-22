@@ -12,6 +12,7 @@ import { checkIsGuest } from "@/lib/admin"
 import VisitorPhotoCapture from "@/components/VisitorPhotoCapture"
 import { saveVisitorPhotos } from "@/lib/visitorPhotos"
 import { sortUnits } from "@/lib/units"
+import PassPrinterModal from "@/components/PassPrinterModal"
 
 type MatchStatus = "none" | "verify" | "confirmed" | "cleared"
 
@@ -51,7 +52,12 @@ export default function VMSPage() {
   const [idPhotos,       setIdPhotos]       = useState<File[]>([])
   const [livePhotos,     setLivePhotos]     = useState<File[]>([])
   const [loadError,      setLoadError]      = useState("")
-  const [confirmed,      setConfirmed]      = useState<{ name: string; wasVerify: boolean } | null>(null)
+  const [confirmed,      setConfirmed]      = useState<{
+    name: string; wasVerify: boolean
+    logId: string | null; communityId: string | null; communityName: string
+    personType: string; unitNumber: string | null; residentName: string | null; plate: string
+  } | null>(null)
+  const [showPasses,     setShowPasses]     = useState(false)
 
   const [todayStats, setTodayStats] = useState({ total: 0, visitors: 0, contractors: 0, deliveries: 0, employees: 0 })
   const [todayLogs,  setTodayLogs]  = useState<Array<{ first_name: string; last_name: string; person_type: string; unit_number: string | null; destination: string | null; created_at: string }>>([])
@@ -78,10 +84,10 @@ export default function VMSPage() {
 
   useEffect(() => {
     if (!confirmed) return
-    const handler = (e: KeyboardEvent) => { if (e.key === "Enter") setConfirmed(null) }
+    const handler = (e: KeyboardEvent) => { if (e.key === "Enter" && !showPasses) setConfirmed(null) }
     window.addEventListener("keydown", handler)
     return () => window.removeEventListener("keydown", handler)
-  }, [confirmed])
+  }, [confirmed, showPasses])
 
   // Intentionally no useEffect on residentId — resident selection records who is being visited,
   // not the visitor's own name
@@ -407,7 +413,16 @@ export default function VMSPage() {
           created_at: new Date().toISOString(),
         })
       })
-      setConfirmed({ name: displayName, wasVerify })
+      setConfirmed({
+        name: displayName, wasVerify,
+        logId: (logRow as { id?: string } | null)?.id || null,
+        communityId: communityId || null,
+        communityName: communities.find(c => c.id === communityId)?.name || "",
+        personType,
+        unitNumber: unitNumber || null,
+        residentName: selectedResident?.name || null,
+        plate: plate || "",
+      })
       resetForm()
       loadTodayLogs(communityId)
     } finally {
@@ -612,12 +627,20 @@ export default function VMSPage() {
               <div className={`text-lg font-bold ${confirmed.wasVerify ? "text-yellow-300" : "text-green-300"}`}>
                 {confirmed.wasVerify ? "⚠️ POSSIBLE MATCH — VERIFY IDENTITY" : "🟢 CLEAR"}
               </div>
-              <button
-                onClick={() => setConfirmed(null)}
-                className={`mt-2 px-8 py-2 text-white rounded-md font-semibold border-none cursor-pointer text-sm transition-colors ${confirmed.wasVerify ? "bg-yellow-700 hover:bg-yellow-600" : "bg-green-600 hover:bg-green-500"}`}
-              >
-                ENTER — Continue
-              </button>
+              <div className="flex items-center gap-3 mt-2">
+                <button
+                  onClick={() => setShowPasses(true)}
+                  className="px-6 py-2 bg-white/10 border border-white/40 text-white rounded-md font-semibold cursor-pointer text-sm hover:bg-white/20"
+                >
+                  🖨 Print Pass
+                </button>
+                <button
+                  onClick={() => setConfirmed(null)}
+                  className={`px-8 py-2 text-white rounded-md font-semibold border-none cursor-pointer text-sm transition-colors ${confirmed.wasVerify ? "bg-yellow-700 hover:bg-yellow-600" : "bg-green-600 hover:bg-green-500"}`}
+                >
+                  ENTER — Continue
+                </button>
+              </div>
               <div className={`text-xs ${confirmed.wasVerify ? "text-yellow-400" : "text-green-400"}`}>Press Enter or click to log next visitor</div>
             </div>
           ) : (
@@ -762,6 +785,19 @@ export default function VMSPage() {
 
       <BoloTicker communityId={communityId} />
       <CadTicker />
+
+      <PassPrinterModal
+        open={showPasses}
+        onClose={() => setShowPasses(false)}
+        communityId={confirmed?.communityId ?? null}
+        communityName={confirmed?.communityName ?? ""}
+        visitorName={confirmed?.name ?? ""}
+        personType={confirmed?.personType ?? "Visitor"}
+        unitNumber={confirmed?.unitNumber ?? null}
+        residentName={confirmed?.residentName ?? null}
+        visitorLogId={confirmed?.logId ?? null}
+        defaultPlate={confirmed?.plate ?? ""}
+      />
     </div>
   )
 }

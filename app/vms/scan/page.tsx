@@ -7,6 +7,7 @@ import SecurityAlert from "../../../components/SecurityAlert"
 import { fireAlert } from "@/lib/alerts"
 import { decodeSex, formatHeight } from "@/lib/dlFormat"
 import { sortUnits } from "@/lib/units"
+import PassPrinterModal from "@/components/PassPrinterModal"
 import { Community, Unit, Resident } from "@/lib/types"
 
 // AAMVA DBB can be YYYYMMDD or MMDDYYYY (Virginia uses MMDDYYYY). Returns
@@ -52,6 +53,7 @@ export default function ScanID(){
   const [saveError,     setSaveError]     = useState("")
   const [logId,         setLogId]         = useState<string | null>(null) // id of the auto-logged visitor_logs row
   const [detailMsg,     setDetailMsg]     = useState("")  // subtle "saved" feedback on enrichment updates
+  const [showPasses,    setShowPasses]    = useState(false)
   const autoSavedRef    = useRef(false)                   // dedupe auto-log per scan result
   const logIdRef        = useRef<string | null>(null)     // sync copy of logId (avoids the stale-closure race)
   const pendingPatchRef = useRef<Record<string, any>>({}) // destination/type picked before the row exists
@@ -673,6 +675,12 @@ export default function ScanID(){
               {detailMsg && <span className="ml-2 text-gray-400 font-normal">{detailMsg}</span>}
             </div>
             <button
+              onClick={() => setShowPasses(true)}
+              className="w-full py-2.5 px-6 bg-white border border-blue-700 text-blue-800 text-sm font-semibold rounded-lg hover:bg-blue-50 cursor-pointer"
+            >
+              🖨 Print Visitor / Vehicle Pass
+            </button>
+            <button
               onClick={reset}
               className="w-full py-4 px-6 bg-green-600 hover:bg-green-700 text-white text-xl font-bold rounded-lg border-none cursor-pointer"
             >
@@ -733,6 +741,18 @@ export default function ScanID(){
           </div>
         </div>
       )}
+
+      <PassPrinterModal
+        open={showPasses}
+        onClose={() => setShowPasses(false)}
+        communityId={communityId || null}
+        communityName={communityName}
+        visitorName={person ? [person.first_name, person.middle_name, person.last_name].filter(Boolean).join(" ") : ""}
+        personType={personType}
+        unitNumber={unitId || null}
+        residentName={residents.find(x => x.id === residentId)?.name || null}
+        visitorLogId={logId || null}
+      />
     </div>
   )
 }
