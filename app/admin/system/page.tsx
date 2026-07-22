@@ -242,6 +242,21 @@ export default function AdminSystemPage() {
     }
   }
 
+  async function deleteUser(userId: string, email: string | null) {
+    if (!confirm(`Permanently delete ${email || "this user"}?\n\nThey will lose all access immediately. This cannot be undone.`)) return
+    setUsersError("")
+    const r = await fetch("/api/admin/users", {
+      method: "DELETE", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ user_id: userId }),
+    })
+    if (!r.ok) {
+      const json = await r.json().catch(() => ({}))
+      setUsersError(json.error || `HTTP ${r.status}`)
+      return
+    }
+    setUsers(prev => prev.filter(u => u.id !== userId))
+  }
+
   async function saveCommunity(userId: string, communityId: string | null) {
     setUsers(prev => prev.map(u => u.id !== userId ? u : ({
       ...u,
@@ -582,6 +597,7 @@ export default function AdminSystemPage() {
                   <th className="px-3 py-2 text-left">Created</th>
                   <th className="px-3 py-2 text-left">Last Login</th>
                   <th className="px-3 py-2 text-left">Last Logout</th>
+                  <th className="px-3 py-2 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -632,6 +648,15 @@ export default function AdminSystemPage() {
                     </td>
                     <td className="px-3 py-2 text-gray-600 text-xs">
                       {fmtStamp(u.last_logout) || <span className="text-gray-400">—</span>}
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <button
+                        onClick={() => deleteUser(u.id, u.email)}
+                        title="Delete user"
+                        className="px-3 py-1 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded border-none cursor-pointer"
+                      >
+                        🗑 Delete
+                      </button>
                     </td>
                   </tr>
                 ))}

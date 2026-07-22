@@ -194,3 +194,52 @@ export async function POST(req: Request) {
 
   return NextResponse.json({ ok: true, user_id: userId })
 }
+
+// DELETE /api/admin/users  body: { user_id }
+// Permanently removes an auth user and their assignment/admin rows. Blocks
+// self-deletion and deletion of built-in allowlist admins.
+export async function DELETE(req: Request) {
+  const gate = await requireAdmin()
+  if (gate.error) return gate.error
+  const admin = gate.admin!
+
+  // Who is performing this (for the self-check + audit trail).
+  const serverClient = await createSupabaseServerClient()
+  const { data: { user: actor } } = await serverClient.auth.getUser()
+
+  const body = await req.json().catch(() => null) as { user_id?: string } | null
+  if (!body?.user_id || !UUID_RE.test(body.user_id)) {
+    return NextResponse.json({ error: "user_id must be a UUID" }, { status: 400 })
+  }
+  if (actor && actor.id === body.user_id) {
+    return NextResponse.json({ error: "You can't delete your own account." }, { status: 400 })
+  }
+
+  // Look up the target's email to protect built-in admins and to log it.
+  const { data: target, error: getErr } = await admin.auth.admin.getUserById(body.user_id)
+  if (getErr || !target?.user) {
+    return NextResponse.json({ error: getErr?.message || "User not found" }, { status: 404 })
+  }
+  const targetEmail = target.user.email || ""
+  if (ADMIN_EMAILS.includes(targetEmail)) {
+    return NextResponse.json({ error: "This is a protected admin account and can't be deleted here." }, { status: 400 })
+  }
+
+  // Clean up app-side rows first, then the auth user.
+  await admin.from("user_assignments").delete().eq("user_id", body.user_id)
+  await admin.from("admin_users").delete().eq("user_id", body.user_id)
+
+  const { error: delErr } = await admin.auth.admin.deleteUser(body.user_id)
+  if (delErr) return NextResponse.json({ error: delErr.message }, { status: 500 })
+
+  await admin.from("audit_logs").insert({
+    user_email:    actor?.email || "unknown",
+    action:        "deleted",
+    resource_type: "User",
+    resource_id:   body.user_id,
+    detail:        `Deleted user ${targetEmail}`,
+    created_at:    new Date().toISOString(),
+  })
+
+  return NextResponse.json({ ok: true })
+}
