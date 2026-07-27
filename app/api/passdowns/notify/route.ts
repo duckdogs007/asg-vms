@@ -41,19 +41,38 @@ export async function POST(req: Request) {
     communityName = ((c as { name?: string } | null)?.name) || ""
   }
 
-  // Active recipients, optionally scoped to this community
-  const { data: recList } = await supabase
-    .from("notification_recipients")
-    .select("email, communities")
-    .eq("active", true)
-  const recipients = (recList || [])
-    .filter(r => !pd.community_id || !(r as any).communities?.length || (r as any).communities.includes(pd.community_id))
-    .map(r => (r as any).email as string)
-    .filter(Boolean)
+  // Recipients, resolved in priority order:
+  //  1) the "Passdown" delivery list configured for this community
+  //     (Admin → Post Orders → Report Delivery), so passdowns route the same
+  //     way client reports do;
+  //  2) the legacy active notification_recipients list (community-scoped);
+  //  3) the ASG supervisors fallback so a passdown is never sent to nobody.
+  let recipients: string[] = []
+
+  if (pd.community_id) {
+    const { data: rdr } = await supabase
+      .from("report_delivery_recipients")
+      .select("email")
+      .eq("community_id", pd.community_id)
+      .eq("report_type", "passdown")
+    recipients = (rdr || []).map(r => (r as any).email as string).filter(Boolean)
+  }
 
   if (!recipients.length) {
-    return NextResponse.json({ ok: true, sent: 0, note: "no active recipients" })
+    const { data: recList } = await supabase
+      .from("notification_recipients")
+      .select("email, communities")
+      .eq("active", true)
+    recipients = (recList || [])
+      .filter(r => !pd.community_id || !(r as any).communities?.length || (r as any).communities.includes(pd.community_id))
+      .map(r => (r as any).email as string)
+      .filter(Boolean)
   }
+
+  if (!recipients.length) recipients = ["ASG-Supervisors@teamasg.com"]
+
+  // De-dupe (case-insensitive) in case the same address appears in multiple lists.
+  recipients = Array.from(new Map(recipients.map(e => [e.toLowerCase(), e])).values())
 
   const subject = `📋 Passdown — ${communityName || "ASG-PSP"} · ${pd.date || ""} · ${pd.shift || ""}`.trim()
   const html = buildPassdownEmailHtml({

@@ -20,13 +20,14 @@ const EMPTY_CONTACT:   PostOrderContact       = { role: "", name: "", contact: "
 const EMPTY_PROCEDURE: PostOrderProcedure     = { title: "", icon: "📌", items: [] }
 const EMPTY_EXAMPLE:   PostOrderReportExample = { title: "", body: "" }
 
-const REPORT_TYPES = [
+const REPORT_TYPES: { key: string; label: string; hint?: string }[] = [
   { key: "daily_log",     label: "Daily Activity Log (DAR)" },
   { key: "maintenance",   label: "Maintenance Reports" },
   { key: "incident",      label: "Incident Reports" },
   { key: "field_contact", label: "Field Contact" },
   { key: "vehicle_fi",    label: "Vehicle FI" },
   { key: "parking",       label: "Parking Violations" },
+  { key: "passdown",      label: "Passdown (Shift Handoff)", hint: "Sent to next-shift recipients when a passdown is emailed. Add ASG supervisors, site officers, and related emails here." },
 ]
 
 type DeliveryRecipient = { email: string; label: string }
@@ -365,9 +366,10 @@ export default function PostOrdersEditorPage() {
             <h3 className="text-sm font-bold text-gray-800 mb-1">📧 Report Delivery</h3>
             <p className="text-xs text-gray-500 mb-4">Set the email recipients for each report type at this location. When a report is approved, it is sent to all recipients listed here. If none are configured for a type, all community contacts receive it.</p>
             <div className="space-y-4">
-              {REPORT_TYPES.map(({ key, label }) => (
+              {REPORT_TYPES.map(({ key, label, hint }) => (
                 <div key={key} className={cardCls}>
-                  <div className="text-xs font-bold text-gray-700 mb-2">{label}</div>
+                  <div className="text-xs font-bold text-gray-700 mb-1">{label}</div>
+                  {hint && <div className="text-xs text-gray-500 mb-2">{hint}</div>}
                   {(reportDelivery[key] || []).length === 0 && (
                     <div className="text-xs text-gray-400 mb-2">No recipients configured — falls back to community contacts.</div>
                   )}
