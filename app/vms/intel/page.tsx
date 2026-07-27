@@ -377,16 +377,28 @@ export default function IntelPage() {
 
       // Police-report count for the tab badge (same surname-anchored, inclusive
       // matching the panel uses) so the number shows before the tab is opened.
+      let policeHits = 0
       if (last) {
         const { data: prs } = await supabase
           .from("police_reports").select("person_first").eq("person_last", last)
         const surnameOnly = !first || first === last
-        setPoliceCount((prs || []).filter((p: { person_first: string | null }) =>
+        policeHits = (prs || []).filter((p: { person_first: string | null }) =>
           surnameOnly || firstNameCompatible(p.person_first, first)
-        ).length)
-      } else {
-        setPoliceCount(0)
+        ).length
       }
+      setPoliceCount(policeHits)
+
+      // Jump to the most relevant tab that actually has results, so a lone hit
+      // (e.g. only a BOLO or a report) isn't hidden behind an empty Ban tab.
+      // Ban History stays first — a barred/watchlist hit is the priority signal.
+      const nextTab: RightTab =
+        watchMatches.length      ? "ban"      :
+        boloFiltered.length      ? "bolo"     :
+        incFiltered.length       ? "reports"  :
+        policeHits               ? "police"   :
+        filtered.length          ? "contacts" :
+        visitData.length         ? "visits"   : "ban"
+      setRightTab(nextTab)
 
       tryLoadPhoto(`${first}_${last}`)
 
