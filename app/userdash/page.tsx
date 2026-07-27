@@ -1843,9 +1843,13 @@ export default function UserDashboard() {
   // ── HELPERS ──
   const filteredWatchlist = watchlist.filter(p => {
     if (!watchlistSearch) return true
-    const q = watchlistSearch.toLowerCase()
-    return p.first_name?.toLowerCase().includes(q) || p.last_name?.toLowerCase().includes(q) ||
-           p.oln?.toLowerCase().includes(q) || p.reason?.toLowerCase().includes(q)
+    // Match on individual words so "robert carter", "carter, robert" and
+    // "carter" all find the same person. Every word must appear somewhere in
+    // the person's name / OLN / reason (commas are treated as separators).
+    const haystack = [p.first_name, (p as any).middle_name, p.last_name, p.oln, p.reason]
+      .filter(Boolean).join(" ").toLowerCase()
+    const words = watchlistSearch.toLowerCase().replace(/,/g, " ").trim().split(/\s+/).filter(Boolean)
+    return words.every(w => haystack.includes(w))
   })
 
   const filteredPassdowns = pdFilterComm
