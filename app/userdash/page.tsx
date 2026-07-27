@@ -13,7 +13,7 @@ import { maskSSN } from "@/lib/format"
 import { createSignedUrlFor } from "@/lib/storage"
 import { checkIsAdmin, checkIsGuest, checkCanIssueLeaseViolation } from "@/lib/admin"
 import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/LocationField"
-import { buildHohSnapshot, EMPTY_SNAPSHOT } from "@/lib/hohSnapshot"
+import { buildHohSnapshot, EMPTY_SNAPSHOT, splitUnit } from "@/lib/hohSnapshot"
 import LeaseViolationForm from "@/components/LeaseViolationForm"
 import AiAssist from "@/components/AiAssist"
 import GateChecklist from "./GateChecklist"
@@ -193,6 +193,9 @@ export default function UserDashboard() {
   const [dailyNotes,     setDailyNotes]     = useState("")
   const [dailyPhotoFiles,  setDailyPhotoFiles]  = useState<File[]>([])
   const [dailyAddlOfficers, setDailyAddlOfficers] = useState<{ name: string; start: string; end: string }[]>([])
+  // Units referenced in the narrative — each feeds Unit Activity as its own entry.
+  const [dailyUnits,       setDailyUnits]       = useState<{ unit: string; note: string }[]>([])
+  const [dailyUnitOptions, setDailyUnitOptions] = useState<string[]>([])
   const [shiftTemplate,    setShiftTemplate]    = useState<{ id: string; question: string; bad_answer: string }[]>([])
   const [checklistAnswers, setChecklistAnswers] = useState<{ id: string; question: string; bad_answer: string; answer: string; explanation: string }[]>([])
 
@@ -414,6 +417,21 @@ export default function UserDashboard() {
         ])
       })
   }, [dailyCommunity]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Rent-roll units for the DAR "Units Referenced" picker (keeps building/apt
+  // split exact so entries land under the right unit + HOH in Unit Activity).
+  useEffect(() => {
+    if (!dailyCommunity) { setDailyUnitOptions([]); return }
+    let active = true
+    supabase.from("units").select("unit_number").eq("community_id", dailyCommunity).limit(5000)
+      .then(({ data }) => {
+        if (!active) return
+        const list = Array.from(new Set((data || []).map((u: any) => (u.unit_number || "").trim()).filter(Boolean)))
+          .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }))
+        setDailyUnitOptions(list)
+      })
+    return () => { active = false }
+  }, [dailyCommunity])
 
   async function loadOfficersOnDuty() {
     setOfficersLoading(true); setOfficersError("")
@@ -711,15 +729,32 @@ export default function UserDashboard() {
       additional_officers: addlOfficersPayload,
       created_at: new Date().toISOString()
     }).select("id").single()
+    if (error) { setReportSaving(false); setReportError(error.message); return }
+
+    // Units referenced in the narrative → one Unit Activity entry each, attributed
+    // to the HOH as of the shift date (snapshotted, like the other report forms).
+    const cleanUnits = dailyUnits.filter(u => u.unit.trim())
+    if (ins?.id && cleanUnits.length) {
+      const unitRows = await Promise.all(cleanUnits.map(async u => {
+        const unit = u.unit.trim()
+        const { building, apartment } = splitUnit(unit)
+        const snap = await buildHohSnapshot(dailyCommunity, unit, dailyDate)
+        return {
+          daily_log_id: ins.id, community_id: dailyCommunity,
+          unit_number: unit, building, apartment,
+          note: u.note.trim() || null, hoh_name: snap.hoh_name,
+        }
+      }))
+      await supabase.from("daily_log_units").insert(unitRows)
+    }
     setReportSaving(false)
-    if (error) { setReportError(error.message); return }
     if (ins?.id) enqueueReport("daily_log", ins.id, dailyCommunity, dailyOfficer || officerName, `Daily Log — ${dailyDate}`)
     setReportMessage("✅ Daily log submitted — pending supervisor review.")
     await flagToPassdown({ community: dailyCommunity, date: dailyDate, shift: dailyShift, officer: dailyOfficer || officerName, source: "Daily Log" })
     setPassdownNote("")
     clearDraftAfterSubmit()
     setDailyNarrative(""); setDailyNotes(""); setDailyWeather(""); setDailyPhotoFiles([])
-    setDailyShiftStart(""); setDailyShiftEnd(""); setDailyAddlOfficers([])
+    setDailyShiftStart(""); setDailyShiftEnd(""); setDailyAddlOfficers([]); setDailyUnits([])
     setChecklistAnswers(prev => prev.map(a => ({ ...a, answer: "", explanation: "" })))
     logActivity("created", "Daily Log", "", `Daily log submitted — ${dailyDate}`)
   }
@@ -1258,7 +1293,7 @@ export default function UserDashboard() {
 
   function serializeDraft(type: ReportTab): Record<string, any> {
     switch (type) {
-      case "daily":       return { dailyDate, dailyShift, dailyShiftStart, dailyShiftEnd, dailyCommunity, dailyOfficer, dailyWeather, dailyNarrative, dailyNotes, dailyAddlOfficers }
+      case "daily":       return { dailyDate, dailyShift, dailyShiftStart, dailyShiftEnd, dailyCommunity, dailyOfficer, dailyWeather, dailyNarrative, dailyNotes, dailyAddlOfficers, dailyUnits }
       case "incident":    return { incDate, incTime, incCommunity, incLoc, incTypes, incPersonList, incVehicleList, incDescription, incAction, incFollowUp, incOfficer, incReliantNo, incHpdNo, incAsgNo, incReliantNotified, incReliantNotifiedAt, incReliantNotReason }
       case "contact":     return { ctFirstName, ctLastName, ctDate, ctTime, ctCommunity, ctLocation, ctReason, ctOfficer, ctNotes, ctSex, ctRace, ctDob, ctSsn, ctOln, ctAddress }
       case "vfi":         return { vfiDate, vfiTime, vfiCommunity, vfiOfficer, vfiLoc, vfiVehicle, vfiDescriptors, vfiReason, vfiFollowUp, vfiViolation, vfiViolationNum, vfiNotes }
@@ -1272,7 +1307,7 @@ export default function UserDashboard() {
     const g = (v: any, d: any) => (v === undefined || v === null ? d : v)
     switch (type) {
       case "daily":
-        setDailyDate(g(p.dailyDate, dailyDate)); setDailyShift(g(p.dailyShift, "Day")); setDailyShiftStart(g(p.dailyShiftStart, "")); setDailyShiftEnd(g(p.dailyShiftEnd, "")); setDailyCommunity(g(p.dailyCommunity, "")); setDailyOfficer(g(p.dailyOfficer, "")); setDailyWeather(g(p.dailyWeather, "")); setDailyNarrative(g(p.dailyNarrative, "")); setDailyNotes(g(p.dailyNotes, "")); setDailyAddlOfficers(g(p.dailyAddlOfficers, [])); break
+        setDailyDate(g(p.dailyDate, dailyDate)); setDailyShift(g(p.dailyShift, "Day")); setDailyShiftStart(g(p.dailyShiftStart, "")); setDailyShiftEnd(g(p.dailyShiftEnd, "")); setDailyCommunity(g(p.dailyCommunity, "")); setDailyOfficer(g(p.dailyOfficer, "")); setDailyWeather(g(p.dailyWeather, "")); setDailyNarrative(g(p.dailyNarrative, "")); setDailyNotes(g(p.dailyNotes, "")); setDailyAddlOfficers(g(p.dailyAddlOfficers, [])); setDailyUnits(g(p.dailyUnits, [])); break
       case "incident":
         setIncDate(g(p.incDate, incDate)); setIncTime(g(p.incTime, "")); setIncCommunity(g(p.incCommunity, "")); setIncLoc(g(p.incLoc, EMPTY_LOCATION)); setIncTypes(g(p.incTypes, [])); setIncPersonList(g(p.incPersonList, [])); setIncVehicleList(g(p.incVehicleList, [])); setIncDescription(g(p.incDescription, "")); setIncAction(g(p.incAction, "")); setIncFollowUp(g(p.incFollowUp, false)); setIncOfficer(g(p.incOfficer, "")); setIncReliantNo(g(p.incReliantNo, "")); setIncHpdNo(g(p.incHpdNo, "")); setIncAsgNo(g(p.incAsgNo, "")); setIncReliantNotified(g(p.incReliantNotified, null)); setIncReliantNotifiedAt(g(p.incReliantNotifiedAt, "")); setIncReliantNotReason(g(p.incReliantNotReason, "")); break
       case "contact":
@@ -2386,6 +2421,59 @@ export default function UserDashboard() {
                   placeholder="Shift handoff notes, maintenance issues, follow-ups..."
                   className={textareaCls} />
               </div>
+
+              {/* UNITS REFERENCED — feeds Unit Activity reporting */}
+              <div className="mb-5 border border-gray-200 rounded-xl bg-gray-50 p-4">
+                <div className="flex items-center justify-between mb-1 flex-wrap gap-2">
+                  <label className={labelCls + " mb-0"}>Units Referenced</label>
+                  <button type="button"
+                    onClick={() => setDailyUnits(prev => [...prev, { unit: "", note: "" }])}
+                    className="px-3 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-md hover:bg-blue-800 border-none cursor-pointer">
+                    + Add Unit
+                  </button>
+                </div>
+                <p className="text-xs text-gray-400 mb-3">
+                  Tag any unit(s) mentioned in this report so they appear in Unit Activity. Add a short note for each.
+                </p>
+                {dailyUnits.length === 0 ? (
+                  <div className="text-xs text-gray-400 italic">No units tagged.</div>
+                ) : (
+                  <div className="space-y-2">
+                    {dailyUnits.map((u, i) => (
+                      <div key={i} className="flex flex-wrap items-end gap-2 bg-white border border-gray-200 rounded-lg p-2">
+                        <div className="flex flex-col gap-0.5 w-[150px]">
+                          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Unit #</span>
+                          {dailyUnitOptions.length > 0 ? (
+                            <select value={u.unit}
+                              onChange={e => setDailyUnits(prev => prev.map((x, j) => j === i ? { ...x, unit: e.target.value } : x))}
+                              className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+                              <option value="">Select unit…</option>
+                              {dailyUnitOptions.map(un => <option key={un} value={un}>{un}</option>)}
+                            </select>
+                          ) : (
+                            <input value={u.unit}
+                              onChange={e => setDailyUnits(prev => prev.map((x, j) => j === i ? { ...x, unit: e.target.value } : x))}
+                              placeholder="e.g. 100-2A"
+                              className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                          )}
+                        </div>
+                        <div className="flex flex-col gap-0.5 flex-1 min-w-[180px]">
+                          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-wide">Note (optional)</span>
+                          <input value={u.note}
+                            onChange={e => setDailyUnits(prev => prev.map((x, j) => j === i ? { ...x, note: e.target.value } : x))}
+                            placeholder="What happened at this unit"
+                            className="w-full px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                        </div>
+                        <button type="button"
+                          onClick={() => setDailyUnits(prev => prev.filter((_, j) => j !== i))}
+                          title="Remove"
+                          className="px-2 py-2 text-red-500 hover:text-red-700 bg-transparent border-none cursor-pointer text-sm">🗑</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* SHIFT VERIFICATION */}
               {checklistAnswers.length > 0 && (
                 <div className="mb-5 border border-blue-200 rounded-xl bg-blue-50 p-4">

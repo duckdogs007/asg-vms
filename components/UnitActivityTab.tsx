@@ -27,6 +27,7 @@ const TYPE_BADGE: Record<string, string> = {
   "Parking":          "bg-yellow-100 text-yellow-800 border border-yellow-200",
   "Vehicle FI":       "bg-orange-100 text-orange-800 border border-orange-200",
   "Visitor":          "bg-purple-100 text-purple-700 border border-purple-200",
+  "Daily Log":        "bg-blue-100 text-blue-700 border border-blue-200",
 }
 
 function todayISO(): string {
