@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { VisitorLog, WatchlistEntry, Community } from "@/lib/types"
 import { maskSSN } from "@/lib/format"
@@ -86,7 +87,7 @@ interface ContactRecord {
   photo_url: string | null
 }
 
-type RightTab = "ban" | "visits" | "contacts" | "reports" | "police" | "osint"
+type RightTab = "ban" | "visits" | "contacts" | "reports" | "police" | "bolo" | "osint"
 
 interface IncidentAppearance {
   id: string
@@ -178,6 +179,7 @@ export default function IntelPage() {
   const [rightTab,           setRightTab]           = useState<RightTab>("ban")
   const [policeCount,        setPoliceCount]        = useState(0)
   const [incidentAppearances, setIncidentAppearances] = useState<IncidentAppearance[]>([])
+  const [boloMatches,        setBoloMatches]        = useState<any[]>([])
 
   const [photoUrl,       setPhotoUrl]       = useState("")
   const [uploading,      setUploading]      = useState(false)
@@ -347,6 +349,31 @@ export default function IntelPage() {
         personsInvolvedMatch(r.persons_involved, first, last)
       )
       setIncidentAppearances(incFiltered)
+
+      // BOLO appearances — match the subject name (both words when a full name
+      // was given) or the raw query against plate / vehicle description.
+      const rawTerm = sanitizeFilterTerm(query)
+      const boloOr = [
+        `name.ilike.%${last}%`,
+        first && first !== last ? `name.ilike.%${first}%` : null,
+        rawTerm ? `plate.ilike.%${rawTerm}%` : null,
+        rawTerm ? `vehicle.ilike.%${rawTerm}%` : null,
+      ].filter(Boolean).join(",")
+      const { data: boloData } = await supabase
+        .from("bolos").select("*").or(boloOr)
+        .order("active", { ascending: false })
+        .order("created_at", { ascending: false })
+        .limit(50)
+      const qLower = query.toLowerCase()
+      const nameWords = qLower.replace(/,/g, " ").trim().split(/\s+/).filter(Boolean)
+      const boloFiltered = (boloData || []).filter((b: any) => {
+        const nameStr = (b.name || "").toLowerCase()
+        const nameHit = nameWords.length > 0 && nameWords.every(w => nameStr.includes(w))
+        const pv = `${b.plate || ""} ${b.vehicle || ""}`.toLowerCase()
+        const pvHit = qLower.trim().length > 1 && pv.includes(qLower.trim())
+        return nameHit || pvHit
+      })
+      setBoloMatches(boloFiltered)
 
       // Police-report count for the tab badge (same surname-anchored, inclusive
       // matching the panel uses) so the number shows before the tab is opened.
@@ -680,8 +707,50 @@ export default function IntelPage() {
                 <span className="ml-1.5 bg-blue-700 text-white text-xs rounded-full px-1.5 py-0.5">{policeCount}</span>
               )}
             </button>
+            <button className={tabCls("bolo")} onClick={() => setRightTab("bolo")}>
+              ⚠️ BOLO
+              {boloMatches.length > 0 && (
+                <span className="ml-1.5 bg-amber-500 text-white text-xs rounded-full px-1.5 py-0.5">{boloMatches.length}</span>
+              )}
+            </button>
             <button className={tabCls("osint")} onClick={() => setRightTab("osint")}>🌐 OSINT</button>
           </div>
+
+          {/* BOLO TAB */}
+          {rightTab === "bolo" && (
+            <>
+              {boloMatches.length > 0 ? boloMatches.map((b: any) => (
+                <div key={b.id}
+                  className={`px-4 py-3 rounded-lg mb-3 border-2 ${b.active ? "bg-amber-50 border-amber-300" : "bg-gray-50 border-gray-200 opacity-70"}`}>
+                  <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+                    <div className="font-bold text-amber-800">⚠️ {b.reason || "BOLO"}</div>
+                    <div className="flex items-center gap-2">
+                      {b.firearm_flag && <span className="px-2 py-0.5 bg-red-700 text-white rounded text-xs font-bold">🔫 Firearm</span>}
+                      <span className={`px-2 py-0.5 rounded text-xs font-semibold ${b.active ? "bg-amber-200 text-amber-900" : "bg-gray-200 text-gray-600"}`}>
+                        {b.active ? "Active" : "Cleared"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-1 text-sm text-gray-700">
+                    {b.name    && <span><span className="text-gray-500">Name:</span> {b.name}</span>}
+                    {b.dob     && <span><span className="text-gray-500">DOB:</span> {b.dob}</span>}
+                    {b.oln     && <span><span className="text-gray-500">OLN:</span> {b.oln}</span>}
+                    {b.sex     && <span><span className="text-gray-500">Sex:</span> {b.sex}</span>}
+                    {b.race    && <span><span className="text-gray-500">Race:</span> {b.race}</span>}
+                    {b.vehicle && <span><span className="text-gray-500">Vehicle:</span> {b.vehicle}</span>}
+                    {b.plate   && <span><span className="text-gray-500">Plate:</span> {b.plate}{b.plate_state ? ` (${b.plate_state})` : ""}</span>}
+                    {b.description && <span><span className="text-gray-500">Description:</span> {b.description}</span>}
+                  </div>
+                  <Link href={`/vms/intel/bolo/${b.id}`}
+                    className="inline-block mt-2 text-xs text-blue-700 hover:underline font-semibold">
+                    View BOLO →
+                  </Link>
+                </div>
+              )) : (
+                <p className="text-sm text-gray-500">No BOLO records for this search.</p>
+              )}
+            </>
+          )}
 
           {/* POLICE REPORTS TAB */}
           {rightTab === "police" && selectedPerson && (

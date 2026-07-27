@@ -332,6 +332,7 @@ export default function UserDashboard() {
   const [boloMessage,    setBoloMessage]    = useState("")
   const [boloError,      setBoloError]      = useState("")
   const [boloShowAll,    setBoloShowAll]    = useState(false)
+  const [boloSearch,     setBoloSearch]     = useState("")
   const [showAddBolo,    setShowAddBolo]    = useState(false)
   // Inline edit state (admin only)
   const [editingBoloId,    setEditingBoloId]    = useState<string | null>(null)
@@ -1891,7 +1892,15 @@ export default function UserDashboard() {
     ? passdowns.filter(p => p.community_id === pdFilterComm)
     : passdowns
 
-  const displayedBolos = boloShowAll ? bolos : bolos.filter(b => b.active)
+  const displayedBolos = (boloShowAll ? bolos : bolos.filter(b => b.active))
+    .filter(b => {
+      if (!boloSearch.trim()) return true
+      // Every word must appear somewhere in the BOLO's searchable text.
+      const haystack = [b.name, b.plate, b.plate_state, b.vehicle, b.reason, b.oln, b.description]
+        .filter(Boolean).join(" ").toLowerCase()
+      return boloSearch.toLowerCase().replace(/,/g, " ").trim().split(/\s+/).filter(Boolean)
+        .every(w => haystack.includes(w))
+    })
 
   // View Reports text search — across type, location/unit, HOH, people, officer, and linked ref #s.
   const displayedReports = (() => {
@@ -3841,6 +3850,20 @@ export default function UserDashboard() {
             </div>
           </div>
 
+          {/* SEARCH FILTER */}
+          <div className="relative mb-4">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔎</span>
+            <input
+              value={boloSearch}
+              onChange={e => setBoloSearch(e.target.value)}
+              placeholder="Search BOLOs by name, plate, vehicle, or reason…"
+              className="w-full pl-9 pr-9 py-2.5 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+            {boloSearch && (
+              <button onClick={() => setBoloSearch("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-700 bg-transparent border-none cursor-pointer text-sm">✕</button>
+            )}
+          </div>
+
           {boloMessage && <div className="bg-green-50 border border-green-200 text-green-700 px-4 py-2 rounded-lg text-sm mb-4">{boloMessage}</div>}
           {boloError   && <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-2 rounded-lg text-sm mb-4">{boloError}</div>}
 
@@ -3935,7 +3958,7 @@ export default function UserDashboard() {
           {!boloLoading && displayedBolos.length === 0 && (
             <div className="text-gray-400 text-sm py-12 text-center">
               <div className="text-4xl mb-2">🔍</div>
-              <div>{boloShowAll ? "No BOLOs on record." : "No active BOLOs."}</div>
+              <div>{boloSearch.trim() ? `No BOLOs match "${boloSearch.trim()}".` : boloShowAll ? "No BOLOs on record." : "No active BOLOs."}</div>
             </div>
           )}
           {!boloLoading && displayedBolos.map((b, i) => (
