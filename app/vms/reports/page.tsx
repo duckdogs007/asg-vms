@@ -1120,6 +1120,100 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
     URL.revokeObjectURL(url)
   }
 
+  // Print-ready Visitor Traffic Report: the Activity-tab analytics (summary
+  // metrics, daily + hourly charts, top units, repeat visitors, full entry log)
+  // as a self-contained document the browser can save as PDF or print.
+  function printVisitorTrafficReport() {
+    const w = window.open("", "_blank", "width=980,height=1000")
+    if (!w) { alert("Please allow pop-ups to print the report."); return }
+    const esc = (s: any) => String(s ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    const fmtD = (d: string) => new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })
+    const rangeLabel = `${fmtD(dateFrom)} – ${fmtD(dateTo)}`
+    const generated  = new Date().toLocaleString("en-US", { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit", hour12: false })
+
+    // Daily activity bars
+    const dMax = Math.max(1, ...allDates.map(d => stats.byDay[d] || 0))
+    const dW = 900, dH = 190, dBarW = dW / Math.max(1, allDates.length)
+    const dailyBars = allDates.map((d, i) => {
+      const c = stats.byDay[d] || 0
+      const h = (c / dMax) * (dH - 30)
+      return `<rect x="${(i * dBarW) + 1}" y="${(dH - 22) - h}" width="${Math.max(1, dBarW - 2)}" height="${h}" fill="${c ? "#1d4ed8" : "#e5e7eb"}"/>`
+    }).join("")
+    const dLabelStep = Math.ceil(allDates.length / 12)
+    const dailyLabels = allDates.map((d, i) => i % dLabelStep === 0
+      ? `<text x="${(i * dBarW) + dBarW / 2}" y="${dH - 6}" font-size="9" fill="#9ca3af" text-anchor="middle">${new Date(d + "T12:00:00").toLocaleDateString("en-US", { month: "numeric", day: "numeric" })}</text>` : "").join("")
+
+    // Hourly distribution bars (00–23)
+    const hMax = Math.max(1, ...Object.values(stats.byHour))
+    const hW = 900, hH = 170, hBarW = hW / 24
+    const hourBars = Array.from({ length: 24 }, (_, h) => {
+      const c = stats.byHour[h] || 0
+      const bh = (c / hMax) * (hH - 30)
+      const peak = formatHour(h) === stats.peakHour
+      return `<rect x="${(h * hBarW) + 1}" y="${(hH - 22) - bh}" width="${Math.max(1, hBarW - 2)}" height="${bh}" fill="${c ? (peak ? "#ea580c" : "#3b82f6") : "#e5e7eb"}"/>`
+    }).join("")
+    const hourLabels = [0, 3, 6, 9, 12, 15, 18, 21].map(h =>
+      `<text x="${(h * hBarW) + hBarW / 2}" y="${hH - 6}" font-size="9" fill="#9ca3af" text-anchor="middle">${String(h).padStart(2, "0")}:00</text>`).join("")
+
+    const metrics: [string, string | number][] = [
+      ["Total entries", stats.total], ["Visitors", stats.visitors], ["Deliveries", stats.deliveries],
+      ["Contractors", stats.contractors], ["Employees", stats.employees], ["Residents", stats.residents],
+      ["Peak hour", `${stats.peakHour} (${stats.peakHourCount})`], ["Peak day", stats.peakDay],
+      ["Avg / hour", stats.avgPerHour], ["Top unit", stats.topUnit], ["Repeat visitors", stats.repeat],
+      ["Missing unit", stats.missingUnit],
+    ]
+    const metricCards = metrics.map(([k, v]) => `<div class="metric"><div class="mv">${esc(v)}</div><div class="mk">${esc(k)}</div></div>`).join("")
+
+    const topUnitsRows = stats.topUnits.length
+      ? stats.topUnits.map(u => `<tr><td>${esc(u.unit)}</td><td class="num">${u.count}</td></tr>`).join("")
+      : `<tr><td colspan="2" class="empty">—</td></tr>`
+    const repeatRows = stats.repeatVisitors.length
+      ? stats.repeatVisitors.slice(0, 20).map(r => `<tr><td>${esc(r.name)}</td><td class="num">${r.count}</td></tr>`).join("")
+      : `<tr><td colspan="2" class="empty">None</td></tr>`
+    const logRows = visits.map(v => `<tr>
+      <td>${esc(formatTime(v.created_at))}</td>
+      <td>${esc([v.first_name, v.last_name].filter(Boolean).join(" "))}</td>
+      <td class="cap">${esc(v.person_type || "")}</td>
+      <td>${esc(v.unit_number || "")}</td>
+      <td>${esc(v.resident_name || v.destination || "")}</td>
+    </tr>`).join("")
+
+    w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Visitor Traffic Report — ${esc(communityName || "All")}</title>
+    <style>
+      *{box-sizing:border-box;} body{font-family:Arial,Helvetica,sans-serif;color:#111827;margin:0;padding:24px;}
+      .brand{font-size:11px;letter-spacing:.12em;color:#6b7280;font-weight:700;text-transform:uppercase;}
+      h1{font-size:22px;margin:2px 0 2px;} .sub{font-size:12px;color:#6b7280;margin-bottom:16px;}
+      h2{font-size:13px;text-transform:uppercase;letter-spacing:.04em;color:#374151;border-bottom:1px solid #e5e7eb;padding-bottom:4px;margin:22px 0 10px;}
+      .metrics{display:grid;grid-template-columns:repeat(6,1fr);gap:8px;}
+      .metric{border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;}
+      .mv{font-size:18px;font-weight:800;} .mk{font-size:10px;color:#6b7280;text-transform:uppercase;letter-spacing:.03em;margin-top:2px;}
+      svg{border:1px solid #e5e7eb;border-radius:8px;background:#fff;}
+      .two{display:grid;grid-template-columns:1fr 1fr;gap:18px;}
+      table{width:100%;border-collapse:collapse;font-size:12px;}
+      th{text-align:left;color:#6b7280;font-size:10px;text-transform:uppercase;letter-spacing:.03em;border-bottom:1px solid #e5e7eb;padding:4px 6px;}
+      td{padding:4px 6px;border-bottom:1px solid #f3f4f6;} td.num{text-align:right;font-weight:600;} td.cap{text-transform:capitalize;} td.empty{color:#9ca3af;text-align:center;}
+      .log th:nth-child(1){width:130px;} .cap{text-transform:capitalize;}
+      @media print{@page{margin:12mm;} body{padding:0;} h2{page-break-after:avoid;} tr{page-break-inside:avoid;}}
+    </style></head><body>
+      <div class="brand">American Security Group</div>
+      <h1>Visitor Traffic Report</h1>
+      <div class="sub">${esc(communityName || "All communities")} &nbsp;·&nbsp; ${rangeLabel} (${dayCount} days) &nbsp;·&nbsp; Generated ${esc(generated)}</div>
+      <div class="metrics">${metricCards}</div>
+      <h2>Daily Activity</h2>
+      <svg viewBox="0 0 ${dW} ${dH}" width="100%">${dailyBars}${dailyLabels}</svg>
+      <h2>Hourly Distribution (peak in orange)</h2>
+      <svg viewBox="0 0 ${hW} ${hH}" width="100%">${hourBars}${hourLabels}</svg>
+      <div class="two">
+        <div><h2>Top Units</h2><table><thead><tr><th>Unit</th><th class="num">Visits</th></tr></thead><tbody>${topUnitsRows}</tbody></table></div>
+        <div><h2>Repeat Visitors (2+)</h2><table><thead><tr><th>Name</th><th class="num">Visits</th></tr></thead><tbody>${repeatRows}</tbody></table></div>
+      </div>
+      <h2>Entry Log (${visits.length})</h2>
+      <table class="log"><thead><tr><th>Time</th><th>Name</th><th>Type</th><th>Unit</th><th>Visiting / Destination</th></tr></thead><tbody>${logRows}</tbody></table>
+    </body></html>`)
+    w.document.close(); w.focus()
+    setTimeout(() => w.print(), 400)
+  }
+
   function exportParkingCSV() {
     const header = ["Date", "Time", "Plate", "State", "Violation Type", "Lot/Area", "Space", "Make", "Model", "Color", "Year", "Officer", "Tow", "BOLO Match", "Notes"]
     const rows = parking.map(p => [
@@ -2030,10 +2124,16 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                 </button>
               )}
               {hasData && (
-                <button onClick={exportCSV}
-                  className="px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700 border-none cursor-pointer whitespace-nowrap ml-auto">
-                  ⬇ Export CSV
-                </button>
+                <div className="flex gap-2 ml-auto">
+                  <button onClick={printVisitorTrafficReport}
+                    className="px-3 py-1.5 bg-blue-700 text-white text-xs rounded-lg hover:bg-blue-800 border-none cursor-pointer whitespace-nowrap">
+                    📊 Traffic Report
+                  </button>
+                  <button onClick={exportCSV}
+                    className="px-3 py-1.5 bg-gray-800 text-white text-xs rounded-lg hover:bg-gray-700 border-none cursor-pointer whitespace-nowrap">
+                    ⬇ Export CSV
+                  </button>
+                </div>
               )}
             </div>
             <div className="flex flex-col gap-1.5">
