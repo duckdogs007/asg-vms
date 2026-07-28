@@ -38,7 +38,7 @@ function utc(ts: string) {
 function formatTime(ts: string) {
   return new Date(utc(ts)).toLocaleString("en-US", {
     month: "numeric", day: "numeric", year: "numeric",
-    hour: "numeric", minute: "2-digit"
+    hour: "2-digit", minute: "2-digit", hour12: false
   })
 }
 
@@ -1911,7 +1911,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                               <div key={row.id || i} className="px-4 py-3 flex items-start gap-4">
                                 <div className="text-xs text-gray-400 w-20 flex-shrink-0 pt-0.5">
                                   {row.created_at ? new Date(utc(row.created_at)).toLocaleDateString("en-CA") : "—"}
-                                  <div>{row.created_at ? new Date(utc(row.created_at)).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" }) : ""}</div>
+                                  <div>{row.created_at ? new Date(utc(row.created_at)).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false }) : ""}</div>
                                 </div>
                                 <div className="flex-1 min-w-0">
                                   <div className="text-sm font-semibold text-gray-800 truncate capitalize">
