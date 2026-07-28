@@ -38,6 +38,15 @@ const TYPE_BADGE: Record<string, string> = {
 
 type EditFieldDef = { key: string; label: string; type: "text" | "date" | "textarea" }
 
+// Derive persons_involved text from the structured persons_data list (matches
+// how incidents are saved), so a name-spelling fix stays consistent across the
+// report display, client email, and Intel search.
+function personsInvolvedText(list: { name?: string; role?: string }[]): string {
+  return (list || [])
+    .map(p => [p.name, p.role ? `(${p.role})` : ""].filter(Boolean).join(" "))
+    .join("; ")
+}
+
 const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
   "incident": [
     { key: "date",             label: "Date",              type: "date"     },
@@ -268,6 +277,8 @@ export default function ReportDetailPage() {
     const defs = EDIT_FIELDS[type] || []
     const initial: Record<string, any> = {}
     for (const f of defs) initial[f.key] = report[f.key] ?? ""
+    // Load the structured persons list so names can be corrected directly.
+    if (Array.isArray(report.persons_data)) initial.persons_data = report.persons_data
     setEditFields(initial)
     setEditError("")
     setEditMode(true)
@@ -901,6 +912,9 @@ export default function ReportDetailPage() {
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {(EDIT_FIELDS[type] || []).map(f => (
+              // The structured editor below replaces the plain persons_involved text
+              // input whenever a record has structured persons_data.
+              f.key === "persons_involved" && Array.isArray(editFields.persons_data) ? null : (
               <div key={f.key} className={f.type === "textarea" ? "col-span-full" : ""}>
                 <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">{f.label}</label>
                 {f.type === "textarea" ? (
@@ -925,8 +939,50 @@ export default function ReportDetailPage() {
                   />
                 )}
               </div>
+              )
             ))}
           </div>
+
+          {/* Structured Persons Involved — correct name spelling; rewrites
+              persons_involved in sync so the fix reaches the report, email, and search. */}
+          {type === "incident" && Array.isArray(editFields.persons_data) && (
+            <div className="mt-4">
+              <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1 block">Persons Involved</label>
+              <div className="space-y-2">
+                {editFields.persons_data.map((p: any, pi: number) => (
+                  <div key={pi} className="flex flex-wrap items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                    <input value={p.name || ""} placeholder="Full name"
+                      onChange={e => setEditFields(prev => {
+                        const list = (prev.persons_data as any[]).map((x, j) => j === pi ? { ...x, name: e.target.value } : x)
+                        return { ...prev, persons_data: list, persons_involved: personsInvolvedText(list) }
+                      })}
+                      className="flex-1 min-w-[160px] px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                    <input value={p.role || ""} placeholder="Role (optional)"
+                      onChange={e => setEditFields(prev => {
+                        const list = (prev.persons_data as any[]).map((x, j) => j === pi ? { ...x, role: e.target.value } : x)
+                        return { ...prev, persons_data: list, persons_involved: personsInvolvedText(list) }
+                      })}
+                      className="w-40 px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
+                    <button type="button" title="Remove"
+                      onClick={() => setEditFields(prev => {
+                        const list = (prev.persons_data as any[]).filter((_, j) => j !== pi)
+                        return { ...prev, persons_data: list, persons_involved: personsInvolvedText(list) }
+                      })}
+                      className="px-2 py-2 text-red-500 hover:text-red-700 bg-transparent border-none cursor-pointer text-sm">🗑</button>
+                  </div>
+                ))}
+              </div>
+              <button type="button"
+                onClick={() => setEditFields(prev => {
+                  const list = [ ...((prev.persons_data as any[]) || []), { name: "", role: "" } ]
+                  return { ...prev, persons_data: list, persons_involved: personsInvolvedText(list) }
+                })}
+                className="mt-2 px-3 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-md hover:bg-blue-800 border-none cursor-pointer">
+                + Add Person
+              </button>
+            </div>
+          )}
+
           {editError && <div className="mt-3 text-xs text-red-600 font-medium">{editError}</div>}
           <div className="flex gap-2 mt-5">
             <button
