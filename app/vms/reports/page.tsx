@@ -767,6 +767,7 @@ export default function ReportsPage() {
       created_at:    new Date().toISOString(),
     })
     setQueue(prev => prev.filter(x => x.id !== q.id))
+    setApproved(prev => prev.filter(x => x.id !== q.id))
     setDeletingId(null)
   }
 
@@ -1676,6 +1677,16 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                       >
                         🔍 View
                       </Link>
+                      {isAdmin && (
+                        <button
+                          onClick={() => deleteQueued(q)}
+                          disabled={deletingId === q.id}
+                          title="Delete report (admin)"
+                          className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                        >
+                          {deletingId === q.id ? "Deleting…" : "🗑 Delete"}
+                        </button>
+                      )}
                     </div>
                   </div>
                 )
