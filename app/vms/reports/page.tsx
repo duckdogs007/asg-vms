@@ -28,6 +28,18 @@ const QUEUE_TYPE_SLUG: Record<string, string> = {
   maintenance:   "maintenance",
 }
 
+// report_queue.report_type → source table, for admin delete from the queue.
+const QUEUE_TYPE_TABLE: Record<string, string> = {
+  incident:       "incident_reports",
+  field_contact:  "contact_history",
+  vehicle_fi:     "vehicle_fi_logs",
+  parking:        "parking_violations",
+  daily_log:      "officer_daily_logs",
+  maintenance:    "property_maintenance_reports",
+  gate_checklist: "gate_checklists",
+  visitor_log:    "visitor_logs",
+}
+
 const DAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"]
 
 function utc(ts: string) {
@@ -325,6 +337,7 @@ export default function ReportsPage() {
   const [returnNotes,  setReturnNotes]  = useState("")
   const [returnSaving, setReturnSaving] = useState(false)
   const [queueMsg,     setQueueMsg]     = useState<Record<string, { ok: boolean; msg: string }>>({})
+  const [deletingId,   setDeletingId]   = useState<string | null>(null)
 
   useEffect(() => {
     supabase.auth.getUser().then(({ data: { user } }) => {
@@ -730,6 +743,31 @@ export default function ReportsPage() {
         loadApproved()
       }, 2000)
     }
+  }
+
+  // Admin-only: permanently delete a queued report (source row + queue entry).
+  // Enforced server-side by each table's is_admin() DELETE policy.
+  async function deleteQueued(q: any) {
+    if (!isAdmin) return
+    const table = QUEUE_TYPE_TABLE[q.report_type]
+    if (!table) { setQueueMsg(prev => ({ ...prev, [q.id]: { ok: false, msg: "Unknown report type — can't delete." } })); return }
+    if (!window.confirm(`Permanently delete this ${q.report_type.replace(/_/g, " ")} report?\n\n${q.summary || ""}\n\nThis removes the report and its queue entry and cannot be undone.`)) return
+    setDeletingId(q.id)
+    const { error, count } = await supabase.from(table).delete({ count: "exact" }).eq("id", q.report_id)
+    if (error)     { setDeletingId(null); setQueueMsg(prev => ({ ...prev, [q.id]: { ok: false, msg: "Delete failed: " + error.message } })); return }
+    if (count === 0) { setDeletingId(null); setQueueMsg(prev => ({ ...prev, [q.id]: { ok: false, msg: "Delete blocked — admin access required." } })); return }
+    await supabase.from("report_queue").delete().eq("id", q.id)
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from("audit_logs").insert({
+      user_email:    user?.email || "unknown",
+      action:        "deleted",
+      resource_type: "Report",
+      resource_id:   String(q.report_id),
+      detail:        `Deleted ${q.report_type.replace(/_/g, " ")} report — ${q.summary || q.report_id}`,
+      created_at:    new Date().toISOString(),
+    })
+    setQueue(prev => prev.filter(x => x.id !== q.id))
+    setDeletingId(null)
   }
 
   async function returnReport(queueId: string, notes: string) {
@@ -1529,6 +1567,16 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                         >
                           🔄 Return
                         </button>
+                        {isAdmin && (
+                          <button
+                            onClick={() => deleteQueued(q)}
+                            disabled={deletingId === q.id}
+                            title="Delete report (admin)"
+                            className="px-3 py-1.5 bg-red-100 hover:bg-red-200 text-red-700 text-xs font-semibold rounded-lg border-none cursor-pointer disabled:opacity-50"
+                          >
+                            {deletingId === q.id ? "Deleting…" : "🗑 Delete"}
+                          </button>
+                        )}
                       </div>
                     </div>
 
