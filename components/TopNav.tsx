@@ -238,7 +238,7 @@ export default function TopNav() {
                 VMS <span className="text-[10px] text-gray-400 ml-0.5">▾</span>
               </Link>
               {openDropdown === "vms" && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[160px] z-50">
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 before:content-[''] before:absolute before:-top-1 before:left-0 before:right-0 before:h-1 min-w-[160px] z-50">
                   <Link href="/vms"        className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🛂 Check-In</Link>
                   <Link href="/vms/scan"   className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📷 Scan License</Link>
                   <Link href="/vms/search" className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🔎 Search</Link>
@@ -253,7 +253,7 @@ export default function TopNav() {
                 User Dashboard <span className="text-[10px] text-gray-400 ml-0.5">▾</span>
               </Link>
               {openDropdown === "userdash" && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[180px] z-50">
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 before:content-[''] before:absolute before:-top-1 before:left-0 before:right-0 before:h-1 min-w-[180px] z-50">
                   <Link href="/userdash?tab=reports"  className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📝 Reports</Link>
                   <Link href="/userdash?tab=onduty"   className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🟢 On Duty</Link>
                   <Link href="/userdash?tab=watchlist" className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🚫 Watchlist</Link>
@@ -270,7 +270,7 @@ export default function TopNav() {
                 Property Hub <span className="text-[10px] text-gray-400 ml-0.5">▾</span>
               </Link>
               {openDropdown === "property" && (
-                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 min-w-[200px] z-50">
+                <div className="absolute top-full left-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 before:content-[''] before:absolute before:-top-1 before:left-0 before:right-0 before:h-1 min-w-[200px] z-50">
                   <Link href="/vms/property?tab=post-orders"  className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📋 Post Orders</Link>
                   <Link href="/vms/property?tab=info"         className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>🏢 Community Info</Link>
                   <Link href="/vms/property?tab=documents"    className={dropdownItemCls} onClick={() => setOpenDropdown(null)}>📁 Documents</Link>
