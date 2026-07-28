@@ -953,6 +953,13 @@ ${sec("Recommendations", list(aiResult.recommendations, (r: any) => esc(r)))}
 
   async function runReport() {
     if (!rptCommunity) return
+    // Visitor Traffic is a print/PDF analytics report (charts + entry log),
+    // not a row listing — open it directly from the loaded visits/stats.
+    if (runnerType === "visitorTraffic") {
+      if (!visits.length) { alert("No visitor entries in this range to report."); return }
+      printVisitorTrafficReport()
+      return
+    }
     setRunnerLoading(true); setRunnerRan(false); setRunnerRows([])
     if (runnerType === "watchlist")   { await runWatchlistRoster(); return }
     if (runnerType === "unithistory") { await runUnitHistory();     return }
@@ -1505,6 +1512,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
                 <option value="all">All types</option>
                 {REPORT_TYPES.map(rt => <option key={rt.key} value={rt.key}>{rt.label}</option>)}
+                <option value="visitorTraffic">Visitor Traffic (charts + log)</option>
                 <option value="watchlist">Watchlist (Barred Persons)</option>
                 <option value="unithistory">Unit History</option>
               </select>
@@ -1525,7 +1533,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
               disabled={!rptCommunity || runnerLoading}
               className="px-5 py-2 bg-blue-700 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer disabled:opacity-40"
             >
-              {runnerLoading ? "Running…" : "▶ Run Report"}
+              {runnerLoading ? "Running…" : runnerType === "visitorTraffic" ? "📊 Open Traffic Report" : "▶ Run Report"}
             </button>
             {runnerRan && runnerRows.length > 0 && (
               <>
