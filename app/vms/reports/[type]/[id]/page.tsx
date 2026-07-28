@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { supabase } from "@/lib/supabase/supabaseClient"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
-import { checkCanApprove } from "@/lib/admin"
+import { checkCanApprove, checkIsAdmin } from "@/lib/admin"
 
 const TYPE_CONFIG: Record<string, { table: string; label: string; color: string }> = {
   "incident":       { table: "incident_reports",             label: "Incident Report",    color: "red"     },
@@ -168,6 +168,8 @@ export default function ReportDetailPage() {
   const [loading,         setLoading]         = useState(true)
   const [notFound,        setNotFound]        = useState(false)
   const [canEmail,        setCanEmail]        = useState(false)
+  const [isAdmin,         setIsAdmin]         = useState(false)
+  const [deleting,        setDeleting]        = useState(false)
   const [emailSending,    setEmailSending]    = useState(false)
   const [emailResult,     setEmailResult]     = useState<{ ok: boolean; msg: string } | null>(null)
   const [summary,         setSummary]         = useState<string | null>(null)
@@ -190,7 +192,7 @@ export default function ReportDetailPage() {
   const [returnNotes,  setReturnNotes]  = useState("")
   const [returnSaving, setReturnSaving] = useState(false)
 
-  useEffect(() => { checkCanApprove().then(setCanEmail) }, [])
+  useEffect(() => { checkCanApprove().then(setCanEmail); checkIsAdmin().then(setIsAdmin) }, [])
 
   useEffect(() => {
     if (!config) { setNotFound(true); setLoading(false); return }
@@ -296,6 +298,28 @@ export default function ReportDetailPage() {
     if (updated) setReport(updated)
     setEditMode(false)
     setEditSaving(false)
+  }
+
+  async function deleteReport() {
+    if (!report) return
+    const label = `${config?.label || "report"}${report.date ? ` — ${report.date}` : ""}`
+    if (!confirm(`Permanently delete this ${config?.label || "report"}?\n\n${label}\n\nThis removes the report and its review-queue entry. This cannot be undone.`)) return
+    setDeleting(true)
+    // Remove the source report first (admin-only per RLS), then its queue entry.
+    const { error: delErr, count } = await supabase.from(config.table).delete({ count: "exact" }).eq("id", id)
+    if (delErr) { setDeleting(false); alert("Delete failed: " + delErr.message); return }
+    if (count === 0) { setDeleting(false); alert("Delete blocked — admin access required."); return }
+    if (queue?.id) await supabase.from("report_queue").delete().eq("id", queue.id)
+    const { data: { user } } = await supabase.auth.getUser()
+    await supabase.from("audit_logs").insert({
+      user_email:    user?.email || "unknown",
+      action:        "deleted",
+      resource_type: config?.label || "Report",
+      resource_id:   String(id),
+      detail:        `Deleted ${label}`,
+      created_at:    new Date().toISOString(),
+    })
+    router.push("/vms/reports")
   }
 
   async function approveFromDetail() {
@@ -451,6 +475,16 @@ export default function ReportDetailPage() {
                   🔄 Return for Revision
                 </button>
               </>
+            )}
+            {isAdmin && !editMode && (
+              <button
+                onClick={deleteReport}
+                disabled={deleting}
+                title="Delete this report (admin)"
+                className="px-3 py-1.5 text-xs font-semibold bg-red-100 hover:bg-red-200 text-red-700 rounded-lg border-none cursor-pointer disabled:opacity-50 ml-auto"
+              >
+                {deleting ? "Deleting…" : "🗑 Delete Report"}
+              </button>
             )}
           </div>
 
