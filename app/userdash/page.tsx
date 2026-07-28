@@ -11,7 +11,7 @@ import Papa from "papaparse"
 import { fireAlert } from "@/lib/alerts"
 import { maskSSN } from "@/lib/format"
 import { createSignedUrlFor } from "@/lib/storage"
-import { checkIsAdmin, checkIsGuest, checkCanIssueLeaseViolation } from "@/lib/admin"
+import { checkIsAdmin, checkIsGuest, checkCanIssueLeaseViolation, checkCanApprove } from "@/lib/admin"
 import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/LocationField"
 import { buildHohSnapshot, EMPTY_SNAPSHOT, splitUnit } from "@/lib/hohSnapshot"
 import LeaseViolationForm from "@/components/LeaseViolationForm"
@@ -144,6 +144,7 @@ export default function UserDashboard() {
   // Watchlist edit (admin-only). Default false so no buttons render before
   // the admin check resolves; failure leaves it false (safe fallback).
   const [isAdmin,        setIsAdmin]        = useState(false)
+  const [canApprove,     setCanApprove]     = useState(false)   // admin OR supervisor
   const [canIssueLV,     setCanIssueLV]     = useState(false)
   const [isGuest,        setIsGuest]        = useState(false)
   const [editingWlId,    setEditingWlId]    = useState<string | null>(null)
@@ -379,6 +380,7 @@ export default function UserDashboard() {
 
   useEffect(() => {
     checkIsAdmin().then(ok => setIsAdmin(ok)).catch(() => setIsAdmin(false))
+    checkCanApprove().then(ok => setCanApprove(ok)).catch(() => setCanApprove(false))
     checkCanIssueLeaseViolation().then(ok => setCanIssueLV(ok)).catch(() => setCanIssueLV(false))
     checkIsGuest().then(ok => setIsGuest(ok)).catch(() => setIsGuest(false))
   }, [])
@@ -3492,14 +3494,20 @@ export default function UserDashboard() {
                           </>
                         ) : (
                           <>
-                            <button onClick={() => { setEditingReport(i); setEditFields({ ...r }) }}
-                              className="px-4 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer">
-                              ✏️ Edit
-                            </button>
-                            <button onClick={() => deleteReport(r)}
-                              className="px-4 py-1.5 bg-red-700 text-white text-xs font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
-                              🗑 Delete
-                            </button>
+                            {/* Officers can edit only a report returned to them for revision;
+                                supervisors/admins can edit any report at any time. */}
+                            {(canApprove || r._queue?.status === "needs_revision") && (
+                              <button onClick={() => { setEditingReport(i); setEditFields({ ...r }) }}
+                                className="px-4 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-lg hover:bg-blue-800 border-none cursor-pointer">
+                                ✏️ Edit
+                              </button>
+                            )}
+                            {isAdmin && (
+                              <button onClick={() => deleteReport(r)}
+                                className="px-4 py-1.5 bg-red-700 text-white text-xs font-semibold rounded-lg hover:bg-red-800 border-none cursor-pointer">
+                                🗑 Delete
+                              </button>
+                            )}
                             {canIssueLV && r._type === "Incident" && (
                               <button onClick={() => setViolationForId(violationForId === r.id ? null : r.id)}
                                 className="px-4 py-1.5 bg-amber-600 text-white text-xs font-semibold rounded-lg hover:bg-amber-700 border-none cursor-pointer">
