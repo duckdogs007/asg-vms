@@ -67,6 +67,15 @@ type IncidentVehicle = {
   plate: string; plate_state: string; description: string
 }
 const EMPTY_INC_PERSON  = (): IncidentPerson  => ({ name: "", role: "", dob: "", sex: "", race: "", address: "" })
+
+// Derive the persons_involved text (search/CSV/email fallback) from the
+// structured persons_data list, matching how new incidents are saved. Kept in
+// sync whenever a name is corrected in the report editor.
+function personsInvolvedText(list: { name?: string; role?: string }[]): string {
+  return (list || [])
+    .map(p => [p.name, p.role ? `(${p.role})` : ""].filter(Boolean).join(" "))
+    .join("; ")
+}
 const EMPTY_INC_VEHICLE = (): IncidentVehicle => ({ make: "", model: "", year: "", color: "", plate: "", plate_state: "", description: "" })
 
 type Tab       = "onduty" | "watchlist" | "reports" | "passdown" | "bolo" | "gatecheck"
@@ -3575,6 +3584,13 @@ export default function UserDashboard() {
                             <MilitaryTimeField value={editFields.time || ""} onChange={v => setEditFields(f => ({ ...f, time: v }))} /></div>}
                           <div><label className={labelCls}>Officer</label>
                             <input value={editFields.officer_name || editFields.officer || ""} onChange={e => setEditFields(f => ({ ...f, [r.officer_name !== undefined ? "officer_name" : "officer"]: e.target.value }))} className={inputCls} /></div>
+                          {/* Subject name — editable to correct spelling (field contacts, etc.) */}
+                          {r.first_name !== undefined && <div><label className={labelCls}>First Name</label>
+                            <input value={editFields.first_name || ""} onChange={e => setEditFields(f => ({ ...f, first_name: e.target.value }))} className={inputCls} /></div>}
+                          {r.middle_name !== undefined && <div><label className={labelCls}>Middle Name</label>
+                            <input value={editFields.middle_name || ""} onChange={e => setEditFields(f => ({ ...f, middle_name: e.target.value }))} className={inputCls} /></div>}
+                          {r.last_name !== undefined && <div><label className={labelCls}>Last Name</label>
+                            <input value={editFields.last_name || ""} onChange={e => setEditFields(f => ({ ...f, last_name: e.target.value }))} className={inputCls} /></div>}
                           {r.shift !== undefined && <div><label className={labelCls}>Shift</label>
                             <select value={editFields.shift || ""} onChange={e => setEditFields(f => ({ ...f, shift: e.target.value }))} className={inputCls}>
                               <option>Day</option><option>Evening</option><option>Night</option><option>Overnight</option>
@@ -3585,8 +3601,49 @@ export default function UserDashboard() {
                             <input value={editFields.weather || ""} onChange={e => setEditFields(f => ({ ...f, weather: e.target.value }))} className={inputCls} /></div>}
                           {r.incident_type !== undefined && <div><label className={labelCls}>Incident Type</label>
                             <input value={editFields.incident_type || ""} onChange={e => setEditFields(f => ({ ...f, incident_type: e.target.value }))} className={inputCls} /></div>}
-                          {r.persons_involved !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Persons Involved</label>
-                            <input value={editFields.persons_involved || ""} onChange={e => setEditFields(f => ({ ...f, persons_involved: e.target.value }))} className={inputCls} /></div>}
+                          {/* Persons Involved — structured editor so name-spelling fixes flow to
+                              the report display, client email, and Intel search. Falls back to a
+                              plain text field for records without structured persons_data. */}
+                          {Array.isArray(editFields.persons_data) && editFields.persons_data.length > 0 ? (
+                            <div className="sm:col-span-2">
+                              <label className={labelCls}>Persons Involved</label>
+                              <div className="space-y-2">
+                                {editFields.persons_data.map((p: any, pi: number) => (
+                                  <div key={pi} className="flex flex-wrap items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg p-2">
+                                    <input value={p.name || ""} placeholder="Full name"
+                                      onChange={e => setEditFields(f => {
+                                        const list = (f.persons_data as any[]).map((x, j) => j === pi ? { ...x, name: e.target.value } : x)
+                                        return { ...f, persons_data: list, persons_involved: personsInvolvedText(list) }
+                                      })}
+                                      className="flex-1 min-w-[160px] px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                                    <input value={p.role || ""} placeholder="Role (optional)"
+                                      onChange={e => setEditFields(f => {
+                                        const list = (f.persons_data as any[]).map((x, j) => j === pi ? { ...x, role: e.target.value } : x)
+                                        return { ...f, persons_data: list, persons_involved: personsInvolvedText(list) }
+                                      })}
+                                      className="w-40 px-2 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white" />
+                                    <button type="button" title="Remove"
+                                      onClick={() => setEditFields(f => {
+                                        const list = (f.persons_data as any[]).filter((_, j) => j !== pi)
+                                        return { ...f, persons_data: list, persons_involved: personsInvolvedText(list) }
+                                      })}
+                                      className="px-2 py-2 text-red-500 hover:text-red-700 bg-transparent border-none cursor-pointer text-sm">🗑</button>
+                                  </div>
+                                ))}
+                              </div>
+                              <button type="button"
+                                onClick={() => setEditFields(f => {
+                                  const list = [ ...((f.persons_data as any[]) || []), EMPTY_INC_PERSON() ]
+                                  return { ...f, persons_data: list, persons_involved: personsInvolvedText(list) }
+                                })}
+                                className="mt-2 px-3 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-md hover:bg-blue-800 border-none cursor-pointer">
+                                + Add Person
+                              </button>
+                            </div>
+                          ) : (
+                            r.persons_involved !== undefined && <div className="sm:col-span-2"><label className={labelCls}>Persons Involved</label>
+                              <input value={editFields.persons_involved || ""} onChange={e => setEditFields(f => ({ ...f, persons_involved: e.target.value }))} className={inputCls} /></div>
+                          )}
                           {r.reliant_case_no !== undefined && <div><label className={labelCls}>Reliant case #</label>
                             <input value={editFields.reliant_case_no || ""} onChange={e => setEditFields(f => ({ ...f, reliant_case_no: e.target.value }))} className={inputCls} /></div>}
                           {r.hpd_report_no !== undefined && <div><label className={labelCls}>HPD report #</label>
