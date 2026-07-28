@@ -16,6 +16,7 @@ import LocationField, { LocationValue, EMPTY_LOCATION } from "@/components/Locat
 import { buildHohSnapshot, EMPTY_SNAPSHOT, splitUnit } from "@/lib/hohSnapshot"
 import LeaseViolationForm from "@/components/LeaseViolationForm"
 import AiAssist from "@/components/AiAssist"
+import MilitaryTimeField from "@/components/MilitaryTimeField"
 import GateChecklist from "./GateChecklist"
 import { VehicleFields, EMPTY_VEHICLE, isNoPlate, displayPlate, type VehicleInfo } from "@/components/VehicleFields"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
@@ -2573,7 +2574,7 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Date</label>
                   <input type="date" value={incDate} onChange={e => setIncDate(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Time</label>
-                  <input type="time" value={incTime} onChange={e => setIncTime(e.target.value)} className={inputCls} /></div>
+                  <MilitaryTimeField value={incTime} onChange={setIncTime} /></div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={incOfficer} onChange={e => setIncOfficer(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Location or Property Name</label>
@@ -2875,7 +2876,7 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Date</label>
                   <input type="date" value={ctDate} onChange={e => setCtDate(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Time</label>
-                  <input type="time" value={ctTime} onChange={e => setCtTime(e.target.value)} className={inputCls} /></div>
+                  <MilitaryTimeField value={ctTime} onChange={setCtTime} /></div>
                 <div><label className={labelCls}>DOB</label>
                   <input type="date" value={ctDob} onChange={e => setCtDob(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Sex</label>
@@ -2964,7 +2965,7 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Date</label>
                   <input type="date" value={vfiDate} onChange={e => setVfiDate(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Time</label>
-                  <input type="time" value={vfiTime} onChange={e => setVfiTime(e.target.value)} className={inputCls} /></div>
+                  <MilitaryTimeField value={vfiTime} onChange={setVfiTime} /></div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={vfiOfficer} onChange={e => setVfiOfficer(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Location</label>
@@ -3084,7 +3085,7 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Date</label>
                   <input type="date" value={pvDate} onChange={e => setPvDate(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Time</label>
-                  <input type="time" value={pvTime} onChange={e => setPvTime(e.target.value)} className={inputCls} /></div>
+                  <MilitaryTimeField value={pvTime} onChange={setPvTime} /></div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={pvOfficer} onChange={e => setPvOfficer(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Community</label>
@@ -3206,7 +3207,7 @@ export default function UserDashboard() {
                 <div><label className={labelCls}>Date</label>
                   <input type="date" value={mntDate} onChange={e => setMntDate(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Time</label>
-                  <input type="time" value={mntTime} onChange={e => setMntTime(e.target.value)} className={inputCls} /></div>
+                  <MilitaryTimeField value={mntTime} onChange={setMntTime} /></div>
                 <div><label className={labelCls}>Officer Name</label>
                   <input value={mntOfficer} onChange={e => setMntOfficer(e.target.value)} className={inputCls} /></div>
                 <div><label className={labelCls}>Community</label>
@@ -3571,7 +3572,7 @@ export default function UserDashboard() {
                           <div><label className={labelCls}>Date</label>
                             <input type="date" value={editFields.date || ""} onChange={e => setEditFields(f => ({ ...f, date: e.target.value }))} className={inputCls} /></div>
                           {("time" in r) && <div><label className={labelCls}>Time</label>
-                            <input type="time" value={editFields.time || ""} onChange={e => setEditFields(f => ({ ...f, time: e.target.value }))} className={inputCls} /></div>}
+                            <MilitaryTimeField value={editFields.time || ""} onChange={v => setEditFields(f => ({ ...f, time: v }))} /></div>}
                           <div><label className={labelCls}>Officer</label>
                             <input value={editFields.officer_name || editFields.officer || ""} onChange={e => setEditFields(f => ({ ...f, [r.officer_name !== undefined ? "officer_name" : "officer"]: e.target.value }))} className={inputCls} /></div>
                           {r.shift !== undefined && <div><label className={labelCls}>Shift</label>

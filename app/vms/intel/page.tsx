@@ -9,6 +9,7 @@ import { maskSSN } from "@/lib/format"
 import { sanitizeFilterTerm } from "@/lib/searchSanitize"
 import { personsInvolvedMatch, firstNameCompatible } from "@/lib/nameSearch"
 import PoliceReportsPanel from "@/components/PoliceReportsPanel"
+import MilitaryTimeField from "@/components/MilitaryTimeField"
 import { SignedImage, SignedLink } from "@/components/SignedImage"
 
 function fmtDate(ts: string) {
@@ -913,7 +914,7 @@ export default function IntelPage() {
                         <div><label className={lbl}>Date</label>
                           <input type="date" value={ctDate} onChange={e => setCtDate(e.target.value)} className={f} /></div>
                         <div><label className={lbl}>Time</label>
-                          <input type="time" value={ctTime} onChange={e => setCtTime(e.target.value)} className={f} /></div>
+                          <MilitaryTimeField value={ctTime} onChange={setCtTime} /></div>
                         <div><label className={lbl}>DOB</label>
                           <input type="date" value={ctDob} onChange={e => setCtDob(e.target.value)} className={f} /></div>
                         <div><label className={lbl}>Sex</label>
