@@ -122,6 +122,7 @@ export default function UserDashboard() {
   const [watchlist,        setWatchlist]        = useState<WatchlistEntry[]>([])
   const [watchlistLoading, setWatchlistLoading] = useState(false)
   const [watchlistSearch,  setWatchlistSearch]  = useState("")
+  const [watchlistSort,    setWatchlistSort]    = useState<"name" | "date-new" | "date-old">("name")
   const [showAddWatchlist, setShowAddWatchlist] = useState(false)
   const [wlFirst,    setWlFirst]    = useState("")
   const [wlLast,     setWlLast]     = useState("")
@@ -680,6 +681,37 @@ export default function UserDashboard() {
     }
     setWlMessage("✅ Watchlist CSV imported.")
     loadWatchlist()
+  }
+
+  // Export the currently shown watchlist (respects the location filter, search,
+  // and sort) to a CSV file, named for the selected community.
+  function exportWatchlistCSV() {
+    if (!filteredWatchlist.length) { setWlError("Nothing to export."); return }
+    const rows = filteredWatchlist.map(p => ({
+      "Last Name":  p.last_name || "",
+      "First Name": p.first_name || "",
+      "Middle Name": (p as any).middle_name || "",
+      "DOB":        p.dob || "",
+      "Sex":        (p as any).sex || "",
+      "Race":       (p as any).race || "",
+      "OLN / DL #": p.oln || (p as any).dl_number || "",
+      "Reason":     p.reason || "",
+      "Banned By":  (p as any).banned_by || "",
+      "Ban Date":   (p as any).ban_date || "",
+      "Status":     (p as any).status || "",
+      "Firearm":    (p as any).firearm_flag ? "Yes" : "",
+      "Comments":   (p as any).comments || "",
+      "Added":      (p as any).created_at ? new Date((p as any).created_at).toLocaleDateString("en-US") : "",
+    }))
+    const commName = communities.find(c => c.id === communityId)?.name || "all-locations"
+    const csv  = Papa.unparse(rows)
+    const blob = new Blob([csv], { type: "text/csv" })
+    const url  = URL.createObjectURL(blob)
+    const a    = document.createElement("a")
+    a.href = url
+    a.download = `watchlist-${commName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().slice(0, 10)}.csv`
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   // ── OFFICER REPORTS ──
@@ -1898,6 +1930,14 @@ export default function UserDashboard() {
       .filter(Boolean).join(" ").toLowerCase()
     const words = watchlistSearch.toLowerCase().replace(/,/g, " ").trim().split(/\s+/).filter(Boolean)
     return words.every(w => haystack.includes(w))
+  }).sort((a, b) => {
+    if (watchlistSort === "name") {
+      return `${a.last_name || ""} ${a.first_name || ""}`.localeCompare(`${b.last_name || ""} ${b.first_name || ""}`, undefined, { sensitivity: "base" })
+    }
+    // Sort by the ban date, falling back to when the entry was added.
+    const ak = String((a as any).ban_date || (a as any).created_at || "")
+    const bk = String((b as any).ban_date || (b as any).created_at || "")
+    return watchlistSort === "date-new" ? bk.localeCompare(ak) : ak.localeCompare(bk)
   })
 
   const filteredPassdowns = pdFilterComm
@@ -2098,11 +2138,22 @@ export default function UserDashboard() {
                 {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
               <span className="text-sm text-gray-500">{filteredWatchlist.length} persons</span>
+              <select value={watchlistSort} onChange={e => setWatchlistSort(e.target.value as "name" | "date-new" | "date-old")}
+                title="Sort person cards"
+                className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
+                <option value="name">Sort: Name (A–Z)</option>
+                <option value="date-new">Sort: Date (newest)</option>
+                <option value="date-old">Sort: Date (oldest)</option>
+              </select>
             </div>
             <div className="flex gap-2 flex-wrap">
               <input value={watchlistSearch} onChange={(e) => setWatchlistSearch(e.target.value)}
                 placeholder="Search name, OLN, or reason..."
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm w-64 focus:outline-none focus:ring-2 focus:ring-blue-600" />
+              <button onClick={exportWatchlistCSV}
+                className="px-4 py-2 bg-gray-800 text-white text-sm font-semibold rounded-lg hover:bg-gray-700 border-none cursor-pointer">
+                ⬇ Export CSV
+              </button>
               {!isGuest && (
                 <button onClick={() => {
                     const opening = !showAddWatchlist
