@@ -122,7 +122,7 @@ export default function UserDashboard() {
   const [watchlist,        setWatchlist]        = useState<WatchlistEntry[]>([])
   const [watchlistLoading, setWatchlistLoading] = useState(false)
   const [watchlistSearch,  setWatchlistSearch]  = useState("")
-  const [watchlistSort,    setWatchlistSort]    = useState<"name" | "date-new" | "date-old">("name")
+  const [watchlistSort,    setWatchlistSort]    = useState<"name" | "date-new" | "date-old">("date-new")
   const [showAddWatchlist, setShowAddWatchlist] = useState(false)
   const [wlFirst,    setWlFirst]    = useState("")
   const [wlLast,     setWlLast]     = useState("")
@@ -2141,9 +2141,9 @@ export default function UserDashboard() {
               <select value={watchlistSort} onChange={e => setWatchlistSort(e.target.value as "name" | "date-new" | "date-old")}
                 title="Sort person cards"
                 className="px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-600 bg-white">
-                <option value="name">Sort: Name (A–Z)</option>
                 <option value="date-new">Sort: Date (newest)</option>
                 <option value="date-old">Sort: Date (oldest)</option>
+                <option value="name">Sort: Name (A–Z)</option>
               </select>
             </div>
             <div className="flex gap-2 flex-wrap">
