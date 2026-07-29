@@ -1653,7 +1653,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                         </div>
                         <Link
                           href={`/vms/reports/${QUEUE_TYPE_SLUG[q.report_type] ?? q.report_type}/${q.report_id}`}
-                          className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg whitespace-nowrap"
+                          className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 text-sm font-semibold rounded-lg whitespace-nowrap"
                         >
                           🔍 View
                         </Link>
@@ -2169,7 +2169,7 @@ ${runnerRows.map(r => `<tr><td>${r.date || "—"}</td><td class="badge">${r.type
                     <button
                       onClick={(e) => { e.stopPropagation(); window.location.href = `/vms/reports/visitor-log/${v.id}` }}
                       title="View entry details"
-                      className="px-2.5 py-1 bg-blue-700 hover:bg-blue-800 text-white text-xs font-semibold rounded border-none cursor-pointer whitespace-nowrap"
+                      className="px-4 py-2 bg-blue-700 hover:bg-blue-800 text-white text-sm font-semibold rounded-lg border-none cursor-pointer whitespace-nowrap"
                     >
                       View
                     </button>
