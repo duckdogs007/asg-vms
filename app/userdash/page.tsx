@@ -2359,7 +2359,7 @@ export default function UserDashboard() {
                       {(p.ban_date || p.banned_date) && <div>Banned: {p.ban_date || p.banned_date}</div>}
                       {p.banned_by && <div>By: {p.banned_by}</div>}
                     </div>
-                    <Link href={`/vms/intel/${p.id}`} className="text-xs text-blue-700 hover:underline mt-1">View →</Link>
+                    <Link href={`/vms/intel/${p.id}`} className="mt-1 px-4 py-2 bg-blue-700 text-white text-sm font-semibold rounded-lg hover:bg-blue-800 no-underline inline-flex items-center gap-1">🔍 View</Link>
                     {isAdmin && (
                       <div className="flex gap-1.5 mt-1">
                         <button onClick={() => startWatchlistEdit(p)} title="Edit" className="px-2 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded border-none cursor-pointer">✎ Edit</button>
