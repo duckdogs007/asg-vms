@@ -83,20 +83,34 @@ Output ONLY the bullets (or the single "no concerns" line) — no heading, no pr
   try {
     // Retry transient "model overloaded / high demand" (503 UNAVAILABLE) a few
     // times with backoff — these spikes are usually momentary.
-    let res!: Response, data: any = null
-    for (let attempt = 0; attempt < 3; attempt++) {
-      res = await fetch(url, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: prompt }] }],
-          generationConfig,
-        }),
-      })
-      data = await res.json().catch(() => null)
-      const overloaded = res.status === 503 || data?.error?.status === "UNAVAILABLE" || /overloaded|high demand/i.test(data?.error?.message || "")
-      if (!overloaded || attempt === 2) break
-      await new Promise(r => setTimeout(r, 900 * (attempt + 1)))
+    async function callGemini(genConfig: any): Promise<{ res: Response; data: any }> {
+      let res!: Response, data: any = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        res = await fetch(url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            contents: [{ role: "user", parts: [{ text: prompt }] }],
+            generationConfig: genConfig,
+          }),
+        })
+        data = await res.json().catch(() => null)
+        const overloaded = res.status === 503 || data?.error?.status === "UNAVAILABLE" || /overloaded|high demand/i.test(data?.error?.message || "")
+        if (!overloaded || attempt === 2) break
+        await new Promise(r => setTimeout(r, 900 * (attempt + 1)))
+      }
+      return { res, data }
+    }
+
+    let { res, data } = await callGemini(generationConfig)
+
+    // The rolling "…-latest" alias can move to a model that rejects
+    // thinkingConfig, which comes back as 400 INVALID_ARGUMENT. Retry once
+    // without it so the summary still works across model changes.
+    if (!res.ok && res.status === 400 && generationConfig.thinkingConfig) {
+      const { thinkingConfig, ...noThinking } = generationConfig
+      console.warn("[ai/summary] retrying without thinkingConfig", { model, message: data?.error?.message })
+      ;({ res, data } = await callGemini(noThinking))
     }
 
     if (!res.ok) {

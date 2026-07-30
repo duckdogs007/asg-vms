@@ -229,17 +229,37 @@ For EVERY concern, follow_up, and pattern, include a "sources" array listing the
 
   try {
     // Retry transient "model overloaded / high demand" (503 UNAVAILABLE) with backoff.
-    let res!: Response, data: any = null
-    for (let attempt = 0; attempt < 3; attempt++) {
-      res = await fetch(apiUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig }),
-      })
-      data = await res.json().catch(() => null)
-      const overloaded = res.status === 503 || data?.error?.status === "UNAVAILABLE" || /overloaded|high demand/i.test(data?.error?.message || "")
-      if (!overloaded || attempt === 2) break
-      await new Promise(r => setTimeout(r, 900 * (attempt + 1)))
+    async function callGemini(genConfig: any): Promise<{ res: Response; data: any }> {
+      let res!: Response, data: any = null
+      for (let attempt = 0; attempt < 3; attempt++) {
+        res = await fetch(apiUrl, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], generationConfig: genConfig }),
+        })
+        data = await res.json().catch(() => null)
+        const overloaded = res.status === 503 || data?.error?.status === "UNAVAILABLE" || /overloaded|high demand/i.test(data?.error?.message || "")
+        if (!overloaded || attempt === 2) break
+        await new Promise(r => setTimeout(r, 900 * (attempt + 1)))
+      }
+      return { res, data }
+    }
+
+    let { res, data } = await callGemini(generationConfig)
+
+    // "Request contains an invalid argument" (400) usually means the current
+    // model (the rolling "…-latest" alias can move) rejects an advanced config
+    // field. Retry without thinkingConfig, then without responseSchema, so the
+    // summary keeps working across model changes.
+    if (!res.ok && res.status === 400 && generationConfig.thinkingConfig) {
+      const { thinkingConfig, ...noThinking } = generationConfig
+      console.warn("[location-summary] retrying without thinkingConfig", { model, message: data?.error?.message })
+      ;({ res, data } = await callGemini(noThinking))
+    }
+    if (!res.ok && res.status === 400 && generationConfig.responseSchema) {
+      const { thinkingConfig, responseSchema, ...noSchema } = generationConfig
+      console.warn("[location-summary] retrying without responseSchema", { model, message: data?.error?.message })
+      ;({ res, data } = await callGemini(noSchema))
     }
     if (!res.ok) {
       const isQuota = res.status === 429 || data?.error?.status === "RESOURCE_EXHAUSTED"
