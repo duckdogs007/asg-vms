@@ -107,7 +107,6 @@ const EDIT_FIELDS: Record<string, EditFieldDef[]> = {
     { key: "officer_name", label: "Officer",     type: "text"     },
     { key: "issue_type",   label: "Issue Type",  type: "text"     },
     { key: "description",  label: "Description", type: "textarea" },
-    { key: "notes",        label: "Notes",       type: "textarea" },
   ],
   "gate-checklist": [
     { key: "checklist_date",   label: "Date",             type: "date"     },
