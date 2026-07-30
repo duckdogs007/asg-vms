@@ -371,6 +371,36 @@ export default function UserDashboard() {
   const [officers,        setOfficers]        = useState<OfficerOnDuty[]>([])
   const [officersLoading, setOfficersLoading] = useState(false)
   const [officersError,   setOfficersError]   = useState("")
+  // Supervisor scoped "Add Officer / Guest" form
+  const [suOpen,     setSuOpen]     = useState(false)
+  const [suEmail,    setSuEmail]    = useState("")
+  const [suName,     setSuName]     = useState("")
+  const [suPassword, setSuPassword] = useState("")
+  const [suRole,     setSuRole]     = useState<"officer" | "guest">("officer")
+  const [suSaving,   setSuSaving]   = useState(false)
+  const [suMsg,      setSuMsg]      = useState("")
+  const [suErr,      setSuErr]      = useState("")
+
+  async function addTeamMember() {
+    setSuErr(""); setSuMsg("")
+    if (!suEmail.trim())        { setSuErr("Email is required."); return }
+    if (suPassword.length < 8)  { setSuErr("Temporary password must be at least 8 characters."); return }
+    setSuSaving(true)
+    try {
+      const r = await fetch("/api/admin/users", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: suEmail.trim(), password: suPassword, full_name: suName.trim() || undefined, role: suRole }),
+      })
+      const json = await r.json().catch(() => ({}))
+      if (!r.ok) { setSuErr(json.error || `HTTP ${r.status}`); setSuSaving(false); return }
+      setSuMsg(`✅ ${suRole === "guest" ? "Guest" : "Officer"} account created: ${suEmail.trim()}`)
+      setSuEmail(""); setSuName(""); setSuPassword(""); setSuRole("officer")
+      loadOfficersOnDuty()
+    } catch (e: any) {
+      setSuErr(e?.message || "Failed to create user.")
+    }
+    setSuSaving(false)
+  }
 
   // Queue / review-workflow state
   const [userEmail,      setUserEmail]      = useState("")
@@ -2010,6 +2040,45 @@ export default function UserDashboard() {
       {/* ── ON DUTY TAB ── */}
       {activeTab === "onduty" && (
         <div>
+          {/* Supervisor scoped user creation — Officer/Guest in their own community.
+              Admins use Admin → Users (full control). */}
+          {canApprove && !isAdmin && (
+            <div className="mb-5 border border-blue-200 rounded-xl bg-blue-50 p-4">
+              <div className="flex items-center justify-between flex-wrap gap-2">
+                <div className="text-sm font-bold text-blue-900">👥 Add Team Member</div>
+                <button onClick={() => { setSuOpen(o => !o); setSuErr(""); setSuMsg("") }}
+                  className="px-3 py-1.5 bg-blue-700 text-white text-xs font-semibold rounded-md hover:bg-blue-800 border-none cursor-pointer">
+                  {suOpen ? "✕ Close" : "+ Add Officer / Guest"}
+                </button>
+              </div>
+              <p className="text-xs text-blue-800/80 mt-1">Creates an Officer or Guest login scoped to your community. Admin accounts and other communities require an administrator.</p>
+              {suMsg && <div className="mt-3 text-sm text-green-700 font-medium">{suMsg}</div>}
+              {suErr && <div className="mt-3 text-sm text-red-600 font-medium">{suErr}</div>}
+              {suOpen && (
+                <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div><label className={labelCls}>Email <span className="text-red-500">*</span></label>
+                    <input type="email" value={suEmail} onChange={e => setSuEmail(e.target.value)} placeholder="name@teamasg.com" className={inputCls} /></div>
+                  <div><label className={labelCls}>Full Name</label>
+                    <input value={suName} onChange={e => setSuName(e.target.value)} placeholder="First Last" className={inputCls} /></div>
+                  <div><label className={labelCls}>Temporary Password <span className="text-red-500">*</span></label>
+                    <input value={suPassword} onChange={e => setSuPassword(e.target.value)} placeholder="At least 8 characters" className={inputCls} /></div>
+                  <div><label className={labelCls}>Access Level</label>
+                    <select value={suRole} onChange={e => setSuRole(e.target.value as "officer" | "guest")} className={inputCls}>
+                      <option value="officer">Officer</option>
+                      <option value="guest">Guest (view-only)</option>
+                    </select></div>
+                  <div className="sm:col-span-2">
+                    <button onClick={addTeamMember} disabled={suSaving}
+                      className="px-5 py-2.5 bg-blue-800 text-white text-sm font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
+                      {suSaving ? "Creating…" : "Create Account"}
+                    </button>
+                    <span className="ml-3 text-xs text-gray-500">They can sign in immediately with the temporary password.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex justify-between items-center mb-4 flex-wrap gap-3">
             <div className="text-sm text-gray-600">
               {officersLoading ? "Loading…" : (

@@ -23,6 +23,33 @@ async function requireAdmin() {
   }
 }
 
+// Gate for CREATING users. Full admins (ADMIN_EMAILS, admin_users, or role
+// admin_super) may create any account. Supervisors may create scoped accounts —
+// Officer/Guest, in their own community only, never admin — enforced in POST.
+async function requireUserCreator() {
+  const supabase = await createSupabaseServerClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { error: NextResponse.json({ error: "unauthenticated" }, { status: 401 }) }
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceKey) return { error: NextResponse.json({ error: "SUPABASE_SERVICE_ROLE_KEY not set" }, { status: 500 }) }
+  const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, serviceKey, { auth: { autoRefreshToken: false, persistSession: false } })
+
+  let isFull = ADMIN_EMAILS.includes(user.email || "")
+  if (!isFull) {
+    const { data: adminRow } = await admin.from("admin_users").select("user_id").eq("user_id", user.id).maybeSingle()
+    isFull = !!adminRow
+  }
+  const { data: assign } = await admin.from("user_assignments").select("role, community_id").eq("user_id", user.id).maybeSingle()
+  const role = (assign as any)?.role as string | null | undefined
+  if (isFull || role === "admin_super") {
+    return { admin, level: "full", actorEmail: user.email || "" }
+  }
+  if (role === "supervisor") {
+    return { admin, level: "supervisor", actorEmail: user.email || "", communityId: (assign as any)?.community_id ?? null }
+  }
+  return { error: NextResponse.json({ error: "forbidden" }, { status: 403 }) }
+}
+
 export async function GET() {
   const gate = await requireAdmin()
   if (gate.error) return gate.error
@@ -139,9 +166,9 @@ export async function PATCH(req: Request) {
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 
 export async function POST(req: Request) {
-  const gate = await requireAdmin()
-  if (gate.error) return gate.error
-  const admin = gate.admin!
+  const gate = await requireUserCreator()
+  if ("error" in gate) return gate.error
+  const admin = gate.admin
 
   const body = await req.json().catch(() => null) as {
     email?: string
@@ -149,6 +176,7 @@ export async function POST(req: Request) {
     full_name?: string
     community_id?: string | null
     is_admin?: boolean
+    role?: string | null   // null/"officer" = officer, else guest/supervisor/property_manager/admin_super
   } | null
 
   const email    = body?.email?.trim().toLowerCase() || ""
@@ -164,6 +192,29 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "community_id must be a UUID or null" }, { status: 400 })
   }
 
+  // Normalize the requested role ("officer" is represented as null).
+  const VALID_ROLES = [null, "guest", "supervisor", "property_manager", "admin_super"]
+  let role: string | null = body?.role === undefined || body?.role === "officer" ? null : body.role
+  if (!VALID_ROLES.includes(role)) {
+    return NextResponse.json({ error: "Invalid role." }, { status: 400 })
+  }
+  let communityId: string | null = body?.community_id ?? null
+  let grantAdmin = !!body?.is_admin
+
+  // ── Supervisor guardrails (server-enforced; the client cannot bypass) ──
+  // Supervisors may only create Officer/Guest accounts, always scoped to their
+  // OWN community, and can never grant admin.
+  if (gate.level === "supervisor") {
+    if (!gate.communityId) {
+      return NextResponse.json({ error: "Your account isn't assigned to a community, so you can't add users. Ask an admin." }, { status: 403 })
+    }
+    if (role !== null && role !== "guest") {
+      return NextResponse.json({ error: "Supervisors can only add Officer or Guest accounts." }, { status: 403 })
+    }
+    communityId = gate.communityId
+    grantAdmin  = false
+  }
+
   // Create the auth user, email pre-confirmed so they can sign in right away.
   const { data: created, error: createErr } = await admin.auth.admin.createUser({
     email,
@@ -176,21 +227,31 @@ export async function POST(req: Request) {
   }
   const userId = created.user.id
 
-  // Optional community assignment
-  if (body?.community_id) {
+  // Community + role assignment
+  if (communityId || role !== null) {
     const { error: aErr } = await admin
       .from("user_assignments")
-      .upsert({ user_id: userId, community_id: body.community_id, role: null, updated_at: new Date().toISOString() }, { onConflict: "user_id" })
+      .upsert({ user_id: userId, community_id: communityId, role, updated_at: new Date().toISOString() }, { onConflict: "user_id" })
     if (aErr) return NextResponse.json({ error: `User created, but assignment failed: ${aErr.message}`, user_id: userId }, { status: 500 })
   }
 
-  // Optional admin grant
-  if (body?.is_admin) {
+  // Optional admin grant (full admins only)
+  if (grantAdmin) {
     const { error: adErr } = await admin
       .from("admin_users")
       .upsert({ user_id: userId, email }, { onConflict: "user_id" })
     if (adErr) return NextResponse.json({ error: `User created, but admin grant failed: ${adErr.message}`, user_id: userId }, { status: 500 })
   }
+
+  // Audit trail — who created whom.
+  await admin.from("audit_logs").insert({
+    user_email:    gate.actorEmail || "unknown",
+    action:        "created",
+    resource_type: "User",
+    resource_id:   userId,
+    detail:        `Created ${role || "officer"} ${email}${communityId ? "" : " (no community)"}${gate.level === "supervisor" ? " [supervisor]" : ""}`,
+    created_at:    new Date().toISOString(),
+  })
 
   return NextResponse.json({ ok: true, user_id: userId })
 }
