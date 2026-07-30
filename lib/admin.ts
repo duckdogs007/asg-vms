@@ -9,7 +9,7 @@ import { supabase } from "@/lib/supabase/supabaseClient"
 // Long-term: replace consumers with checkIsAdmin() once the hydration
 // regression that bit commit c861662 is diagnosed. The DB-side authority
 // is public.admin_users + the is_admin() function used in RLS policies.
-export const ADMIN_EMAILS: readonly string[] = ["jhall@teamasg.com"]
+export const ADMIN_EMAILS: readonly string[] = ["jhall@teamasg.com", "dconner@teamasg.com", "cbartholf@teamasg.com"]
 
 // Returns true if the current authenticated user is in the admin_users table.
 // Server-side authority for "admin" is the admin_users table + RLS policies that
