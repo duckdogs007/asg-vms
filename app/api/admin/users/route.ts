@@ -205,14 +205,21 @@ export async function POST(req: Request) {
   // Supervisors may only create Officer/Guest accounts, always scoped to their
   // OWN community, and can never grant admin.
   if (gate.level === "supervisor") {
-    if (!gate.communityId) {
-      return NextResponse.json({ error: "Your account isn't assigned to a community, so you can't add users. Ask an admin." }, { status: 403 })
-    }
     if (role !== null && role !== "guest") {
       return NextResponse.json({ error: "Supervisors can only add Officer or Guest accounts." }, { status: 403 })
     }
-    communityId = gate.communityId
-    grantAdmin  = false
+    if (gate.communityId) {
+      // Community-scoped supervisor: new user is forced into their community.
+      communityId = gate.communityId
+    } else {
+      // All-locations supervisor: must choose a valid community for the new user.
+      if (!communityId) {
+        return NextResponse.json({ error: "Choose which community this user belongs to." }, { status: 400 })
+      }
+      const { data: exists } = await admin.from("communities").select("id").eq("id", communityId).maybeSingle()
+      if (!exists) return NextResponse.json({ error: "Unknown community." }, { status: 400 })
+    }
+    grantAdmin = false
   }
 
   // Create the auth user, email pre-confirmed so they can sign in right away.

@@ -377,6 +377,8 @@ export default function UserDashboard() {
   const [suName,     setSuName]     = useState("")
   const [suPassword, setSuPassword] = useState("")
   const [suRole,     setSuRole]     = useState<"officer" | "guest">("officer")
+  const [suCommunity, setSuCommunity] = useState("")   // only used by all-locations supervisors
+  const [myCommunity, setMyCommunity] = useState<string | null>(null)
   const [suSaving,   setSuSaving]   = useState(false)
   const [suMsg,      setSuMsg]      = useState("")
   const [suErr,      setSuErr]      = useState("")
@@ -385,16 +387,21 @@ export default function UserDashboard() {
     setSuErr(""); setSuMsg("")
     if (!suEmail.trim())        { setSuErr("Email is required."); return }
     if (suPassword.length < 8)  { setSuErr("Temporary password must be at least 8 characters."); return }
+    // All-locations supervisors (no home community) must choose the new user's community.
+    if (myCommunity === null && !suCommunity) { setSuErr("Choose which community this user belongs to."); return }
     setSuSaving(true)
     try {
       const r = await fetch("/api/admin/users", {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: suEmail.trim(), password: suPassword, full_name: suName.trim() || undefined, role: suRole }),
+        body: JSON.stringify({
+          email: suEmail.trim(), password: suPassword, full_name: suName.trim() || undefined, role: suRole,
+          ...(myCommunity === null ? { community_id: suCommunity } : {}),
+        }),
       })
       const json = await r.json().catch(() => ({}))
       if (!r.ok) { setSuErr(json.error || `HTTP ${r.status}`); setSuSaving(false); return }
       setSuMsg(`✅ ${suRole === "guest" ? "Guest" : "Officer"} account created: ${suEmail.trim()}`)
-      setSuEmail(""); setSuName(""); setSuPassword(""); setSuRole("officer")
+      setSuEmail(""); setSuName(""); setSuPassword(""); setSuRole("officer"); setSuCommunity("")
       loadOfficersOnDuty()
     } catch (e: any) {
       setSuErr(e?.message || "Failed to create user.")
@@ -414,6 +421,13 @@ export default function UserDashboard() {
     checkCanApprove().then(ok => setCanApprove(ok)).catch(() => setCanApprove(false))
     checkCanIssueLeaseViolation().then(ok => setCanIssueLV(ok)).catch(() => setCanIssueLV(false))
     checkIsGuest().then(ok => setIsGuest(ok)).catch(() => setIsGuest(false))
+    // The current user's assigned community (null = all-locations) — drives whether
+    // the supervisor "Add Team Member" form needs a community picker.
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (!user) return
+      supabase.from("user_assignments").select("community_id").eq("user_id", user.id).maybeSingle()
+        .then(({ data }) => setMyCommunity((data as any)?.community_id ?? null))
+    })
   }, [])
 
   useEffect(() => {
@@ -2067,6 +2081,13 @@ export default function UserDashboard() {
                       <option value="officer">Officer</option>
                       <option value="guest">Guest (view-only)</option>
                     </select></div>
+                  {myCommunity === null && (
+                    <div><label className={labelCls}>Community <span className="text-red-500">*</span></label>
+                      <select value={suCommunity} onChange={e => setSuCommunity(e.target.value)} className={inputCls}>
+                        <option value="">Select community…</option>
+                        {communities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                      </select></div>
+                  )}
                   <div className="sm:col-span-2">
                     <button onClick={addTeamMember} disabled={suSaving}
                       className="px-5 py-2.5 bg-blue-800 text-white text-sm font-semibold rounded-lg hover:bg-blue-900 border-none cursor-pointer disabled:opacity-50">
